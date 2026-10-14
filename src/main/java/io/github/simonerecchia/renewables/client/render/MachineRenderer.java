@@ -59,7 +59,8 @@ import org.joml.Vector3f;
  *     first time the group is drawn and again when the machine's light or the group's texture changes.  The buffers
  *     of a position its type's pass did not draw are closed, and all of them are when the level changes or the
  *     resources reload.  A cache per type, not one for all, because a pass only knows which of its own machines it
- *     drew; it also keeps a turbine and the bare tower it replaced, at the same position, from sharing buffers.</li>
+ *     drew; it also keeps a turbine and the bare tower it replaced, at the same position, from sharing buffers.  Every
+ *     build goes through one shared builder.</li>
  * <li>Within a machine the groups are batched by texture: one render state per texture, one draw per group.</li>
  * <li>A group that is given no matrix is not drawn, which is how a renderer hides a part.  Markers
  *     ({@code pivot_*}) are never drawn.</li>
@@ -71,6 +72,10 @@ public abstract class MachineRenderer {
 	/** A group's vertex buffer on the GPU, kept per (block position, group name). */
 	static final class GroupBuffer implements AutoCloseable {
 		private static final int VERTEX_BYTES = DefaultVertexFormat.NEW_ENTITY.getVertexSize();
+		/** What the shared builder holds before it first has to grow: a machine's larger groups. */
+		private static final int BUILDER_START_VERTICES = 16384;
+		@Nullable
+		private static BufferBuilder BUILDER;
 
 		@Nullable
 		private VertexBuffer buffer;
@@ -88,8 +93,7 @@ public abstract class MachineRenderer {
 
 		static GroupBuffer build(MeshModel.Group group, ResourceLocation texture, int light) {
 			int count = group.vertexCount();
-			// the builder allocates six times what it is told; a third of the bytes is three times what the group needs
-			BufferBuilder builder = new BufferBuilder(count * VERTEX_BYTES / 2 + 64);
+			BufferBuilder builder = builder();
 			// triangles as they are: no need for the quad of four that the render type would otherwise ask for
 			builder.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
 
@@ -106,6 +110,17 @@ public abstract class MachineRenderer {
 			vertexBuffer.upload(builder.end());
 			VertexBuffer.unbind();
 			return new GroupBuffer(vertexBuffer, group, texture, light);
+		}
+
+		/**
+		 * The one builder every group is written through.  A {@code BufferBuilder}'s memory is native and 1.20.1 has no way
+		 * to free it, so one per build was megabytes lost each time a machine came back into range; this one grows to the
+		 * largest group once and is handed back empty by the upload.  Render thread only.
+		 */
+		static BufferBuilder builder() {
+			if (BUILDER == null) BUILDER = new BufferBuilder(BUILDER_START_VERTICES * VERTEX_BYTES / 6);
+
+			return BUILDER;
 		}
 
 		boolean isStale(MeshModel.Group group, ResourceLocation texture, int light) {
@@ -211,13 +226,13 @@ public abstract class MachineRenderer {
 
 				if (machine instanceof ExtraPose pose) applyPose(poseStack, pose);
 
+				// before the drawing: a machine whose drawing throws keeps its buffers, or it would rebuild them every frame
+				seen.add(pos);
 				if (draw == null) {
 					renderGrouped(context, poseStack, name -> true);
 				} else {
 					draw.draw(machine, context, poseStack);
 				}
-
-				seen.add(pos);
 			} catch (RuntimeException e) {
 				// one machine's drawing going wrong must cost that machine, not the frame
 				reportOnce(machine.getClass().getName(), "A " + machine.getClass().getSimpleName() + " could not be drawn: " + e);
