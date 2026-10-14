@@ -1,5 +1,6 @@
 package io.github.simonerecchia.renewables.item;
 
+import io.github.simonerecchia.renewables.api.Nameplate;
 import io.github.simonerecchia.renewables.api.power.DcCableSpec;
 import io.github.simonerecchia.renewables.block.DcCableBlock;
 import io.github.simonerecchia.renewables.block.DcTerminal;
@@ -106,6 +107,6 @@ public class DcCableItem extends BlockItem {
 	}
 
 	private static String fmt(double value) {
-		return value == Math.floor(value) ? String.valueOf((long) value) : String.format("%.1f", value);
+		return Nameplate.figure(value);
 	}
 }

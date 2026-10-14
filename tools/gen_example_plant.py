@@ -144,7 +144,10 @@ FOOTPRINTS = {
     'cabin': cells('electric_cabin', 'ElectricCabinBlock', 'CELLS'),
     'pole': cells('utility_pole', 'UtilityPoleBlock'),
     'kiosk': cells('power_box', 'PowerBoxBlock', 'CELLS'),
-    'tower': cells('lattice_suspension', 'LatticeTowerBlock', 'BODY_CELLS'),
+    # every tower kind is laid out on one footprint: the cells any of the three duties claims
+    'tower': sorted(set(cells('lattice_suspension', 'LatticeTowerBlock', 'SUSPENSION_CELLS'))
+                    | set(cells('lattice_tension', 'LatticeTowerBlock', 'TENSION_CELLS'))
+                    | set(cells('lattice_terminal', 'LatticeTowerBlock', 'TERMINAL_CELLS'))),
     'mast': cells('met_station', 'MetStationBlock'),
     'controller': cells('plant_controller', 'PlantControllerBlock'),
 }
