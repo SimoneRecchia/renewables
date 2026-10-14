@@ -211,14 +211,11 @@ These came out of writing the table, and none of them is a bug — they are the 
    mast's plane-of-array reading into a tracker's backtracking decision is the obvious use, and it is
    what a real plant does with it.
 
-3. **A tower's own span limit is not enforced.** Each tower is rated for a ruling span (160 blocks for a
-   suspension tower, 200 for the others), but only the conductor's own 160-block limit stops a span.
-
-4. **The first `solar_panel` and `power_box` predate the catalogue.** They work, and they now sit in
+3. **The first `solar_panel` and `power_box` predate the catalogue.** They work, and they now sit in
    the same crafting tree as everything else, but the power box converts to Forge Energy at a fixed rate
    with no mention of voltage — where every other machine in the mod is careful about it. It does at least
    take low voltage only, so a 24 kV line has to come down through a pole first.
 
-5. **No fault state is repairable.** A machine can degrade and de-rate; nothing brings it back. A
+4. **No fault state is repairable.** A machine can degrade and de-rate; nothing brings it back. A
    service action with the wrench — clean the modules, replace a blown fuse — would give the wrench a
    second job and the plant a maintenance loop.

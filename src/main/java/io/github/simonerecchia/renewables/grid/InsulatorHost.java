@@ -98,6 +98,14 @@ public interface InsulatorHost {
 		return List.of();
 	}
 
+	/**
+	 * The longest span this machine will hold, in blocks: a lattice tower's ruling span, and no limit of its own for
+	 * anything else.  A span is held to the shorter of this at each end and its conductor's own limit.
+	 */
+	default double maxSpanBlocks() {
+		return Double.POSITIVE_INFINITY;
+	}
+
 	/** Whether a fitting is an output, an input, or either. */
 	default String powerType(String partName) {
 		return "bidirectional";
