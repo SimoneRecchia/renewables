@@ -123,6 +123,21 @@ costava metà della perdita a pieno carico. È l'I²R degli avvolgimenti e costa
 | VT-63000 Grid: Pk | 0,55 % × carico (346 kW a pieno carico) | **230 kW** | il Tier 2 chiede un PEI ≥ 99,745 % a 63 MVA: con P0 = 28 kW, PEI = 1 − 2√(P0·Pk)/Sr = 99,7452 %. Un 63 MVA reale (CEB 220/33 kV) fa P0 ≤ 30, Pk ≤ 225 kW ([gara CEB](https://www.ceb.lk/front_img/tender_pdf/2008131108024_Revised_Table_2_12_POWER_TRANSFORMERS_of_Section_6_Employers_Requirements_Part_D_-_Supplementary_Information.pdf)) |
 | Vcc % | — | non modellata: 6 % per 2500 kVA ([Legrand](https://www.legrand.fr/pro/catalogue/transformateur-htabt-aaoak-2500kva-5900kg-primaire-20kv-aluminium-2050x1400x2380mm)), 12–14 % per 40–63 MVA AT/MT | |
 
+**Oltre la taglia** — **corretto**: i kVA non limitavano nulla, un VT-2500 passava 26 MW. Un trasformatore vero non
+limita la potenza (passa quello che la linea spinge e il carico chiede): si scalda, e lo stacca la protezione. Ora
+(`block/TransformerThermal`) le temperature sono quelle della guida di carico IEC 60076-7:2005, equazioni alle
+differenze (§8.2.3) con le caratteristiche termiche della tab. 5 — VT-2500 come trasformatore di distribuzione ONAN
+(x 0,8, y 1,6, k11 1, k21 1, k22 2, τo 180 min, τw 4 min, Δθor 55 K, Hgr 23 K), VT-63000 come trasformatore di media
+potenza ONAF (x 0,8, y 1,3, k11 0,5, k21 2, k22 2, τo 150 min, τw 7 min, Δθor 52 K, Hgr 26 K) — e R = Pk/P0 dalle
+cifre Ecodesign sopra, ambiente 20 °C. La protezione scatta dove la guida non ammette più alcun carico (tab. 4,
+carico di emergenza di lunga durata): punto caldo 140 °C (termometro dell'avvolgimento), olio 115 °C (termometro
+dell'olio), corrente oltre 1,8 volte la taglia per la distribuzione e 1,5 per la media potenza (relè di massima
+corrente, entro il secondo). Scattato, il trasformatore non porta nulla finché una mano non lo riarma, e il riarmo è
+rifiutato finché non è rientrato nei limiti del carico ciclico normale (punto caldo 120 °C, olio 105 °C). Cifre (test
+`TransformerThermalTest`): alla taglia si assesta a 98 °C (il punto caldo di progetto) e va per sempre; a 1,2 volte
+(la C90 da 3 MW sul VT-2500 del sito d'esempio) si assesta a 123 °C e non scatta; a 1,6 volte (la C130 da 4 MW)
+scatta dopo circa 3 ore da freddo; 26 MW lo staccano subito.
+
 Un 63 MVA a 400 kV non esiste nei parchi reali (i 400/30–33 kV sono 125–315 MVA, es. Talayuela 2 × 135/160 MVA):
 63 MVA è la taglia tipica 132–150/20–30 kV. Il nome e la taglia sono rimasti: vedi domande.
 
@@ -406,7 +421,7 @@ altro agente).
   * tre campate fra le stesse due macchine sono le tre fasi di un circuito e perdono quanto una; servono quattro-sei
     campate (due circuiti) per dimezzare la perdita;
   * `docs/items.md` r. 214–216 "The transformers' losses are shown but not taken" → ora sono prese dalla rete
-    (resta vero che la taglia in kVA non limita nulla);
+    e oltre la taglia il trasformatore si scalda e la protezione lo stacca (sezione Trasformatori);
   * le letture lungo le linee degli impianti di esempio (IMPIANTO, IMPIANTO-SOLARE) cambiano: in MT e AT le perdite
     sono quasi nulle, in BT dipendono dalla potenza.
 * **Tensione MT** — `README.md` r. 25, `docs/getting-started.md` r. 45, `docs/items.md` r. 50, 64, 225,
