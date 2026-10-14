@@ -2,6 +2,7 @@ package io.github.simonerecchia.renewables;
 
 import io.github.simonerecchia.renewables.client.ClientBlockEntities;
 import io.github.simonerecchia.renewables.client.hooks.ClientInput;
+import io.github.simonerecchia.renewables.client.hooks.FittingSelector;
 import io.github.simonerecchia.renewables.client.hooks.WireLinker;
 import io.github.simonerecchia.renewables.client.render.MetStationRenderer;
 import io.github.simonerecchia.renewables.client.render.PlantControllerRenderer;
@@ -77,6 +78,7 @@ public final class RenewablesClient {
 	/** Forgets every span, the connection in progress, every tracked machine and every fitting lookup. */
 	public static void forgetWorld() {
 		WireLinker.reset();
+		FittingSelector.forget();
 		ClientWires.clear();
 		ClientBlockEntities.clear();
 		InsulatorIndex.clear();

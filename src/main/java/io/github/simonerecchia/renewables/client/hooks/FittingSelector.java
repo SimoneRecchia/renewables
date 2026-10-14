@@ -7,6 +7,9 @@ import io.github.simonerecchia.renewables.grid.InsulatorHost;
 import io.github.simonerecchia.renewables.model.ModelDefinition;
 import io.github.simonerecchia.renewables.model.ModelDefinitions;
 
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -39,6 +42,8 @@ public final class FittingSelector {
 	private static final double BARE_RAY_LENGTH = 64.0;
 	/** What a fitting with no model group is called, for {@code InsulatorHost.powerType}. */
 	private static final String BARE_PART_PREFIX = "fitting_";
+
+	private static final Neighbourhood NEARBY = new Neighbourhood();
 
 	private FittingSelector() {
 	}
@@ -131,15 +136,7 @@ public final class FittingSelector {
 		Selection best = null;
 		double bestDistance = Double.MAX_VALUE;
 
-		for (BlockEntity entity : ClientBlockEntities.hosts()) {
-			BlockPos pos = entity.getBlockPos();
-			if (Math.abs(pos.getX() - around.getX()) > AIR_REACH || Math.abs(pos.getY() - around.getY()) > AIR_REACH
-					|| Math.abs(pos.getZ() - around.getZ()) > AIR_REACH) {
-				continue;
-			}
-
-			if (entity.getLevel() != level) continue;
-
+		for (BlockPos pos : NEARBY.around(level, around)) {
 			Selection candidate = select(level, pos, eye, look);
 			if (candidate == null) continue;
 
@@ -151,5 +148,54 @@ public final class FittingSelector {
 		}
 
 		return best;
+	}
+
+	/** A new world: the cached neighbourhood belongs to the last one. */
+	public static void forget() {
+		NEARBY.forget();
+	}
+
+	/**
+	 * The machines with fittings within {@link #AIR_REACH} of a block, worked out once per tick.
+	 *
+	 * The preview asks every frame while a connection is pending and the crosshair is on nothing, and walking every
+	 * tracked machine of the level each time was a list of all of them per frame.  Machines load, move and go on
+	 * ticks, so a tick's answer holds for that tick's frames; {@link #select} reads the block entity again anyway.
+	 */
+	private static final class Neighbourhood {
+		private final List<BlockPos> positions = new ArrayList<>();
+		private WeakReference<Level> level = new WeakReference<>(null);
+		private long gameTime = Long.MIN_VALUE;
+		@Nullable
+		private BlockPos around;
+
+		List<BlockPos> around(Level level, BlockPos around) {
+			if (level != this.level.get() || level.getGameTime() != gameTime || !around.equals(this.around)) {
+				positions.clear();
+				for (BlockEntity entity : ClientBlockEntities.hosts()) {
+					BlockPos pos = entity.getBlockPos();
+					if (entity.getLevel() != level || Math.abs(pos.getX() - around.getX()) > AIR_REACH
+							|| Math.abs(pos.getY() - around.getY()) > AIR_REACH
+							|| Math.abs(pos.getZ() - around.getZ()) > AIR_REACH) {
+						continue;
+					}
+
+					positions.add(pos.immutable());
+				}
+
+				this.level = new WeakReference<>(level);
+				this.gameTime = level.getGameTime();
+				this.around = around.immutable();
+			}
+
+			return positions;
+		}
+
+		void forget() {
+			positions.clear();
+			level = new WeakReference<>(null);
+			gameTime = Long.MIN_VALUE;
+			around = null;
+		}
 	}
 }
