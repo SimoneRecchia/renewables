@@ -2,6 +2,7 @@ package io.github.simonerecchia.renewables.item;
 
 import io.github.simonerecchia.renewables.api.Nameplate;
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
+import io.github.simonerecchia.renewables.block.TurbineTowerBlock;
 import io.github.simonerecchia.renewables.catalog.TurbineCatalog;
 
 import java.util.List;
@@ -17,7 +18,6 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import io.github.simonerecchia.renewables.block.TurbineTowerBlock;
 
 /** A turbine in the hand, showing its nameplate the way a datasheet header reads. */
 public class TurbineBlockItem extends BlockItem {
@@ -32,7 +32,12 @@ public class TurbineBlockItem extends BlockItem {
 		return spec;
 	}
 
-	/** Refuses to mount, and says why. */
+	/**
+	 * Refuses to mount on a tower that is not a height this model is built for, and says why.
+	 *
+	 * The refusal consumes nothing.  The message is sent from the server only: the client runs this too, and would
+	 * otherwise show it twice.
+	 */
 	@Override
 	public InteractionResult place(BlockPlaceContext context) {
 		Level level = context.getLevel();
@@ -41,7 +46,7 @@ public class TurbineBlockItem extends BlockItem {
 
 		if (!spec.acceptsTowerHeight(segments)) {
 			Player player = context.getPlayer();
-			if (player != null) {
+			if (player != null && !level.isClientSide()) {
 				player.displayClientMessage(Component.translatable("message.renewables.turbine.tower_height",
 						spec.displayName(), spec.minTowerSegments(), spec.maxTowerSegments(), segments).withStyle(ChatFormatting.RED), true);
 			}

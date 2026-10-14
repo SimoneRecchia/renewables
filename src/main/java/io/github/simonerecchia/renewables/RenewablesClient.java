@@ -1,6 +1,8 @@
 package io.github.simonerecchia.renewables;
 
 import io.github.simonerecchia.renewables.client.ClientBlockEntities;
+import io.github.simonerecchia.renewables.client.hooks.ClientInput;
+import io.github.simonerecchia.renewables.client.hooks.WireLinker;
 import io.github.simonerecchia.renewables.client.render.MetStationRenderer;
 import io.github.simonerecchia.renewables.client.render.PlantControllerRenderer;
 import io.github.simonerecchia.renewables.client.render.PvArrayRenderer;
@@ -33,8 +35,9 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
  * The client entry point.  Nothing here is reached from the dedicated server: the class is only subscribed on
  * {@link Dist#CLIENT}, and the network code gets to its message handlers through a {@code DistExecutor}.
  *
- * owner C fills in the input, wire-drawing and screen hooks; what is here is what is obvious from the
- * client's own lifecycle.
+ * What lives here is the client's lifecycle: the config, the renderer registrations and the clean-up when a world
+ * goes.  The wire drawing is {@code client.events.WireRenderEvents}, the clicks are {@code client.events.WireInputEvents}
+ * and {@code client.hooks.ClientInput}; those subscribe themselves.
  */
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
@@ -56,6 +59,9 @@ public final class RenewablesClient {
 				if (unload.getLevel().isClientSide()) forgetWorld();
 			});
 
+			// the items and the pole reach the input code through these, never by name
+			ClientInput.install();
+
 			// each registers its blocks with the model bindings, which is how the machine pass knows what to draw
 			// owner M adds the pole, cabin, power box, tower and turbine renderers here
 			PvArrayRenderer.init();
@@ -68,8 +74,9 @@ public final class RenewablesClient {
 		});
 	}
 
-	/** Forgets every span, every tracked machine and every fitting lookup. */
+	/** Forgets every span, the connection in progress, every tracked machine and every fitting lookup. */
 	public static void forgetWorld() {
+		WireLinker.reset();
 		ClientWires.clear();
 		ClientBlockEntities.clear();
 		InsulatorIndex.clear();

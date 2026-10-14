@@ -1,37 +1,89 @@
 package io.github.simonerecchia.renewables.block;
 
+import io.github.simonerecchia.renewables.api.power.TurbineSpec;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
+import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * One segment of a turbine tower.  Stacked to the height a turbine wants, with the machine seated on top.
  *
- * STUB: owner W (wind.md): collision, the tower-height limit of sixteen, collapse.  The two column queries are
- * real, because the machine, its item and the computer peripheral already depend on them.
+ * A pile is only as good as its height.  Up to {@link TurbineGeometry#SAFE_SEGMENTS} it carries a walker; a block
+ * set on top of {@link TurbineGeometry#MAX_SEGMENTS} folds the whole pile at once; in between it stands until
+ * something steps on its top.  Either way the fall is {@link TowerCollapse}.  Nothing built to a turbine's own
+ * limits (13 at the most) ever comes near these, so the rule is for bare towers.
  */
 public class TurbineTowerBlock extends Block implements EntityBlock {
-	/** Nothing stands above this many segments. */
-	public static final int MAX_SEGMENTS = 16;
+	/**
+	 * Nothing stands above this many segments.  Kept under this name for the code that already reads it; it is
+	 * {@link TurbineGeometry#SAFE_SEGMENTS}.
+	 */
+	public static final int MAX_SEGMENTS = TurbineGeometry.SAFE_SEGMENTS;
 
+	/** Finest radius step the tube's staircase is cached at: a tenth of a pixel. */
+	private static final double RADIUS_STEPS_PER_BLOCK = 160.0;
+	/** The tube's collision at each radius, built once: a shape is asked for far more often than it changes. */
+	private static final Map<Integer, VoxelShape> TUBES = new ConcurrentHashMap<>();
+	/** The insulator's box at the foot of a tower that carries a turbine, turned with the machine's four facings. */
+	private static final MachineShell.Cell INSULATOR = new MachineShell.Cell(0, 0, 0, box(TurbineGeometry.INSULATOR_BOX));
+
+	/** The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state. */
 	public TurbineTowerBlock(Properties properties) {
-		super(properties);
+		super(properties.dynamicShape());
 	}
+
+	private static VoxelShape box(double[] b) {
+		return Shapes.box(b[0], b[1], b[2], b[3], b[4], b[5]);
+	}
+
+	// ---- the column ----
 
 	/** How many tower segments are directly below {@code pos}. */
 	public static int countBelow(BlockGetter level, BlockPos pos) {
 		int count = 0;
 		BlockPos.MutableBlockPos cursor = pos.mutable().move(0, -1, 0);
-		while (count < MAX_SEGMENTS && level.getBlockState(cursor).getBlock() instanceof TurbineTowerBlock) {
+		while (count < TurbineGeometry.SCAN_LIMIT && level.getBlockState(cursor).getBlock() instanceof TurbineTowerBlock) {
 			count++;
 			cursor.move(0, -1, 0);
+		}
+
+		return count;
+	}
+
+	/** How many tower segments are directly above {@code pos}. */
+	public static int countAbove(BlockGetter level, BlockPos pos) {
+		int count = 0;
+		BlockPos.MutableBlockPos cursor = pos.mutable().move(0, 1, 0);
+		while (count < TurbineGeometry.SCAN_LIMIT && level.getBlockState(cursor).getBlock() instanceof TurbineTowerBlock) {
+			count++;
+			cursor.move(0, 1, 0);
 		}
 
 		return count;
@@ -41,7 +93,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	@Nullable
 	public static BlockPos findTurbineAbove(BlockGetter level, BlockPos pos) {
 		BlockPos.MutableBlockPos cursor = pos.mutable().move(0, 1, 0);
-		for (int i = 0; i < MAX_SEGMENTS + 1; i++) {
+		for (int i = 0; i < TurbineGeometry.SCAN_LIMIT + 1; i++) {
 			BlockState state = level.getBlockState(cursor);
 			if (state.getBlock() instanceof WindTurbineBlock) return cursor.immutable();
 			if (!(state.getBlock() instanceof TurbineTowerBlock)) return null;
@@ -52,10 +104,133 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 		return null;
 	}
 
+	/** The foot of the tower a machine at {@code machinePos} stands on: its lowest segment, or the machine's own position if it has none. */
+	public static BlockPos footBelow(BlockGetter level, BlockPos machinePos) {
+		return machinePos.below(countBelow(level, machinePos));
+	}
+
+	/** Whether this segment is the lowest of its pile. */
+	public static boolean isFoot(BlockGetter level, BlockPos pos) {
+		return !(level.getBlockState(pos.below()).getBlock() instanceof TurbineTowerBlock);
+	}
+
+	// ---- shape and light ----
+
+	/**
+	 * The tube as the model draws it: a cone that is 0.34 in radius at the foot and 0.19 at the head, stretched over the
+	 * pile and scaled to the machine on it (a bare tower is scaled by its height).  This block's slice of it is a staircase
+	 * of rectangles round the axis, so what the player bumps into and points at is the tube and not a box around it.  The
+	 * foot of a tower that carries a turbine also has the insulator beside it, which is what a wire is strung to.
+	 *
+	 * Collision and selection are the same shape.
+	 */
+	@Override
+	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+		int below = countBelow(level, pos);
+		int above = 0;
+		BlockState head = null;
+		BlockPos.MutableBlockPos cursor = pos.mutable();
+		while (above < TurbineGeometry.SCAN_LIMIT) {
+			BlockState up = level.getBlockState(cursor.move(0, 1, 0));
+			if (!(up.getBlock() instanceof TurbineTowerBlock)) {
+				head = up;
+				break;
+			}
+
+			above++;
+		}
+
+		int height = below + above + 1;
+		TurbineSpec machine = head != null && head.getBlock() instanceof WindTurbineBlock turbine ? turbine.spec() : null;
+		double scale = machine != null ? machine.nacelleRenderScale() : TurbineGeometry.bareTowerScale(height);
+
+		int key = (int) Math.round(TurbineGeometry.towerRadius(below, height, scale) * RADIUS_STEPS_PER_BLOCK);
+		VoxelShape tube = TUBES.computeIfAbsent(key, k -> {
+			VoxelShape steps = Shapes.empty();
+			for (double[] b : TurbineGeometry.towerBoxes(k / RADIUS_STEPS_PER_BLOCK)) steps = Shapes.or(steps, box(b));
+
+			return steps.optimize();
+		});
+
+		if (below != 0 || machine == null) return tube;
+
+		int quarters = ModelFacing.quarters(WindTurbineBlock.AUTHORED, head.getValue(BlockStateProperties.HORIZONTAL_FACING));
+		return Shapes.or(tube, INSULATOR.shape(quarters));
+	}
+
 	@Override
 	public RenderShape getRenderShape(BlockState state) {
 		return RenderShape.INVISIBLE;
 	}
+
+	@Override
+	public int getLightBlock(BlockState state, BlockGetter level, BlockPos pos) {
+		return 0;
+	}
+
+	/** Sky light goes down the column: a tower is a tube of air as far as the light is concerned. */
+	@Override
+	public boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
+		return true;
+	}
+
+	// ---- standing up ----
+
+	/** A segment stands on another segment, or on anything that has a solid shape to stand on. */
+	@Override
+	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+		BlockPos below = pos.below();
+		BlockState support = level.getBlockState(below);
+
+		return support.getBlock() instanceof TurbineTowerBlock || !support.getCollisionShape(level, below).isEmpty();
+	}
+
+	/**
+	 * From any neighbour: a segment whose support has gone is air.  The block above sees the change in its turn,
+	 * so the whole column comes down, and whatever machine sits on it with the last block.
+	 */
+	@Override
+	public BlockState updateShape(BlockState state, Direction direction, BlockState neighbour, LevelAccessor level, BlockPos pos, BlockPos neighbourPos) {
+		if (!canSurvive(state, level, pos)) return Blocks.AIR.defaultBlockState();
+
+		return super.updateShape(state, direction, neighbour, level, pos, neighbourPos);
+	}
+
+	/** A block set on top of more than twenty makes the whole pile give way. */
+	@Override
+	public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+		super.setPlacedBy(level, pos, state, placer, stack);
+		if (!(level instanceof ServerLevel serverLevel)) return;
+
+		int height = countBelow(level, pos) + 1;
+		if (!TurbineGeometry.collapsesWhenPlaced(height)) return;
+
+		fail(serverLevel, pos.below(height - 1), height, placer);
+	}
+
+	/** Anything that steps on the top of a pile taller than sixteen brings it down, a dropped item as well as a player. */
+	@Override
+	public void stepOn(Level level, BlockPos pos, BlockState state, Entity entity) {
+		super.stepOn(level, pos, state, entity);
+		if (!(level instanceof ServerLevel serverLevel)) return;
+		if (level.getBlockState(pos.above()).getBlock() instanceof TurbineTowerBlock) return;
+
+		int height = countBelow(level, pos) + 1;
+		if (!TurbineGeometry.collapsesWhenWalkedOn(height)) return;
+
+		fail(serverLevel, pos.below(height - 1), height, entity);
+	}
+
+	/** Starts the fall, and tells a player who caused it, once. */
+	private static void fail(ServerLevel level, BlockPos foot, int height, @Nullable Entity cause) {
+		if (!TowerCollapse.begin(level, foot, height)) return;
+
+		if (cause instanceof Player player) {
+			player.displayClientMessage(Component.translatable("message.renewables.tower.collapsed").withStyle(ChatFormatting.RED), true);
+		}
+	}
+
+	// ---- block entity ----
 
 	@Nullable
 	@Override
