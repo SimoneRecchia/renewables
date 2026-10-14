@@ -2,6 +2,7 @@ package io.github.simonerecchia.renewables.client.preview;
 
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
 import io.github.simonerecchia.renewables.catalog.TurbineCatalog;
+import io.github.simonerecchia.renewables.registry.ModBlocks;
 
 import io.github.simonerecchia.renewables.Renewables;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -93,7 +94,7 @@ public final class PreviewStage {
 		}
 
 		List<String> found = new ArrayList<>();
-		for (var entry : io.github.simonerecchia.renewables.registry.ModBlocks.BLOCKS.getEntries()) {
+		for (var entry : ModBlocks.BLOCKS.getEntries()) {
 			String path = entry.getId().getPath();
 			// the shell is invisible by design, and a tower on its own is a tube
 			if (path.equals("machine_shell")) continue;
@@ -164,7 +165,7 @@ public final class PreviewStage {
 
 	/** Whether this block is a machine that will not seat without a tower under it. */
 	private static boolean needsTower(String block) {
-		for (io.github.simonerecchia.renewables.api.power.TurbineSpec spec : io.github.simonerecchia.renewables.catalog.TurbineCatalog.all()) {
+		for (TurbineSpec spec : TurbineCatalog.all()) {
 			if (block.endsWith(":" + spec.id().getPath())) return true;
 		}
 

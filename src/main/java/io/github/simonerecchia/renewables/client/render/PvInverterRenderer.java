@@ -35,7 +35,7 @@ public class PvInverterRenderer extends MachineRenderer {
 	/** Cabinet temperature at which the fan is at a standstill */
 	private static final double FAN_IDLE_C = 25.0;
 	private static final double FAN_FULL_C = 60.0;
-	/** Degrees a frame at full speed. */
+	/** Degrees a frame at full speed, at 60 frames a second: {@link #frameScale()} makes it the same speed at any rate. */
 	private static final float FAN_MAX_STEP = 22.0f;
 
 	@SubscribeEvent
@@ -97,7 +97,7 @@ public class PvInverterRenderer extends MachineRenderer {
 		if (cooling == InverterSpec.Cooling.NATURAL || Minecraft.getInstance().isPaused()) return current;
 
 		double duty = Math.max(0.0, Math.min(1.0, (cabinetTempC - FAN_IDLE_C) / (FAN_FULL_C - FAN_IDLE_C)));
-		float next = (current + (float) (duty * FAN_MAX_STEP)) % 360.0f;
+		float next = (current + (float) (duty * FAN_MAX_STEP) * frameScale()) % 360.0f;
 		FAN_ANGLE.put(pos, next);
 		return next;
 	}
