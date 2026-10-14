@@ -4,6 +4,7 @@ import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.IntConsumer;
+import java.util.function.IntPredicate;
 import javax.annotation.Nullable;
 
 /**
@@ -41,17 +42,23 @@ final class IdPool {
 		return highest;
 	}
 
+	/** {@link #claim(int[], IntPredicate)} with nothing known about where an id belongs. */
+	synchronized void claim(int[] ids) {
+		claim(ids, id -> false);
+	}
+
 	/**
 	 * Gives every slot that is unassigned (zero or less) a fresh id.  With duplicate detection, a slot whose id is
-	 * already held by a different array, or repeated earlier in the same one, is treated as unassigned too.
+	 * already held by a different array, repeated earlier in the same one, or {@code foreign} (the saved spans put it
+	 * on another machine) is treated as unassigned too.
 	 *
 	 * Asking again with the same array changes nothing: an array is its own holder.
 	 */
-	synchronized void claim(int[] ids) {
+	synchronized void claim(int[] ids, IntPredicate foreign) {
 		for (int i = 0; i < ids.length; i++) {
 			int id = ids[i];
 
-			if (id > 0 && detectDuplicates && (heldElsewhere(id, ids) || repeatedBefore(ids, i))) id = 0;
+			if (id > 0 && detectDuplicates && (heldElsewhere(id, ids) || repeatedBefore(ids, i) || foreign.test(id))) id = 0;
 
 			if (id > 0) {
 				raise(id);

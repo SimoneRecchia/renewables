@@ -242,7 +242,7 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 		if (!state.is(newState.getBlock()) && !level.isClientSide
 				&& level instanceof net.minecraft.server.level.ServerLevel serverLevel
 				&& level.getBlockEntity(pos) instanceof GroundConductorBlockEntity run) {
-			WireLedger.removeAttachedTo(serverLevel, run.getInsulatorIds());
+			WireLedger.removeAttachedTo(serverLevel, pos, run.getInsulatorIds());
 		}
 
 		super.onRemove(state, level, pos, newState, movedByPiston);

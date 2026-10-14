@@ -94,7 +94,7 @@ public class WindTurbineBlock extends MachineBlock {
 		if (!state.is(newState.getBlock()) && level instanceof ServerLevel serverLevel) {
 			notifyFoot(level, pos);
 			if (level.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine) {
-				WireLedger.removeAttachedTo(serverLevel, turbine.getInsulatorIds());
+				WireLedger.removeAttachedTo(serverLevel, pos, turbine.getInsulatorIds());
 			}
 		}
 

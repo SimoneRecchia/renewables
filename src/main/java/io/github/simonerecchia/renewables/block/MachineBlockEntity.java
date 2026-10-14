@@ -19,6 +19,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -207,6 +208,12 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 		tag.putDouble("currentPower", currentPower);
 	}
 
+	/**
+	 * Reads the saved state.  From disk this runs before the machine is in a level, and {@link #onLoad} claims the ids;
+	 * on a machine already in a server level it is data pasted over a live one ({@code /clone}, {@code /setblock} with
+	 * data, a structure, a creative pick-block), so the ids that came with it are claimed again here: a copy is given
+	 * new ones and the original keeps its spans.
+	 */
 	@Override
 	public void load(CompoundTag tag) {
 		super.load(tag);
@@ -214,10 +221,15 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 		int[] saved = tag.getIntArray("insulatorIds");
 		ensureSizes();
+		boolean pasted = level instanceof ServerLevel && saved.length > 0;
+		if (pasted) InsulatorIds.release(insulatorIds);
+
 		for (int i = 0; i < Math.min(saved.length, insulatorIds.length); i++) {
 			insulatorIds[i] = saved[i];
 			if (saved[i] > 0) InsulatorIds.adopt(saved[i]);
 		}
+
+		if (pasted) InsulatorIds.claim(insulatorIds, (ServerLevel) level, worldPosition);
 	}
 
 	@Override
@@ -265,7 +277,7 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 				ClientWires.invalidate(getInsulatorIds());
 			});
 		} else {
-			InsulatorIds.claim(insulatorIds);
+			InsulatorIds.claim(insulatorIds, (ServerLevel) level, worldPosition);
 			refreshAnchors();
 			setChanged();
 		}
