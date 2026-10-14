@@ -1,6 +1,7 @@
 package io.github.simonerecchia.renewables.client.wire;
 
 import io.github.simonerecchia.renewables.client.hooks.WirePreview;
+import io.github.simonerecchia.renewables.client.render.MachineRenderer;
 import io.github.simonerecchia.renewables.client.render.PoseLighting;
 import io.github.simonerecchia.renewables.core.ClientConfig;
 
@@ -17,6 +18,7 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -37,7 +39,8 @@ import org.joml.Vector3f;
  * straight into the render buffer as numbers, and the frustum test reuses the span's own box.
  *
  * What is skipped: a span whose box is beyond the configured distance (128 blocks by default), one outside the
- * frustum, one whose ends cannot be found yet.  What is simplified with distance: see {@link WireLod}.
+ * frustum, one whose ends cannot be found yet, and one whose machine at either end is beyond its own renderer's range.
+ * What is simplified with distance: see {@link WireLod}.
  */
 @OnlyIn(Dist.CLIENT)
 public final class WireRenderer {
@@ -112,6 +115,7 @@ public final class WireRenderer {
 			double distanceSq = span.distanceSqTo(camera.x, camera.y, camera.z);
 			if (distanceSq > maxDistanceSq) continue;
 			if (!frustum.isVisible(span.bounds)) continue;
+			if (!endDrawn(level, span.wire.startBlockPos(), camera) || !endDrawn(level, span.wire.endBlockPos(), camera)) continue;
 
 			if (span.lightStamp != lightStamp) refreshLight(level, span, lightStamp);
 			if (consumer == null) consumer = buffers.getBuffer(type);
@@ -130,6 +134,12 @@ public final class WireRenderer {
 		// the normals are in camera space; the level's lights are not set yet at this stage of the frame
 		PoseLighting.setLevel(event.getPoseStack().last().pose(), level.effects().constantAmbientLight());
 		buffers.endBatch(type);
+	}
+
+	/** Whether the machine at one end of a span is drawn from here: a cable is never drawn hanging from nothing. */
+	private static boolean endDrawn(ClientLevel level, BlockPos pos, Vec3 camera) {
+		BlockEntity machine = level.getBlockEntity(pos);
+		return machine == null || MachineRenderer.inRange(machine, camera);
 	}
 
 	// ---- light ----
