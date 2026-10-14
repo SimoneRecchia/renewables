@@ -5,13 +5,13 @@ import io.github.simonerecchia.renewables.api.power.ConductorSpec;
 import io.github.simonerecchia.renewables.api.power.Dispatchable;
 import io.github.simonerecchia.renewables.api.power.RedstoneMode;
 import io.github.simonerecchia.renewables.api.power.Telemetry;
-import io.github.simonerecchia.renewables.api.power.TickBudget;
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
 import io.github.simonerecchia.renewables.catalog.TurbineCatalog;
 import io.github.simonerecchia.renewables.compat.energy.EnergyBridge;
-import io.github.simonerecchia.renewables.core.ServerConfig;
 import io.github.simonerecchia.renewables.grid.FittingTypes;
+import io.github.simonerecchia.renewables.grid.GeneratorBudget;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
+import io.github.simonerecchia.renewables.grid.WindSample;
 import io.github.simonerecchia.renewables.model.ExtraPose;
 import io.github.simonerecchia.renewables.model.ModelDefinition;
 import io.github.simonerecchia.renewables.model.ModelDefinitions;
@@ -22,7 +22,6 @@ import io.github.simonerecchia.renewables.telemetry.TurbineTelemetrySimulator;
 import io.github.simonerecchia.renewables.weather.LevelWeather;
 import io.github.simonerecchia.renewables.weather.WeatherSnapshot;
 import io.github.simonerecchia.renewables.wind.TurbineDynamics;
-import io.github.simonerecchia.renewables.wind.TurbineExport;
 
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -53,7 +52,7 @@ import org.joml.Vector3f;
  *
  * <b>Angles.</b> The yaw kept here is in the wind's own system (the heading the air travels towards: 0 east, 90
  * south), so that it can be compared with the wind direction as the telemetry does.  A rotor faces <em>into</em> the
- * wind, and the renderer is given the rotation to turn the model by, already converted: see {@link #yawDegrees}.
+ * wind: the renderer converts the heading to the rotation it draws with (see {@link #yawDegrees}).
  *
  * <b>The foot.</b> The machine is the top block of a stack of tower blocks, but its cables, its redstone and its
  * energy are all at the bottom: the fitting is by the foot, the signal is read there, and neighbouring energy
@@ -110,7 +109,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private int towerSegments = -1;
 	private int towerRecheck = TOWER_RECHECK_TICKS;
 
-	private final TickBudget budget = new TickBudget();
+	private final GeneratorBudget budget = new GeneratorBudget(GeneratorBudget.Kind.TURBINE);
 	private final ClientSync clientSync = new ClientSync();
 	private final LazyOptional<IEnergyStorage> forgeEnergy = LazyOptional.of(() -> EnergyBridge.forgeEnergyView(this));
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
@@ -120,7 +119,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	// ---- client only: what is drawn, which lags what is true ----
 
 	private boolean drawnReady;
-	/** The rotation to give the model about Y, last tick and now. */
+	/** The nacelle heading in the wind's system, last tick and now. */
 	private double drawnYawBefore;
 	private double drawnYaw;
 	/** How far the rotor has turned in its direction of travel, last tick and now, in degrees. */
@@ -180,18 +179,18 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	// ---- what the renderer reads (docs/ARCHITECTURE.md section 3.7) ----
 
 	/**
-	 * Which way the nacelle faces: the rotation about Y, in degrees, to give the model, in the same system as the
-	 * block's own facing rotation ({@code ModelFacing.degrees}: 0 = the front faces south, 90 = east).  The rotor
-	 * looks into the wind, so this is not the wind direction but its opposite, and it already is the finished
-	 * rotation: the renderer subtracts the facing it has applied itself and turns the machine by the rest.
+	 * Which way the nacelle points, in the wind's own system: the heading the air is travelling towards, in degrees, 0
+	 * east and 90 south.  A nacelle that is lined up with the wind has this equal to the wind direction, and its rotor
+	 * then looks <em>into</em> the wind, which is the opposite heading: the renderer converts when it draws, with
+	 * {@link TurbineDynamics#modelRotationDegrees} (the model, authored facing +Z, is turned by -90 - this).
 	 *
-	 * On the client it is a smoothed value, interpolated between ticks; the unsmoothed target is
-	 * {@link #nacelleDirection()} converted by {@link TurbineDynamics#modelRotationDegrees}.
+	 * On the client it is smoothed (the yaw drive's speed, caught up in steps when a sync arrives) and interpolated
+	 * between ticks with the partial tick, across the 180 degree seam the short way round.
 	 *
 	 * @return degrees in (-180, 180]
 	 */
 	public float yawDegrees(float partialTick) {
-		if (level == null || !level.isClientSide()) return (float) TurbineDynamics.modelRotationDegrees(currentYawWind());
+		if (level == null || !level.isClientSide()) return (float) currentYawWind();
 
 		ensureDrawn();
 		double step = TurbineDynamics.shortestAngle(drawnYawBefore, drawnYaw);
@@ -227,7 +226,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		if (drawnReady) return;
 
 		drawnReady = true;
-		drawnYaw = drawnYawBefore = TurbineDynamics.modelRotationDegrees(currentYawWind());
+		drawnYaw = drawnYawBefore = currentYawWind();
 		clientSpeed = rotorSpeed;
 		drawnPitch = TurbineDynamics.collectivePitch(isBraked(), alignedWind, spec());
 	}
@@ -327,8 +326,15 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	// ---- what the grid asks ----
 
 	/** What the wire network may carry away this tick, in kW: what is made, less what other mods' cables took. */
+	@Override
 	public double getGeneratedPower() {
-		return TurbineExport.gridKw(producedKw, budget.claimed());
+		return budget.netKw(producedKw);
+	}
+
+	/** The wind at the hub, from which the grid decides whether this machine is putting a disturbance on the line. */
+	@Override
+	public WindSample windSample() {
+		return new WindSample(meanWind, turbulence);
 	}
 
 	/** Whether this generator is putting a disturbance onto the network. */
@@ -340,6 +346,11 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	@Override
 	public double getCurrentPower() {
 		return producedKw;
+	}
+
+	/** Nothing to tell it: a turbine's reading is what it makes, not what reaches it. */
+	@Override
+	public void deliverPower(double power) {
 	}
 
 	// ---- the tick ----
@@ -380,7 +391,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		rotorSpeed = TurbineDynamics.lagSpeed(rotorSpeed,
 				TurbineDynamics.targetDegreesPerTick(isParked(), cutOut, alignedWind, activePowerLimitKw, uncappedKw, spec));
 
-		budget.open(TurbineExport.offeredJoules(producedKw, getMaxJoulesPerTick()));
+		budget.open(producedKw, spec.ratedPowerKw());
 		EnergyBridge.emit(this, this, footPos(), energyFaces());
 
 		publishTelemetry(serverLevel, spec, braked);
@@ -437,7 +448,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		ensureDrawn();
 
 		// the nacelle turns onto the synced heading, not faster than a yaw drive could
-		double target = TurbineDynamics.modelRotationDegrees(currentYawWind());
+		double target = currentYawWind();
 		double gap = TurbineDynamics.shortestAngle(drawnYaw, target);
 		drawnYawBefore = drawnYaw;
 		drawnYaw = TurbineDynamics.wrapSigned(drawnYaw + Mth.clamp(gap * DRAWN_YAW_CATCH_UP, -DRAWN_YAW_MAX_STEP, DRAWN_YAW_MAX_STEP));
@@ -563,27 +574,24 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	/** Joules produced this tick, before anything was claimed. */
 	@Override
 	public double getGrossJoulesPerTick() {
-		return producedKw * TurbineExport.JOULES_PER_KW_TICK;
+		return producedKw * GeneratorBudget.joulesPerKw();
 	}
 
+	/** Other mods draw only on the server: a client has no budget and, on a dedicated server, no configuration to read. */
 	@Override
 	public double getAvailableJoules() {
-		if (level == null || level.isClientSide() || !ServerConfig.externalEnergyEnabled()) return 0.0;
-
-		return budget.available();
+		return level == null || level.isClientSide() ? 0.0 : budget.getAvailableJoules();
 	}
 
 	/** The most the turbine offers other mods in one tick: its nameplate times the configured share, under the absolute ceiling if there is one. */
 	@Override
 	public double getMaxJoulesPerTick() {
-		if (level == null || level.isClientSide() || !ServerConfig.externalEnergyEnabled()) return 0.0;
-
-		return TurbineExport.capacityJoules(spec().ratedPowerKw(), ServerConfig.turbineExportFraction(), ServerConfig.turbineMaxJoulesPerTick());
+		return level == null || level.isClientSide() ? 0.0 : budget.getMaxJoulesPerTick();
 	}
 
 	@Override
 	public double claimJoules(double joules, boolean simulate) {
-		return budget.claim(joules, simulate);
+		return level == null || level.isClientSide() ? 0.0 : budget.claimJoules(joules, simulate);
 	}
 
 	@Nonnull
@@ -629,8 +637,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	}
 
 	/**
-	 * Where the wire ends: the top of the fitting's porcelain, which sits at the foot of the tower and not up at the
-	 * machine, so the model's frame is lowered by the tower under it exactly as the renderer lowers it.  Until the
+	 * Where the wire ends: the middle of the fitting's porcelain, which stands beside the foot of the tower and not up at
+	 * the machine, so the model's frame is lowered by the tower under it exactly as the renderer lowers it.  Until the
 	 * model's table says where the fitting is, the middle of the foot block.
 	 */
 	@Nullable
@@ -641,8 +649,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		PartBox box = group == null ? null : PartBoxes.box(getBlockState().getBlock(), group);
 		if (definition == null || box == null) return Vec3.atCenterOf(footPos());
 
-		Vector3f top = box.top();
-		return ExtraPose.toWorld(new Vec3(top.x(), top.y(), top.z()), worldPosition, definition.authored(), facing(definition.authored()), this);
+		Vector3f centre = box.center();
+		return ExtraPose.toWorld(new Vec3(centre.x(), centre.y(), centre.z()), worldPosition, definition.authored(), facing(definition.authored()), this);
 	}
 
 	// ---- persistence and syncing ----

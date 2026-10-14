@@ -33,12 +33,15 @@ class TurbineSpecTest {
 
 	@Test
 	void drawingScalesOfEveryModel() {
-		assertEquals(0.1771, TurbineCatalog.SW_10.renderScale(), 0.0001);
-		assertEquals(0.3987, TurbineCatalog.C52_085.renderScale(), 0.0001);
-		assertEquals(0.6133, TurbineCatalog.C80_20.renderScale(), 0.0001);
-		assertEquals(0.6900, TurbineCatalog.C90_30.renderScale(), 0.0001);
-		assertEquals(0.8586, TurbineCatalog.C112_30.renderScale(), 0.0001);
-		assertEquals(0.9966, TurbineCatalog.C130_40.renderScale(), 0.0001);
+		// the redrawn model's rotor is exactly 13 blocks across, so the C130 is 1:1 and the others are D / 130
+		assertEquals(0.1777, TurbineCatalog.SW_10.renderScale(), 0.0001);
+		assertEquals(0.4000, TurbineCatalog.C52_085.renderScale(), 0.0001);
+		assertEquals(0.6154, TurbineCatalog.C80_20.renderScale(), 0.0001);
+		assertEquals(0.6923, TurbineCatalog.C90_30.renderScale(), 0.0001);
+		assertEquals(0.8615, TurbineCatalog.C112_30.renderScale(), 0.0001);
+		assertEquals(1.0000, TurbineCatalog.C130_40.renderScale(), 0.0001);
+		assertEquals(13.0, TurbineSpec.MODEL_ROTOR_DIAMETER_BLOCKS, 0.0);
+		assertEquals(13.0, TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS, 0.0);
 
 		// the small machine's nacelle is held at a quarter so it keeps a body worth drawing
 		assertEquals(0.25, TurbineCatalog.SW_10.nacelleRenderScale(), 1e-9);

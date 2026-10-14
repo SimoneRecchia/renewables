@@ -34,15 +34,19 @@ public class WindTurbineBlock extends MachineBlock {
 	public static final Direction AUTHORED = Direction.SOUTH;
 
 	private final TurbineSpec spec;
-	/** The nacelle as collision and as selection: a box on the floor of the block, centred on the tower's axis. */
-	private final VoxelShape shape;
+	/** The nacelle as collision and as selection, at each of the four facings: the hull and the cooler, cut to the block. */
+	private final MachineShell.Cell shape;
 
 	public WindTurbineBlock(Properties properties, TurbineSpec spec) {
 		super(properties);
 		this.spec = spec;
 
-		double half = TurbineGeometry.nacelleHalfWidth(spec);
-		this.shape = Shapes.box(0.5 - half, 0.0, 0.5 - half, 0.5 + half, TurbineGeometry.nacelleHeight(spec), 0.5 + half);
+		VoxelShape authored = Shapes.empty();
+		for (double[] b : TurbineGeometry.nacelleBoxes(spec)) {
+			authored = Shapes.or(authored, Shapes.box(b[0], b[1], b[2], b[3], b[4], b[5]));
+		}
+
+		this.shape = new MachineShell.Cell(0, 0, 0, authored);
 	}
 
 	public TurbineSpec spec() {
@@ -51,7 +55,7 @@ public class WindTurbineBlock extends MachineBlock {
 
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return shape;
+		return shape.shape(ModelFacing.quarters(AUTHORED, state.getValue(FACING)));
 	}
 
 	// ---- standing on a tower ----

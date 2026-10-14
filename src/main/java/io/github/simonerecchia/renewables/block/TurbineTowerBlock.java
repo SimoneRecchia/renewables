@@ -1,8 +1,12 @@
 package io.github.simonerecchia.renewables.block;
 
+import io.github.simonerecchia.renewables.api.power.TurbineSpec;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -23,6 +27,7 @@ import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -42,18 +47,20 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	 */
 	public static final int MAX_SEGMENTS = TurbineGeometry.SAFE_SEGMENTS;
 
-	/**
-	 * Two crossed boxes that make an octagon one block tall, centred in the block: 0.693 across one way and 0.490
-	 * the other, and the other way round.  The same for every tower whatever scale it is drawn at.
-	 */
-	private static final VoxelShape SHAPE = Shapes.or(
-			Shapes.box(0.5 - TurbineGeometry.TOWER_LONG_HALF, 0.0, 0.5 - TurbineGeometry.TOWER_SHORT_HALF,
-					0.5 + TurbineGeometry.TOWER_LONG_HALF, 1.0, 0.5 + TurbineGeometry.TOWER_SHORT_HALF),
-			Shapes.box(0.5 - TurbineGeometry.TOWER_SHORT_HALF, 0.0, 0.5 - TurbineGeometry.TOWER_LONG_HALF,
-					0.5 + TurbineGeometry.TOWER_SHORT_HALF, 1.0, 0.5 + TurbineGeometry.TOWER_LONG_HALF));
+	/** Finest radius step the tube's staircase is cached at: a tenth of a pixel. */
+	private static final double RADIUS_STEPS_PER_BLOCK = 160.0;
+	/** The tube's collision at each radius, built once: a shape is asked for far more often than it changes. */
+	private static final Map<Integer, VoxelShape> TUBES = new ConcurrentHashMap<>();
+	/** The insulator's box at the foot of a tower that carries a turbine, turned with the machine's four facings. */
+	private static final MachineShell.Cell INSULATOR = new MachineShell.Cell(0, 0, 0, box(TurbineGeometry.INSULATOR_BOX));
 
+	/** The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state. */
 	public TurbineTowerBlock(Properties properties) {
-		super(properties);
+		super(properties.dynamicShape());
+	}
+
+	private static VoxelShape box(double[] b) {
+		return Shapes.box(b[0], b[1], b[2], b[3], b[4], b[5]);
 	}
 
 	// ---- the column ----
@@ -109,9 +116,46 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 
 	// ---- shape and light ----
 
+	/**
+	 * The tube as the model draws it: a cone that is 0.34 in radius at the foot and 0.19 at the head, stretched over the
+	 * pile and scaled to the machine on it (a bare tower is scaled by its height).  This block's slice of it is a staircase
+	 * of rectangles round the axis, so what the player bumps into and points at is the tube and not a box around it.  The
+	 * foot of a tower that carries a turbine also has the insulator beside it, which is what a wire is strung to.
+	 *
+	 * Collision and selection are the same shape.
+	 */
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-		return SHAPE;
+		int below = countBelow(level, pos);
+		int above = 0;
+		BlockState head = null;
+		BlockPos.MutableBlockPos cursor = pos.mutable();
+		while (above < TurbineGeometry.SCAN_LIMIT) {
+			BlockState up = level.getBlockState(cursor.move(0, 1, 0));
+			if (!(up.getBlock() instanceof TurbineTowerBlock)) {
+				head = up;
+				break;
+			}
+
+			above++;
+		}
+
+		int height = below + above + 1;
+		TurbineSpec machine = head != null && head.getBlock() instanceof WindTurbineBlock turbine ? turbine.spec() : null;
+		double scale = machine != null ? machine.nacelleRenderScale() : TurbineGeometry.bareTowerScale(height);
+
+		int key = (int) Math.round(TurbineGeometry.towerRadius(below, height, scale) * RADIUS_STEPS_PER_BLOCK);
+		VoxelShape tube = TUBES.computeIfAbsent(key, k -> {
+			VoxelShape steps = Shapes.empty();
+			for (double[] b : TurbineGeometry.towerBoxes(k / RADIUS_STEPS_PER_BLOCK)) steps = Shapes.or(steps, box(b));
+
+			return steps.optimize();
+		});
+
+		if (below != 0 || machine == null) return tube;
+
+		int quarters = ModelFacing.quarters(WindTurbineBlock.AUTHORED, head.getValue(BlockStateProperties.HORIZONTAL_FACING));
+		return Shapes.or(tube, INSULATOR.shape(quarters));
 	}
 
 	@Override

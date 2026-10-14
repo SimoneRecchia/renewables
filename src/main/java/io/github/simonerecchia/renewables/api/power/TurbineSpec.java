@@ -56,9 +56,9 @@ public record TurbineSpec(
 	/** 16/27: no rotor of any design extracts more than this fraction of the wind's power. */
 	public static final double BETZ_LIMIT = 16.0 / 27.0;
 	/** Rotor diameter of the authored model, in blocks, measured from the hub centre of {@code wind_turbine.obj}. */
-	public static final double MODEL_ROTOR_DIAMETER_BLOCKS = 13.044;
+	public static final double MODEL_ROTOR_DIAMETER_BLOCKS = 13.0;
 	/** Height of the authored tower, in blocks. */
-	public static final double MODEL_TOWER_HEIGHT_BLOCKS = 12.43;
+	public static final double MODEL_TOWER_HEIGHT_BLOCKS = 13.0;
 	/** Smallest the nacelle is ever drawn, so the small-wind machine keeps a body worth texturing. */
 	private static final double SMALL_WIND_NACELLE_FLOOR = 0.25;
 
