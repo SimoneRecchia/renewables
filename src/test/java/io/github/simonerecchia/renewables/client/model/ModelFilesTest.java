@@ -208,6 +208,30 @@ class ModelFilesTest {
 	}
 
 	@Test
+	void theTurbineModelHasTheGroupsItsRendererPoses() {
+		MeshModel turbine = machine("wind_turbine/wind_turbine.obj");
+		assertHas("wind_turbine/wind_turbine.obj", List.of("insulator_insulator_porcelain"));
+		for (String prefix : List.of("pole_tower", "pole_base", "motor_nacelle", "rotate_1", "rotate_2")) {
+			assertNotNull(turbine.union(prefix), "no group " + prefix);
+		}
+
+		// the tube is 13 blocks, the nacelle rests on it, the hub is the middle of rotate_2
+		assertEquals(13.0f, turbine.union("pole").max().y(), 1e-4);
+		assertEquals(13.0f, turbine.union("motor").min().y(), 1e-4);
+		var hub = turbine.centerOf("rotate_2");
+		assertEquals(0.0f, hub.x(), 1e-4);
+		assertEquals(13.30f, hub.y(), 1e-3);
+		assertEquals(1.04f, hub.z(), 1e-3);
+		// the fitting is at the foot, beside the tower, and in reach
+		var fitting = turbine.box("insulator_insulator_porcelain").center();
+		assertEquals(0.375f, fitting.x(), 1e-3);
+		assertEquals(0.320f, fitting.y(), 1e-3);
+		assertEquals(0.375f, fitting.z(), 1e-3);
+		// no marker is ever drawn
+		assertTrue(turbine.group("pivot_rotor_flange").isMarker());
+	}
+
+	@Test
 	void theCableEntriesAndTheMovingGroupsUseTheNamesTheRenderersTest() {
 		for (String name : List.of("pv_inverter/pv_inverter.obj", "pv_combiner/pv_combiner.obj")) {
 			Set<String> entries = machine(name).groups.keySet().stream().filter(n -> n.startsWith("entry_")).collect(Collectors.toSet());
