@@ -149,10 +149,12 @@ final class ServerHandlers {
 			case SET_SETPOINT -> {
 				if (!Double.isFinite(message.value())) return;
 
-				// the panel's own scale is the plant's capacity, so a setpoint above it means nothing
-				double capacity = plant.getCapacityKw();
-				double kw = Math.max(0.0, message.value());
-				plant.setSetpointKw(capacity > 0.0 ? Math.min(kw, capacity) : kw);
+				// the panel's own scale is the plant's capacity, so a setpoint above it means nothing; and with no
+				// capacity in range the slider's value times nothing is a zero nobody chose, which would hold the
+				// plant at nothing as soon as its units came into range
+				if (!plant.hasCapacity()) return;
+
+				plant.setSetpointKw(Math.min(Math.max(0.0, message.value()), plant.getCapacityKw()));
 			}
 		}
 	}

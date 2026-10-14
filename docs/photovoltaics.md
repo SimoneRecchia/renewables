@@ -32,9 +32,11 @@ reports what it *could* have made, and its panel says so in as many words.
    ([Getting started](getting-started.md#building-your-first-grid)).
 6. Optionally place a **mast**. It needs no power and feeds nothing; it measures.
 
-An inverter takes the arrays whose runs are **shortest** first, up to the string terminals, the input
-current and the DC power it actually has. An array past those limits is not wired in and says so, and
-so does one whose string voltage falls outside the machine's tracking window.
+An inverter takes the arrays whose runs are **shortest** first, up to its string terminals, the current
+of each of its trackers, its DC power and the voltage a cold morning would put on its input. An array
+past those limits is not wired in, and the inverter's panel names which limit it hit. A string whose
+voltage falls outside the tracking window is wired, but held at the edge of the window, where it gives
+less - or nothing - and the panel names that too.
 
 The central machine takes **nothing** here however much cable you lay to it. It has bare busbars
 rather than fused string terminals, which is what a central inverter is, and what fills the gap is a
@@ -311,36 +313,39 @@ standard load points, which is what it means.
 
 ### What decides whether an array fits an inverter
 
-**Four figures, and any of them can be the one that refuses.** Two are hard refusals — the array
-does not come online at all — and two are capacity limits that stop the *next* array.
+**Four figures, and any of them can be the one that refuses.** The panel names the one that did.
 
 | Test | The figure | What happens when it fails |
 |---|---|---|
-| Tracking window | string Vmp at operating temperature against 140–980 V etc. | refused, and the panel names the window |
 | Input rating | string Voc at −10 °C against Max DC volts | refused: a cold morning would exceed the input |
-| Terminals | one per string, 4 / 18 / 32 / 288 | the array is not wired in |
-| **Input current** | the strings' amps against MPPT count × A/MPPT | the array is not wired in, with terminals still free |
+| Terminals | one per string, 2 / 18 / 32 / 288 | the array is not wired in |
+| DC power | nameplate against Max DC | the array is not wired in |
+| **Tracker current** | each string's Imp against *one* tracker's A/MPPT, and a free terminal on that tracker | the array is not wired in, with terminals still free |
 
-The current limit is the one people are surprised by, and it is the one that binds most often.
-Worked out across the whole catalogue, arrays each inverter will actually take:
+A string is landed on one tracker's terminals and cannot be shared between two, so the current limit
+is per tracker, not the sum of them: two 17.3 A strings do not go on a 26 A input, however much room
+the other trackers have. Each string goes on the tracker it fits most tightly. A combiner box's trunk
+goes on busbars feeding the trackers together, so it has to fit under what they have left between them.
+Worked out across the whole catalogue, arrays each string inverter will actually take:
 
-| | VX-10K | VX-110K | VX-350K | VC-2500K |
-|---|---|---|---|---|
-| FT-415 flat table | 0, power | **8, current** | 16, terminals | window |
-| FT-430 flat table | 0, power | **8, current** | 16, terminals | window |
-| TR-580 fixed tilt | 1, power | 15, power | 32, terminals | window |
-| TR-530 thin film | window | window | 10, terminals | **96, terminals** |
-| HX-700 tracker | 1, power | **13, current** | **27, current** | window |
-| AE-440 dual axis | input rating | input rating | 32, terminals | window |
+| | VX-10K | VX-110K | VX-350K |
+|---|---|---|---|
+| FT-415 flat table | 0, power | **4, current** | 16, terminals |
+| FT-430 flat table | 0, terminals | 4, terminals | 8, terminals |
+| TR-580 fixed tilt | **0, current** | **9, current** | 32, terminals |
+| TR-530 thin film | input rating | input rating | 10, terminals |
+| HX-700 tracker | **0, current** | **9, current** | **16, current** |
+| AE-440 dual axis | 2, terminals | 18, terminals | 32, terminals |
 
-Read the HX-700 row: eighteen terminals free on a VX-110K and only **thirteen** arrays fit,
-because a 210 mm cell module's string carries 17.7 A and nine trackers at 26 A will take 234 A
-between them. That is the constraint a real designer meets before running out of holes, and it is
-why a high-current module ends up on fewer strings per tracker than a narrow one.
+Read the HX-700 row: eighteen terminals free on a VX-110K and only **nine** arrays fit, one to a
+tracker, because a 210 mm cell module's string carries 17.3 A and a tracker takes 26. And the TR-580's
+13.62 A string is just over the VX-10K's 13.5 A input. That is the constraint a real designer meets
+before running out of holes, and it is why a high-current module ends up on fewer strings per tracker
+than a narrow one. (A real inverter clips an input current over its rating and only refuses a short-
+circuit current over its limit; the mod refuses on Imp, which is the stricter reading.)
 
-And the smallest machine takes **no flat table at all**: one block of flat table is 18.3 kW and a
-10 kW residential inverter's input is rated to 15. A residential machine is for a residential
-array, which here means a fixed rack or a single tracker.
+The central VC-2500K takes strings only through a box - one fitted inside it, whose ways limit only what
+is wired into that box, or boxes on its trunk - and counts its 288 inputs over all of them.
 
 The spare input is published as `dcCurrentHeadroom`, because an array standing beside an inverter
 with terminals to spare and still not wired in has no other way of telling you why.
@@ -349,9 +354,10 @@ with terminals to spare and still not wired in has no other way of telling you w
 
 **The tracking window is a real constraint**, and it is the one mismatch you can make without
 being able to see it. A string sits at a voltage decided by how many modules are in series and
-how hot they are; if that lands outside the machine's window it cannot be tracked, and the
-plant sits in standby forever. So the panel names the window and the voltage rather than
-leaving it at "standby".
+how hot they are; if that lands outside the machine's window its tracker holds it at the nearest
+edge instead, off its maximum power point - a string held below its knee gives that much less, and
+one held above its open-circuit voltage gives nothing. So the panel names the window and the
+voltage of the string it is holding off.
 
 | Array | String at 55 °C | VX-10K | VX-110K | VX-350K | VC-2500K |
 |---|---|---|---|---|---|
@@ -369,8 +375,9 @@ rather than a voltage range.
 
 **String against central** is the real choice. A string inverter has a maximum power point
 tracker per few strings, so a shaded, soiled or failed row only drags down its own tracker.
-The central machine has one tracker for two and a half megawatts, so the weakest string in
-the plant sets the operating point for all of them — and in exchange it is cheaper per watt
+The central machine has one tracker for two and a half megawatts: every string is on one bus,
+held at the one voltage that makes the most between them, and a string whose open-circuit
+voltage is under that bus gives nothing at all — and in exchange it is cheaper per watt
 and lives in one place. That is what the MPPT count in the table is telling you, and it is
 why the central machine's input window is narrow and high: it is designed around one string
 length and the strings are built to suit it.
@@ -378,7 +385,9 @@ length and the strings are built to suit it.
 **They draw power overnight.** A watt on the residential machine, a hundred on the central
 one, and it is why a real plant's meter reads slightly negative between sunset and sunrise —
 the controller, the communications and the insulation monitoring all have to stay alive. The
-panel shows it as a negative active power. A stopped inverter still draws it.
+panel shows it as a negative active power. A stopped inverter still draws it. It is a reading
+only: the grid does not charge it, and a box's monitoring, which real boxes power from the
+strings, draws nothing at night.
 
 **They derate.** Full output to 45 or 50 °C of air and backing off above, down to half
 nameplate at the top of the range. On the panel that is the cabinet gauge crossing into the
@@ -511,8 +520,10 @@ against the drive's reachable band, and reports `backtracking` while it is happe
 
 ### What the second axis is worth here, honestly
 
-Almost nothing. Minecraft's sun rises due east, passes through the zenith and sets due west,
-so it never leaves one vertical plane: a north-south horizontal axis holds a plane square to
+Almost nothing. Minecraft's sun rises due east, passes through the zenith and sets due west -
+the mod's sun is the one the game draws, elevation and all, up a little before the day clock's
+zero, down a little after twelve thousand and lingering round noon - so it never leaves one
+vertical plane: a north-south horizontal axis holds a plane square to
 it all day on its own, and an azimuth drive has nothing to chase. A tracker placed here
 snaps its axis to north-south for that reason, whichever way you were facing.
 
@@ -610,8 +621,11 @@ which is the shunt resistance carrying a fixed share of a shrinking current.
 
 Four kinds, and they are not interchangeable.
 
-**Something overhead** is traced along the sun's actual direction, so a wall to the east
-shades an array at breakfast and not at lunch. Obstructions **attenuate rather than switch**:
+**Something overhead or beside it** is traced along the sun's actual direction from the middle
+of the module plane - low on a ballasted table, on the torque tube of a tracker - so a wall to the
+east shades an array at breakfast and not at lunch, and so does anything standing east or west of
+a row taller than its modules: a cabinet, a box, the met mast. Obstructions **attenuate rather than
+switch**:
 
 | Over the array | Beam that gets through |
 |---|---|
@@ -622,6 +636,7 @@ shades an array at breakfast and not at lunch. Obstructions **attenuate rather t
 | Water | 50% |
 | Leaves | 25% |
 | Anything solid | 0% |
+| A shape that is not a full block (a cabinet, a slab, a post) | what its outline leaves of the beam's cross-section, where the ray crosses it |
 
 The **sky** is shaded separately, by how much of the dome the array can see — nine rays,
 weighted by how much each direction contributes to a plane, resurveyed every ten seconds
@@ -632,15 +647,18 @@ plane's irradiance. The same obstruction under a full overcast costs **nothing a
 because there is no beam left to block. A model with one lumped irradiance figure gets both
 ends wrong.
 
-**Something moving over it** — a player standing on an array, a mob wandering across —
-takes its own footprint's share of the block along the sun's direction, so a player costs
-about a third of one array block and it moves with them.
+**Something moving over it** — a player standing on an array, a mob, a cart — casts its shadow
+down the sun's direction onto the module plane, and only the part that lands on the row counts:
+a player standing on an array at noon costs a third of it, one standing beside it nothing, and
+in a low sun the same player a block east of the row throws a long shadow across it. Items,
+arrows and orbs cast none.
 
 **The array shading itself** is geometry rather than obstruction, and it is what ground cover
 ratio is *for*. A flat array never shades itself at any ground cover, which is why the flat
-table here can be packed nearly solid. A 25° rack at 47% cover starts shading below about 19°
-of sun elevation and loses a third of its rows by 10°. A tracker holds it at zero by
-backtracking.
+table here can be packed nearly solid. A 25° rack at 47% cover facing the sun starts shading
+below about 19° of sun elevation and loses a third of its rows by 10°. What counts is the sun's
+angle across the rows: a rack facing north or south has the sun running along its rows all day
+and never shades itself. A tracker holds it at zero by backtracking.
 
 **Neighbouring arrays do not shade each other** beyond that, and that is correct rather than
 a simplification: a block is a hundred square metres carrying several rows, so the next block
@@ -658,12 +676,14 @@ tolerance — which is exactly what a real field's trends look like.
 
 **Snow buries an array**, and this is the loss a cold-climate plant actually loses its winter
 to. It is read out of the world rather than accumulated, so if there is snow on the block
-there is snow on the modules. One vanilla snow layer stands for five centimetres, and five
-centimetres passes about 8% of the light.
+there is snow on the modules - and snow settles on every row when it snows, flat tables
+included. One vanilla snow layer stands for five centimetres, and five centimetres passes about
+8% of the light.
 
 An array **sheds** snow if it is tilted at least 30° and its modules are above freezing — and
-when it does, it *removes the snow block*, because reporting itself clear while sitting under
-a snow layer that never went anywhere would be a lie. Below 30° it cannot, which is the field
+when it does, it *removes the snow layers*, because reporting itself clear while sitting under
+a snow layer that never went anywhere would be a lie. A snow block a player has put there is
+not snow that fell, and stays. Below 30° it cannot, which is the field
 data's own threshold: elevated modules at 30 and 45 degrees shed within a day or two and lose
 5 to 12% of the year, while below thirty an array covered early in the winter can stay covered
 until spring.
@@ -676,9 +696,14 @@ biome is — and the causation runs the way you would not guess: a desert is not
 it is dusty, it is worse because it never rains to wash it. It saturates at 15%.
 
 Rain washes it off, and **how much depends on the tilt**: rain running off a tilted module
-carries the dust with it, while rain on a flat one pools, spreads it about and dries dirty. So
-a flat array in a dry climate carries a standing soiling loss that never quite washes out,
-which is a real and well documented nuisance.
+carries the dust with it, while rain on a flat one pools, spreads it about and dries dirty. A
+shower takes a tilted row clean over a few minutes and a flat one only about halfway, whatever
+the rain. So a flat array in a dry climate carries a standing soiling loss that never quite
+washes out, which is a real and well documented nuisance.
+
+The dust builds up by the day clock, like everything else that happens against the sky - the
+tracker's drive, its stow and diffuse dwells: with the daylight cycle stopped nothing gathers
+dust, and under the wall-clock rule a tracker turns at its real four degrees a minute.
 
 ---
 

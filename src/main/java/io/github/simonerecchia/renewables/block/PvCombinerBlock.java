@@ -99,10 +99,14 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 		return true;
 	}
 
-	/** An empty hand throws the switch. */
+	/**
+	 * An empty main hand throws the switch, unless the other hand holds one of the mod's tools, whose click it is.
+	 * Asked of the main hand only: with an item in it that does nothing here, vanilla tries again with the off hand,
+	 * which is usually empty - and the switch went over with a stick in hand.
+	 */
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
+		if (hand != InteractionHand.MAIN_HAND || !Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
 
 		boolean isolated = !state.getValue(ISOLATED);
 		if (!level.isClientSide) {

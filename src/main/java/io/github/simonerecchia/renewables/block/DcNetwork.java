@@ -47,13 +47,15 @@ public final class DcNetwork {
 		Set<BlockPos> visited = new HashSet<>();
 		Set<BlockPos> claimed = new HashSet<>();
 		Deque<Step> frontier = new ArrayDeque<>();
+		// the longest run followed, not the copper counted: a comb of short branches off a long spine is
+		// forty blocks of cable and no run longer than nineteen. MAX_RUNS is only the backstop on the walk
 		int budget = Math.min(MAX_RUNS, Math.max(1, maxRuns));
 
 		for (BlockPos start : reaching(level, origin, cable)) {
 			if (visited.add(start)) frontier.add(step(level, start, 0, 0));
 		}
 
-		while (!frontier.isEmpty() && visited.size() <= budget) {
+		while (!frontier.isEmpty() && visited.size() <= MAX_RUNS) {
 			Step at = frontier.poll();
 			BlockState state = level.getBlockState(at.pos());
 			if (!(state.getBlock() instanceof DcCableBlock run)) continue;

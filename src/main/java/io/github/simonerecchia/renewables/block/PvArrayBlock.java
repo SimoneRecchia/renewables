@@ -4,8 +4,11 @@ import io.github.simonerecchia.renewables.api.power.DcCableSpec;
 import io.github.simonerecchia.renewables.api.power.PvArraySpec;
 import io.github.simonerecchia.renewables.api.power.PvMounting;
 import io.github.simonerecchia.renewables.catalog.CableCatalog;
+import io.github.simonerecchia.renewables.model.PartBox;
+import io.github.simonerecchia.renewables.model.PartBoxes;
 
 import io.github.simonerecchia.renewables.registry.ModItems;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -25,6 +28,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -66,10 +70,27 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 			PvMounting.SINGLE_AXIS, TRACK_CELLS,
 			PvMounting.DUAL_AXIS, DUAL_CELLS);
 
+	/** The part of each model whose height is the module plane's: the torque tube's axis on a tracker, the modules' middle on a rack. */
+	private static final Map<PvMounting, String> PLANE_PART = Map.of(
+			PvMounting.FLAT, "modules_module",
+			PvMounting.FIXED_TILT, "modules_module",
+			PvMounting.SINGLE_AXIS, "pivot_tube_steel",
+			PvMounting.DUAL_AXIS, "pivot_elevation_steel");
+	/** The same heights as fittings.json had them when this was written, for a table that is missing. */
+	private static final Map<PvMounting, Double> PLANE_FALLBACK = Map.of(
+			PvMounting.FLAT, 0.24,
+			PvMounting.FIXED_TILT, 0.47,
+			PvMounting.SINGLE_AXIS, 0.68,
+			PvMounting.DUAL_AXIS, 0.75);
+
 	private final PvArraySpec spec;
 
+	/**
+	 * Solid, whatever its shape: a row is something snow settles on and rain stops at.  A ballasted table is too low
+	 * for vanilla's own test, which left it out of the precipitation heightmap, so no snow could ever lie on one.
+	 */
 	public PvArrayBlock(Properties properties, PvArraySpec spec) {
-		super(properties.sound(SoundType.GLASS));
+		super(properties.sound(SoundType.GLASS).forceSolidOn());
 		this.spec = spec;
 		registerDefaultState(defaultBlockState().setValue(FACING, Direction.NORTH).setValue(HARNESSED, false));
 	}
@@ -107,6 +128,12 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		return state.getBlock() instanceof PvArrayBlock && state.getValue(HARNESSED);
 	}
 
+	/** How high the module plane stands above the block's floor, in blocks, read off the model the row is drawn with. */
+	public double planeHeight() {
+		PartBox part = PartBoxes.box(this, PLANE_PART.get(spec.mounting()));
+		return part == null ? PLANE_FALLBACK.get(spec.mounting()) : part.center().y();
+	}
+
 	/** Whether a block is one of these rows at all. */
 	public static boolean row(BlockState state) {
 		return state.getBlock() instanceof PvArrayBlock;
@@ -137,14 +164,18 @@ public class PvArrayBlock extends HorizontalDirectionalBlock implements EntityBl
 		return takes(state, face) || gives(state, face);
 	}
 
-	/** Hands the leads back when the array is taken away. */
+	/**
+	 * The leads come back with the row, by the row's own loot rule: not from a creative player's break, and from an
+	 * explosion only when the row itself survives it.
+	 */
 	@Override
-	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-		if (!level.isClientSide && !state.is(newState.getBlock()) && state.getValue(HARNESSED)) {
-			popResource(level, pos, new ItemStack(ModItems.DC_CABLES.get(CableCatalog.STRING_6.id()).get()));
-		}
+	public List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+		List<ItemStack> drops = super.getDrops(state, params);
+		if (drops.isEmpty() || !state.getValue(HARNESSED)) return drops;
 
-		super.onRemove(state, level, pos, newState, movedByPiston);
+		List<ItemStack> withLeads = new ArrayList<>(drops);
+		withLeads.add(new ItemStack(ModItems.DC_CABLES.get(CableCatalog.STRING_6.id()).get()));
+		return withLeads;
 	}
 
 	@Override
