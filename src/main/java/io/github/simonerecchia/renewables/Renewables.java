@@ -27,10 +27,10 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
  * The mod's entry point: declares the registries, the configuration and the game rule, and wires the event
  * handlers.  There is no game logic here.
  *
- * Order matters in the constructor, and is the one in docs/spec/entry.md section 3: the game rule has to
- * exist before any world data is read (rules are deserialised with the world, so one registered later would
- * be missing from a world that had set it), and the block entity registry joins the bus after its types are
- * declared.
+ * Order matters in the constructor, and is the one in docs/spec/entry.md section 3: the block entity registry
+ * joins the bus after its types are declared.  The game rule is not registered here: constructors run in parallel
+ * on the mod-loading workers and GameRules keeps its rules in an unsynchronised static map, so it goes in common
+ * setup's main-thread work - still before any world is read, which is when a saved rule needs to exist.
  */
 @Mod(Renewables.MOD_ID)
 public final class Renewables {
@@ -46,7 +46,6 @@ public final class Renewables {
 
 		// stored with the world, not in config/: <world>/serverconfig/Renewables/server.toml
 		ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC, "Renewables/server.toml");
-		ModGameRules.register();
 
 		ModBlockEntities.BLOCK_ENTITIES.register(modBus);
 
@@ -60,8 +59,9 @@ public final class Renewables {
 	}
 
 	private static void onCommonSetup(FMLCommonSetupEvent event) {
-		// queued onto the main thread: registries are fully frozen by then
+		// queued onto the main thread: registries are fully frozen by then, and no other mod is writing GameRules
 		event.enqueueWork(() -> {
+			ModGameRules.register();
 			Net.init();
 			ModelDefinitions.bootstrap();
 			ComputerCraftBridge.register();
