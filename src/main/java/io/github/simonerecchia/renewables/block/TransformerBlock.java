@@ -214,7 +214,7 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 			MachineShell.clear(level, pos, state);
 			if (!level.isClientSide && level instanceof ServerLevel serverLevel
 					&& level.getBlockEntity(pos) instanceof TransformerBlockEntity transformer) {
-				WireLedger.removeAttachedTo(serverLevel, transformer.getInsulatorIds());
+				WireLedger.removeAttachedTo(serverLevel, pos, transformer.getInsulatorIds());
 			}
 		}
 

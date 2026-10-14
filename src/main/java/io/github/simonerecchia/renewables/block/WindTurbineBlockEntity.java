@@ -374,6 +374,12 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		return budget.netKw(producedKw);
 	}
 
+	/** What the grid took is spent: no other mod may claim it before the next tick's budget. */
+	@Override
+	public void drawnByGrid(double kw) {
+		budget.drawForGrid(kw);
+	}
+
 	/** The wind at the hub, from which the grid decides whether this machine is putting a disturbance on the line. */
 	@Override
 	public WindSample windSample() {

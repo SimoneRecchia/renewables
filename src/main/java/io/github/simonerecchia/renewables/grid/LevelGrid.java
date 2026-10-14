@@ -26,11 +26,15 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * The network of one level: builds the graph from the saved spans and the machines that are loaded, hands it to
  * {@link GridSolver}, and delivers the answer to every machine and to the clients that can see it.
  *
- * The graph is rebuilt from scratch on every calculation, because the things that decide it change without telling
- * anyone: a generator's output moves every tick, and a switch changes its buses.  What this object keeps between
- * calculations is only what has to survive them - which positions were powered (so a machine that drops out is told
- * zero), what the clients were last sent (so that a steady reading is not repeated every tick) and the disturbance a
- * turbine is in the middle of.
+ * The graph is read from the world on every calculation, because the things that decide it change without telling
+ * anyone: a switch opens or closes, a chunk goes and takes its machines with it.  What the solver works out from
+ * the graph alone is kept for as long as the graph reads the same ({@link #network}), so a steady tick only pushes
+ * the generators' output through.  The rest this object keeps between calculations is what has to survive them -
+ * which positions were powered (so a machine that drops out is told zero), what the clients were last sent (so that
+ * a steady reading is not repeated every tick) and the disturbance a turbine is in the middle of.
+ *
+ * A machine that throws is left out of the calculation, not allowed to stop it; the failure is logged once a
+ * minute ({@link FaultLog}).
  *
  * Lengths of ground-laid conductor that touch are one conductor: the runs joined to a run a span reaches are in the
  * graph too, a block of that conductor between each two ({@link #joinRuns}).
@@ -40,8 +44,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * was strung to is stale and goes, with its refund.
  */
 final class LevelGrid {
-	/** A reading that has moved by less than this many kW is not worth a packet. */
+	/** A reading that has moved by less than this many kW is not worth a packet... */
 	static final double SEND_TOLERANCE_KW = 0.05;
+	/** ...nor one that has moved by less than this share of what was sent: a megawatt machine moves kilowatts a tick. */
+	static final double SEND_TOLERANCE_SHARE = 0.005;
+	/** A reading that keeps moving is sent at most this often, so a wind farm is not a packet per machine per tick. */
+	static final long MIN_SEND_INTERVAL_TICKS = 10;
 	/** But a client that has been told nothing for this long is told again, so a lost or missed update heals in a second. */
 	static final long HEARTBEAT_TICKS = 20;
 
@@ -75,10 +83,24 @@ final class LevelGrid {
 	private Map<Integer, PowerDeliveryEvent> memory = new HashMap<>();
 	private long memoryTick = Long.MIN_VALUE;
 	private boolean running;
+	private final FaultLog faults = new FaultLog();
+
+	/** The solver for the graph last read, and that graph: the per-generator work it caches outlives a tick. */
+	@Nullable
+	private GridSolver network;
+	private List<GridSolver.Node> networkNodes = List.of();
+	private List<GridSolver.Edge> networkEdges = List.of();
+	private Set<Long> networkLoads = Set.of();
+	private Map<Long, Boolean> networkSwitches = Map.of();
 
 	/** Whether there is nothing left to remember, so the owner may let this go until the level has spans again. */
 	boolean idle() {
 		return powered.isEmpty() && sent.isEmpty() && memory.isEmpty();
+	}
+
+	/** Where this level's grid reports what went wrong. */
+	FaultLog faults() {
+		return faults;
 	}
 
 	/** Builds the graph, solves it and delivers.  Does nothing if a calculation is already under way (a delivery that triggers one). */
@@ -97,16 +119,17 @@ final class LevelGrid {
 		List<WireConnection> spans = WireLedger.spans(level);
 
 		Map<Long, Slot> slots = new HashMap<>();
-		Set<Integer> stale = new LinkedHashSet<>();
+		Map<BlockPos, Set<Integer>> stale = new LinkedHashMap<>();
 		List<WireConnection> live = new ArrayList<>(spans.size());
 		List<End[]> ends = new ArrayList<>(spans.size());
 		for (WireConnection span : spans) {
 			End start = resolve(level, slots, span.startBlockPos(), span.startBlockType(), span.startInsulatorId());
 			End end = resolve(level, slots, span.endBlockPos(), span.endBlockType(), span.endInsulatorId());
 
-			// every id that points at the wrong thing is cleared of all its spans, not just this one
-			if (start.status() == Status.STALE) stale.add(span.startInsulatorId());
-			if (end.status() == Status.STALE) stale.add(span.endInsulatorId());
+			// every end that points at the wrong thing loses all its spans, not just this one - but only the spans
+			// that put that id at that block: the same id elsewhere is another machine's
+			if (start.status() == Status.STALE) stale.computeIfAbsent(span.startBlockPos(), key -> new LinkedHashSet<>()).add(span.startInsulatorId());
+			if (end.status() == Status.STALE) stale.computeIfAbsent(span.endBlockPos(), key -> new LinkedHashSet<>()).add(span.endInsulatorId());
 
 			if (start.status() == Status.ACTIVE && end.status() == Status.ACTIVE) {
 				live.add(span);
@@ -115,13 +138,12 @@ final class LevelGrid {
 		}
 
 		if (!stale.isEmpty()) {
-			int[] ids = stale.stream().mapToInt(Integer::intValue).toArray();
-			WireLedger.removeAttachedTo(level, ids);
+			stale.forEach((pos, ids) -> WireLedger.removeAttachedTo(level, pos, ids.stream().mapToInt(Integer::intValue).toArray()));
 
 			// the spans just removed are not in the graph either
 			for (int i = live.size() - 1; i >= 0; i--) {
 				WireConnection span = live.get(i);
-				if (stale.contains(span.startInsulatorId()) || stale.contains(span.endInsulatorId())) {
+				if (isStale(stale, span.startBlockPos(), span.startInsulatorId()) || isStale(stale, span.endBlockPos(), span.endInsulatorId())) {
 					live.remove(i);
 					ends.remove(i);
 				}
@@ -165,16 +187,63 @@ final class LevelGrid {
 		Map<Long, Boolean> switches = new HashMap<>();
 		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
 			InsulatorHost host = entry.getValue();
-			if (host.losesInPassing()) passages.put(entry.getKey(), host::throughLossKw);
+			if (host.losesInPassing()) passages.put(entry.getKey(), through -> throughLoss(level, entry.getKey(), host, through));
 			if (host.isLoad()) loads.add(entry.getKey());
 			if (host.passesThrough()) switches.put(entry.getKey(), host.closed());
 		}
 
-		List<GridSolver.Source> sources = sources(level, hosts, firstNode);
-		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads, switches);
-		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(nodes.values(), readings);
+		Map<Integer, InsulatorHost> generators = new HashMap<>();
+		List<GridSolver.Source> sources = sources(level, hosts, firstNode, generators);
+		List<GridSolver.Node> graph = new ArrayList<>(nodes.values());
+		GridSolver.Solution solution = network(graph, edges, loads, switches).solve(sources, passages);
+		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(graph, solution.readings());
 
 		deliver(level, hosts, byPosition);
+
+		// what the grid carried away is spent: no other mod's cable may take it again before the next tick
+		solution.drawn().forEach((node, kw) -> {
+			InsulatorHost host = generators.get(node);
+			if (host == null) return;
+
+			try {
+				host.drawnByGrid(kw);
+			} catch (RuntimeException e) {
+				faults.report(level, "the machine at " + describe(host) + " failed to take its draw", e);
+			}
+		});
+	}
+
+	/** The solver for this graph: the one already built if the graph reads exactly as it did, else a new one. */
+	private GridSolver network(List<GridSolver.Node> nodes, List<GridSolver.Edge> edges, Set<Long> loads, Map<Long, Boolean> switches) {
+		if (network == null || !nodes.equals(networkNodes) || !edges.equals(networkEdges) || !loads.equals(networkLoads)
+				|| !switches.equals(networkSwitches)) {
+			network = GridSolver.network(nodes, edges, loads, switches);
+			networkNodes = nodes;
+			networkEdges = edges;
+			networkLoads = loads;
+			networkSwitches = switches;
+		}
+
+		return network;
+	}
+
+	private static boolean isStale(Map<BlockPos, Set<Integer>> stale, BlockPos pos, int id) {
+		Set<Integer> ids = stale.get(pos);
+		return ids != null && ids.contains(id);
+	}
+
+	/** A transformer that fails to say what it burns is a broken one, and passes nothing on. */
+	private double throughLoss(ServerLevel level, long pos, InsulatorHost host, double throughKw) {
+		try {
+			return host.throughLossKw(throughKw);
+		} catch (RuntimeException e) {
+			faults.report(level, "the machine at " + BlockPos.of(pos).toShortString() + " failed to give its losses", e);
+			return throughKw;
+		}
+	}
+
+	private static String describe(InsulatorHost host) {
+		return host instanceof BlockEntity entity ? entity.getBlockPos().toShortString() : host.fittingType();
 	}
 
 	private void addNode(Map<Integer, GridSolver.Node> nodes, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode,
@@ -237,8 +306,12 @@ final class LevelGrid {
 		}
 	}
 
-	/** Every machine in the graph that is putting power on the network, with the disturbance it is carrying. */
-	private List<GridSolver.Source> sources(ServerLevel level, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode) {
+	/**
+	 * Every machine in the graph that is putting power on the network, with the disturbance it is carrying; each one's
+	 * node goes into {@code generators}.
+	 */
+	private List<GridSolver.Source> sources(ServerLevel level, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode,
+			Map<Integer, InsulatorHost> generators) {
 		long now = level.getGameTime();
 		boolean advance = now != memoryTick;
 		Map<Integer, PowerDeliveryEvent> next = advance ? new HashMap<>() : memory;
@@ -246,12 +319,21 @@ final class LevelGrid {
 		List<GridSolver.Source> sources = new ArrayList<>();
 		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
 			InsulatorHost host = entry.getValue();
-			double power = host.getGeneratedPower();
+			double power;
+			WindSample wind;
+			try {
+				power = host.getGeneratedPower();
+				wind = power > 0.0 ? host.windSample() : null;
+			} catch (RuntimeException e) {
+				faults.report(level, "the machine at " + BlockPos.of(entry.getKey()).toShortString() + " failed to give its output", e);
+				continue;
+			}
+
 			if (!(power > 0.0)) continue;
 
 			int node = firstNode.get(entry.getKey());
+			generators.put(node, host);
 			PowerDeliveryEvent event = PowerDeliveryEvent.NONE;
-			WindSample wind = host.windSample();
 			if (wind != null) {
 				// one draw per game tick: a second calculation in the same tick (a switch moved) must not
 				// count the disturbance down twice
@@ -276,10 +358,16 @@ final class LevelGrid {
 			if (host == null) continue;
 
 			GridSolver.Reading reading = entry.getValue();
-			host.deliverPower(reading.powerKw());
-			host.deliverEvent(reading.event());
-			publish(level, entry.getKey(), reading.powerKw());
 			now.add(entry.getKey());
+			try {
+				host.deliverPower(reading.powerKw());
+				host.deliverEvent(reading.event());
+			} catch (RuntimeException e) {
+				faults.report(level, "the machine at " + BlockPos.of(entry.getKey()).toShortString() + " failed to take its power", e);
+				continue;
+			}
+
+			publish(level, entry.getKey(), reading.powerKw());
 		}
 
 		// positions that were powered and are no longer in the graph are told zero, once the chunk is there to be told
@@ -294,8 +382,12 @@ final class LevelGrid {
 			}
 
 			if (level.getBlockEntity(at) instanceof InsulatorHost host) {
-				host.deliverPower(0.0);
-				host.deliverEvent(PowerDeliveryEvent.NONE);
+				try {
+					host.deliverPower(0.0);
+					host.deliverEvent(PowerDeliveryEvent.NONE);
+				} catch (RuntimeException e) {
+					faults.report(level, "the machine at " + at.toShortString() + " failed to take its power", e);
+				}
 			}
 
 			if (sent.remove(pos) != null) sendNow(level, at, 0.0);
@@ -304,14 +396,27 @@ final class LevelGrid {
 		powered = next;
 	}
 
-	/** Tells the clients a reading, but only if it moved or it is time to say it again. */
+	/** Tells the clients a reading, but only if it is worth a packet ({@link #worthSending}). */
 	private void publish(ServerLevel level, long pos, double kw) {
 		long now = level.getGameTime();
 		Sent last = sent.get(pos);
-		if (last != null && Math.abs(kw - last.kw()) <= SEND_TOLERANCE_KW && now - last.tick() < HEARTBEAT_TICKS) return;
+		if (last != null && !worthSending(kw, last.kw(), now - last.tick())) return;
 
 		sent.put(pos, new Sent(kw, now));
 		if (!level.players().isEmpty()) sendNow(level, BlockPos.of(pos), kw);
+	}
+
+	/**
+	 * Whether a reading is sent, given what was sent last and how many ticks ago.  Power coming or going is sent at
+	 * once; a reading that moved by more than {@link #SEND_TOLERANCE_KW} and {@link #SEND_TOLERANCE_SHARE} of itself
+	 * at most every {@link #MIN_SEND_INTERVAL_TICKS}; anything after {@link #HEARTBEAT_TICKS}, moved or not.
+	 */
+	static boolean worthSending(double kw, double lastKw, long age) {
+		if ((kw > 0.0) != (lastKw > 0.0)) return true;
+		if (age >= HEARTBEAT_TICKS) return true;
+
+		double tolerance = Math.max(SEND_TOLERANCE_KW, SEND_TOLERANCE_SHARE * Math.abs(lastKw));
+		return age >= MIN_SEND_INTERVAL_TICKS && Math.abs(kw - lastKw) > tolerance;
 	}
 
 	private static void sendNow(ServerLevel level, BlockPos pos, double kw) {

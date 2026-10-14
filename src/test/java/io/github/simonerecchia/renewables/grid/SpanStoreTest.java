@@ -88,6 +88,37 @@ class SpanStoreTest {
 		assertTrue(store.isEmpty());
 	}
 
+	/**
+	 * A machine copied with its data carries the original's ids.  Taking the copy out removes the spans that put
+	 * those ids at the copy's block, and none of the original's.
+	 */
+	@Test
+	void removingAtAPositionLeavesTheSameIdsElsewhere() {
+		SpanStore store = new SpanStore();
+		BlockPos original = new BlockPos(3205, -60, 5);
+		BlockPos copy = new BlockPos(1604, -60, 4);
+		store.add(new WireConnection(33, 25, "mv_conductor", original, new BlockPos(1602, -60, 2),
+				"utility_pole", "utility_pole", "bidirectional", "bidirectional", 3));
+		store.add(new WireConnection(26, 34, "mv_conductor", new BlockPos(1600, -60, 0), copy,
+				"utility_pole", "utility_pole", "bidirectional", "bidirectional", 1));
+
+		List<WireConnection> removed = store.removeAttachedAt(copy, List.of(33, 34));
+
+		assertEquals(1, removed.size());
+		assertEquals(26, removed.get(0).startInsulatorId());
+		assertTrue(store.joined(33, 25));
+	}
+
+	@Test
+	void anIdIsWhereItsSpansPutIt() {
+		SpanStore store = new SpanStore();
+		store.add(span(1, 2));
+		store.add(span(3, 1));
+
+		assertEquals(java.util.Set.of(new BlockPos(1, 64, 0)), store.endsOf(1));
+		assertTrue(store.endsOf(9).isEmpty());
+	}
+
 	@Test
 	void removingAnUnknownIdDoesNothing() {
 		SpanStore store = new SpanStore();

@@ -1,5 +1,8 @@
 package io.github.simonerecchia.renewables.net;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.function.ToIntFunction;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -22,16 +25,31 @@ public final class PanelGuard {
 	/** How far a panel command is accepted from: the wrench's reach and a little slack for walking away. */
 	public static final double REACH = WRENCH_REACH + 2.0;
 
+	/**
+	 * How many requests about one thing a player may make in one server tick.  A client sends one a click, but the
+	 * packets of two quick clicks can arrive together; a modified client sending hundreds cannot.
+	 */
+	static final int PER_TICK = 4;
+
+	/** What each player has asked for this tick.  Weak keys: a player who leaves takes his entry along. */
+	private static final Map<ServerPlayer, Requests> REQUESTS = new WeakHashMap<>();
+
+	private record Requests(int tick, Map<Long, Integer> counts) {
+	}
+
 	private PanelGuard() {
 	}
 
 	/**
 	 * The block entity at {@code pos} if the player may command it, otherwise null.
 	 *
-	 * In order: the chunk is loaded (without loading it), the position is inside the world border, the player
-	 * may interact there (spawn protection and the like), the block entity is of the expected kind, and the
-	 * player is close enough.  Close enough is measured to the machine's vertical axis, at the player's own
-	 * height clamped to the machine's span, so someone halfway up a turbine tower is not far from its panel.
+	 * In order: the player may change the world at all (not a spectator, not in adventure mode - a command moves a
+	 * pole's arms or stops a turbine, which is building, not pressing a button), the player has not already sent
+	 * {@link #PER_TICK} commands for this machine this tick (each one is a full update to everyone watching it), the
+	 * chunk is loaded (without loading it), the position is inside the world border, the player may
+	 * interact there (spawn protection and the like), the block entity is of the expected kind, and the player is
+	 * close enough.  Close enough is measured to the machine's vertical axis, at the player's own height clamped to
+	 * the machine's span, so someone halfway up a turbine tower is not far from its panel.
 	 *
 	 * @param footDrop blocks the machine reaches below its block entity: the tower segments of a turbine, else 0
 	 */
@@ -39,6 +57,8 @@ public final class PanelGuard {
 	public static <T extends BlockEntity> T find(@Nullable ServerPlayer player, BlockPos pos, Class<T> type,
 			ToIntFunction<T> footDrop) {
 		if (player == null) return null;
+		if (player.isSpectator() || !player.mayBuild()) return null;
+		if (!admit(player, pos.asLong())) return null;
 
 		ServerLevel level = player.serverLevel();
 		if (!level.isLoaded(pos)) return null;
@@ -64,5 +84,25 @@ public final class PanelGuard {
 	@Nullable
 	public static <T extends BlockEntity> T find(@Nullable ServerPlayer player, BlockPos pos, Class<T> type) {
 		return find(player, pos, type, machine -> 0);
+	}
+
+	/**
+	 * Counts a request from the player about {@code key} - a machine's position, or a kind of request that is about
+	 * no single machine - and says whether it is within {@link #PER_TICK} for this server tick.
+	 */
+	static boolean admit(ServerPlayer player, long key) {
+		int tick = player.server.getTickCount();
+		Requests requests = REQUESTS.get(player);
+		if (requests == null || requests.tick() != tick) {
+			requests = new Requests(tick, new HashMap<>());
+			REQUESTS.put(player, requests);
+		}
+
+		return requests.counts().merge(key, 1, Integer::sum) <= PER_TICK;
+	}
+
+	/** The world has closed: no player of it is remembered. */
+	public static void clear() {
+		REQUESTS.clear();
 	}
 }
