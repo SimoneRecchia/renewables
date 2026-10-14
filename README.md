@@ -8,7 +8,7 @@ photovoltaic array is modules on a mounting, wired in strings to an inverter tha
 point. Power leaves them on spans of real conductors, crosses cabins, poles, transformers and lattice towers,
 loses a little on every hop, and ends at a kiosk that hands it to the rest of the modpack as Forge Energy.
 
-* **Minecraft** 1.20.1, **Forge** 47.4.0 or later, **Java** 17
+* **Minecraft** 1.20.1 only, **Forge** 47.4.0 or later within 47 (`mods.toml` asks for `[47.4,48)`), **Java** 17
 * Optional: **Mekanism** 10.4 (Joules straight from the generators), **CC:Tweaked** 1.109 or later (SCADA from
   a computer)
 
@@ -137,4 +137,5 @@ owns which file, what must pass before a change is done, and where the code is.
 
 ## License
 
-To be decided.
+To be decided. The jar's `mods.toml` says the same (`mod_license` in `gradle.properties`); change both
+together when one is chosen.
