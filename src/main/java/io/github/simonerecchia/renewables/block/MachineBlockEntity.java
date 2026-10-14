@@ -140,8 +140,11 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 	@Nullable
 	protected Vec3 computeAnchor(int index) {
 		Vec3 local = localAnchor(index);
-		if (local == null) return null;
+		return local == null ? null : modelToWorld(local);
+	}
 
+	/** A point of this machine's model in the world, through the one transform the renderer draws it with. */
+	protected Vec3 modelToWorld(Vec3 local) {
 		Direction authored = authored();
 		return ExtraPose.toWorld(local, getBlockPos(), authored, facing(authored), this instanceof ExtraPose pose ? pose : null);
 	}
@@ -236,12 +239,17 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 	/** The client's side of the update tag; only here is the reading taken from a tag. */
 	@Override
 	public void handleUpdateTag(CompoundTag tag) {
+		int[] before = getInsulatorIds();
 		load(tag);
 		if (tag.contains("currentPower")) currentPower = tag.getDouble("currentPower");
 		refreshAnchors();
+		int[] after = getInsulatorIds();
 		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-			InsulatorIndex.register(this, getInsulatorIds());
-			ClientWires.invalidate(getInsulatorIds());
+			// an id this machine has given up (the server renumbered a duplicate) must not keep finding it here
+			InsulatorIndex.unregister(this, before);
+			InsulatorIndex.register(this, after);
+			ClientWires.invalidate(before);
+			ClientWires.invalidate(after);
 		});
 	}
 
@@ -287,7 +295,8 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				InsulatorIndex.unregister(getInsulatorIds());
+				// only what still points here: an id already taken up by a copy of this machine stays with the copy
+				InsulatorIndex.unregister(this, getInsulatorIds());
 				ClientWires.invalidate(getInsulatorIds());
 			});
 		}

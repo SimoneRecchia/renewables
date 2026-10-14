@@ -3,6 +3,7 @@ package io.github.simonerecchia.renewables.item;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
@@ -25,6 +26,12 @@ public final class ClientHooks {
 		boolean click(Level level, Player player, InteractionHand hand, BlockPos host, BlockHitResult hit);
 	}
 
+	/** A click with a reel on nothing, the reaching click; what it came to is what the item answers. */
+	@FunctionalInterface
+	public interface WireClickInAir {
+		InteractionResult click(Level level, Player player, InteractionHand hand);
+	}
+
 	/** A click with the wrench, on a block ({@code hit} set) or on the air (null); true when a screen opened. */
 	@FunctionalInterface
 	public interface WrenchUse {
@@ -38,6 +45,7 @@ public final class ClientHooks {
 	}
 
 	private static volatile WireClick wireClick = (level, player, hand, host, hit) -> false;
+	private static volatile WireClickInAir wireClickInAir = (level, player, hand) -> InteractionResult.PASS;
 	private static volatile WrenchUse wrenchUse = (level, player, hit) -> false;
 	private static volatile PoleScreen poleScreen = pole -> {
 	};
@@ -47,6 +55,10 @@ public final class ClientHooks {
 
 	public static void installWireClick(WireClick hook) {
 		wireClick = hook;
+	}
+
+	public static void installWireClickInAir(WireClickInAir hook) {
+		wireClickInAir = hook;
 	}
 
 	public static void installWrenchUse(WrenchUse hook) {
@@ -60,6 +72,11 @@ public final class ClientHooks {
 	/** Client side only: a reel was used on the machine at {@code host}. */
 	public static boolean wireClick(Level level, Player player, InteractionHand hand, BlockPos host, BlockHitResult hit) {
 		return wireClick.click(level, player, hand, host, hit);
+	}
+
+	/** Client side only: a reel was used with the crosshair on nothing. */
+	public static InteractionResult wireClickInAir(Level level, Player player, InteractionHand hand) {
+		return wireClickInAir.click(level, player, hand);
 	}
 
 	/** Client side only: the wrench was used. */

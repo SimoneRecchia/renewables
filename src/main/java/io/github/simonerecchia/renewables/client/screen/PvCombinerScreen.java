@@ -96,8 +96,8 @@ public class PvCombinerScreen extends PlantScreen<PvCombinerBlockEntity> {
 				: 1.0 - Math.max(0.0, combiner.stringCurrentHeadroom()) / spec.outputAmps();
 
 		label(graphics, Component.translatable("screen.renewables.pv_combiner.ways"), WAYS_Y);
-		value(graphics, fmt("%d of %d  ·  %s free", combiner.stringsConnected(), spec.fusedInputs(),
-				fmt("%.0f A", Math.max(0.0, combiner.stringCurrentHeadroom()))), WAYS_Y);
+		value(graphics, Component.translatable("screen.renewables.pv_combiner.ways_used", fmt("%d", combiner.stringsConnected()),
+				fmt("%d", spec.fusedInputs()), fmt("%.0f A", Math.max(0.0, combiner.stringCurrentHeadroom()))).getString(), WAYS_Y);
 
 		fillBar(graphics, WAYS_BAR_Y, barWidth(Math.min(1.0, ways)), BLUE);
 		// the copper marked over the ways, because which of the two is nearly full is the whole question

@@ -1,24 +1,24 @@
 package io.github.simonerecchia.renewables.client.events;
 
 import io.github.simonerecchia.renewables.Renewables;
-import io.github.simonerecchia.renewables.client.hooks.ClientInput;
 import io.github.simonerecchia.renewables.client.hooks.WireLinker;
 import io.github.simonerecchia.renewables.client.wire.ClientWires;
 import io.github.simonerecchia.renewables.item.ConductorItem;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
- * The input side of wiring that is not a click on a block: a click in the air with a reel, and the housekeeping that
- * goes with a connection left pending (docs/spec/client-net.md sections 2.2 and 2.3).
+ * The housekeeping that goes with a connection left pending (docs/spec/client-net.md section 2.2): the use button
+ * watched for the click gates, and a pending connection dropped when the reel is put away.
+ *
+ * The click in the air with a reel is not here: vanilla posts its click-on-empty event only for an empty hand, so it
+ * never carries a reel, and the click arrives through {@code ConductorItem.use} instead.
  */
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -29,23 +29,6 @@ public final class WireInputEvents {
 	private static int idleTicks;
 
 	private WireInputEvents() {
-	}
-
-	/**
-	 * A click on nothing.  The event comes once for each hand, so one press with a reel in the main hand and something
-	 * else (or nothing) in the other would run twice and the second pass would cancel the first.  Only the hand that
-	 * holds the reel is looked at, the main hand first, and the click gates in {@link WireLinker} are the rest of the
-	 * guarantee that one press is one step.
-	 */
-	@SubscribeEvent
-	public static void onClickInAir(PlayerInteractEvent.RightClickEmpty event) {
-		InteractionHand hand = event.getHand();
-		if (!(event.getItemStack().getItem() instanceof ConductorItem)) return;
-
-		boolean mainHoldsReel = event.getEntity().getMainHandItem().getItem() instanceof ConductorItem;
-		if (hand == InteractionHand.OFF_HAND && mainHoldsReel) return;
-
-		ClientInput.conductorInAir(event.getEntity(), hand);
 	}
 
 	@SubscribeEvent
