@@ -35,7 +35,7 @@ public class ElectricCabinBlockEntity extends MachineBlockEntity {
 		return conductor.voltageClass() != ConductorSpec.VoltageClass.HIGH;
 	}
 
-	/** The only machine whose fittings are not both ways: the input takes power in, the output sends it out. */
+	/** The only machine whose fittings are not both ways: the input takes power in, the output sends it out.  Named for the model's groups. */
 	@Override
 	public String powerType(String partName) {
 		if (partName.contains("input")) return FittingTypes.POWER_INPUT;

@@ -133,7 +133,7 @@ def main():
     # the directory name as a string literal too, which is all the Java ever holds for those.
     sources = ''.join(open(os.path.join(root, name)).read()
                       for root, _, names in os.walk(java) for name in names if name.endswith('.java'))
-    for path in objs if written else ():
+    for path in objs:
         if os.path.normpath(path) in referenced:
             continue
         directory = os.path.basename(os.path.dirname(path))
