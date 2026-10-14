@@ -1,7 +1,6 @@
 package io.github.simonerecchia.renewables.block;
 
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
-import io.github.simonerecchia.renewables.grid.WireLedger;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 import io.github.simonerecchia.renewables.wind.TurbineDynamics;
 import io.github.simonerecchia.renewables.wind.TurbineGeometry;
@@ -9,7 +8,6 @@ import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -94,37 +92,34 @@ public class WindTurbineBlock extends MachineBlock {
 	}
 
 	/**
-	 * The cables leave at the foot of the tower, so when a turbine appears or goes the foot is told: what it offers to
-	 * a neighbouring cable has just changed, and the neighbour is only told to look again by being told something
-	 * changed.
+	 * The cables leave at the foot of the tower and a computer may stand against any block of it, so when a turbine
+	 * appears or goes the whole tower is told: what it offers to a neighbouring cable or computer has just changed, and a
+	 * neighbour is only told to look again by being told something changed.
 	 */
 	@Override
 	public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
 		super.onPlace(state, level, pos, oldState, movedByPiston);
-		if (!level.isClientSide() && !oldState.is(state.getBlock())) notifyFoot(level, pos);
+		if (!level.isClientSide() && !oldState.is(state.getBlock())) notifyTower(level, pos);
 	}
 
 	/**
-	 * When the turbine is replaced: the foot first, then every span hung from its fitting, and only then the block
-	 * entity goes, because the spans are found through the ids it holds.
+	 * When the turbine is replaced: the tower first, then (in MachineBlock) every span hung from its fitting, and only
+	 * then the block entity goes, because the spans are found through the ids it holds.
 	 */
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-		if (!state.is(newState.getBlock()) && level instanceof ServerLevel serverLevel) {
-			notifyFoot(level, pos);
-			if (level.getBlockEntity(pos) instanceof WindTurbineBlockEntity turbine) {
-				WireLedger.removeAttachedTo(serverLevel, turbine.getInsulatorIds());
-			}
-		}
+		if (!state.is(newState.getBlock()) && !level.isClientSide()) notifyTower(level, pos);
 
 		super.onRemove(state, level, pos, newState, movedByPiston);
 	}
 
 	/**
-	 * Tells the foot of the tower under {@code machinePos} that what it carries has changed: drops what a neighbour
-	 * cached about its energy, and nudges the six neighbours the way a comparator update would.
+	 * Tells the tower under {@code machinePos} that what it carries has changed: the foot drops what a neighbour cached
+	 * about its energy and nudges its neighbours the way a comparator update would, and every segment tells the blocks
+	 * beside it - a computer against the tenth block of the tower otherwise went on talking to a turbine that had gone,
+	 * or never saw the one put in its place.
 	 */
-	private static void notifyFoot(Level level, BlockPos machinePos) {
+	private static void notifyTower(Level level, BlockPos machinePos) {
 		BlockPos foot = TurbineTowerBlock.footBelow(level, machinePos);
 
 		BlockEntity footEntity = level.getBlockEntity(foot);
@@ -134,9 +129,14 @@ public class WindTurbineBlock extends MachineBlock {
 		}
 
 		level.updateNeighbourForOutputSignal(foot, level.getBlockState(foot).getBlock());
-		for (Direction side : Direction.values()) {
-			BlockPos neighbour = foot.relative(side);
-			level.getBlockState(neighbour).onNeighborChange(level, neighbour, foot);
+		for (BlockPos segment = foot; segment.getY() < machinePos.getY(); segment = segment.above()) {
+			for (Direction side : Direction.values()) {
+				BlockPos neighbour = segment.relative(side);
+				// the tower's own blocks are not neighbours to tell
+				if (neighbour.getX() == machinePos.getX() && neighbour.getZ() == machinePos.getZ()) continue;
+
+				level.getBlockState(neighbour).onNeighborChange(level, neighbour, segment);
+			}
 		}
 	}
 
