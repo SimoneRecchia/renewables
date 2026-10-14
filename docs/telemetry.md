@@ -27,10 +27,12 @@ SCADA lives and it is the only part of a plant a program can usefully change —
 controls beyond its tracker, while the inverter holds the curtailment setpoint, the power
 factor and the stop. Read the arrays when you want to know *why*.
 
-**Threading.** Reads come off the computer thread and never block: every value is served
-from an immutable snapshot the machine publishes once per tick, so a call can never mix
-values from two different ticks. Methods that *change* the machine run on the server
-thread instead, because they mark the block entity dirty and push state to clients.
+**Threading.** Reads come off the computer thread and never block. The telemetry —
+`getTelemetry()`, `getTelemetryKinds()` and every generated `get<Tag>()` — is served from an
+immutable snapshot the machine publishes once per tick, so it can never mix values from two
+different ticks; the other read methods read the machine's current state. Methods that
+*change* the machine run on the server thread instead, because they mark the block entity
+dirty and push state to clients.
 
 ---
 
@@ -78,10 +80,10 @@ read a player's hand-stop as its own would leave a turbine down believing it had
 there. Ask `isRunning()` for the fact and the three `stoppedBy*` tags for the reason.
 
 **A setpoint of zero does not stop the machine.** Curtailment is an instruction from the
-grid: a machine told to export nothing disconnects and idles with its blades feathered.
-It does not brake, because it has to be able to come back in seconds, and because
-standing still is what harms a main bearing. Only `stop()`, a player at the panel and
-redstone put the brake on. A partly curtailed machine also visibly slows — curtailment is
+grid: a machine told to export nothing disconnects and lets its rotor idle. It does not
+brake, because it has to be able to come back in seconds, and because standing still is
+what harms a main bearing. Only `stop()`, a player at the panel, redstone and a storm
+shutdown put the brake on, and only a braked machine feathers its blades to 90°. A partly curtailed machine also visibly slows — curtailment is
 done by pitching, and power goes with the cube, so half output is four fifths of the
 speed rather than half.
 
@@ -94,9 +96,10 @@ speed rather than half.
 | `get<Tag>()` | number/boolean | one generated getter per tag |
 
 Every tag below also has a generated getter, `get` plus the capitalised tag:
-`getWindSpeed()`, `getPf()`, `getV12()`, `getGearBoxOilTemp()`. The single exception is
-`activePowerLimit`, whose generated name would shadow the annotated method above — read
-it from `getTelemetry()` or from `getActivePowerLimit()`.
+`getWindSpeed()`, `getPf()`, `getV12()`, `getGearBoxOilTemp()`. Where a generated name would
+be the same as an annotated method, the annotated method answers: on the turbine and the
+inverter that is `getActivePowerLimit()`, on an array `getPerformanceRatio()`,
+`getTrackerMode()` and `getTrackerAngle()`. The tag is still in `getTelemetry()`.
 
 One `getTelemetry()` beats sixty separate calls, and it is the only way to be certain
 every value came from the same tick.
@@ -156,7 +159,8 @@ size, and the gear ratio is derived per model so a slow wide rotor gets a taller
 
 **Pitch** is 0° from cut-in to the rated wind, ramps to 25° across the regulating band,
 carries on to 60° through storm control, and sits at 90° — full feather — whenever the
-machine is off load.
+machine is braked: a storm shutdown, `stop()`, a player at the panel or redstone. A machine
+curtailed to nothing is not braked, and reports the pitch its wind calls for.
 
 **`airPressure` is a cause now, not a decoration.** It used to be worked backwards from
 the wind speed. It is read from the pressure map the wind is *computed from*, so a station
@@ -175,8 +179,8 @@ written against them behaves as it would against a real machine, which is the po
 there is no energy balance behind them and **no failure modes**, so an alarm written
 against them will never fire. `getTelemetryKinds()` says so at runtime.
 
-Temperatures are the rise above ambient; each starts at ambient on a freshly loaded
-turbine and warms up.
+Temperatures are published in °C — ambient plus a rise that follows the load; each starts at
+ambient on a freshly loaded turbine and warms up.
 
 | Tag | Unit | Roughly |
 |---|---|---|
@@ -230,8 +234,8 @@ V112. Hub height is the tower you built, ten metres to the block.
 
 The rotor speed ranges are the published ones — a V52 runs 14.0 to 31.4 rpm, a V112 6.2
 to 17.7 — which is why the tip speeds differ: 80 m/s is right for a V80 and thirty percent
-short of what a V112's longer blades are allowed. The C130 cuts out at 22.5 m/s like the
-rest of its platform. Rated wind speed is derived from the curve rather than declared
+short of what a V112's longer blades are allowed. The C130 starts its storm derating at
+22.5 m/s and cuts out at 25 like the rest of its platform. Rated wind speed is derived from the curve rather than declared
 beside it, and lands on the published figures.
 
 **The power curve has no corner in it.** The textbook one does — cubic, then flat at the
@@ -371,7 +375,8 @@ day, while `powerLimitationActive` quietly says so.
 
 Three nodes, and the split is the one a real plant has: the inverter is what the grid sees,
 each array publishes the optics and the mechanism of its own patch of glass, and the mast
-publishes the sky once for the whole site. Ninety-six tags across the three.
+publishes the sky once for the whole site. A hundred and two tags across the three (47 on the
+inverter, 40 on an array, 15 on the mast; a few, like `ambientTemp`, are on more than one).
 
 The physics behind all of it — the catalogue, the transposition, the shading rules, the
 tracker modes, what a site is worth — is [its own document](photovoltaics.md). This section
@@ -396,7 +401,7 @@ Joules and one kW is 125 J/tick, the same scale the whole mod uses.
 | `getRedstoneMode()` / `setRedstoneMode(mode)` | string / — | `DISABLED`, `HIGH`, `LOW` |
 | `getActivePowerLimit()` / `setActivePowerLimit(kW)` | number / — | clamped to the nameplate |
 | `getPowerFactor()` / `setPowerFactor(pf)` | number / — | clamped to what the machine can hold |
-| `getArrays()` | table | `{x, y, z}` of every array wired in, nearest first |
+| `getArrays()` | table | `{x, y, z}` of every array wired in on string cable, nearest first; arrays behind a combiner box are the box's |
 | `getTelemetry()` | table | every tag at once, one tick-consistent snapshot |
 | `getTelemetryKinds()` | table | tag → `MEASURED`, `DERIVED` or `SIMULATED` |
 
@@ -404,7 +409,8 @@ Plus a generated getter per tag. **Measured:** `activePower`, `pvActivePower`,
 `availableDcPower`, `activeEnergy`, `activeEnergyToday`, `ambientTemp`, `cabinetTemp`,
 `moduleTemp`, `irradiation`, `activePowerLimit`, `powerLimitationActive`, `running`,
 `clipping`, `derating`, `stoppedByComputer`, `stoppedByPlayer`, `stoppedByRedstone`,
-`arraysConnected`, `stringsConnected`, `stringCapacity`. **Derived:** `apparentPower`,
+`arraysConnected`, `stringsConnected`, `combinersConnected`, `stringCapacity`, `dcCurrentHeadroom`.
+**Derived:** `apparentPower`,
 `reactivePower`, `pf`, `f`, `gridVoltage`, `gridCurrent`, `v1`–`v3`, `v12`/`v23`/`v31`,
 `i1`–`i3`, `dcVoltage`, `dcCurrent`, `efficiency`, `performanceRatio`, `dcAcRatio`.
 **Simulated:** `heatSinkTemp`, `internalAirTemp`, `insulationResistance`, `dcBusVoltage`,
@@ -412,9 +418,11 @@ Plus a generated getter per tag. **Measured:** `activePower`, `pvActivePower`,
 
 Three things worth knowing before you build a control loop on this.
 
-**`activePower` goes negative overnight.** A watt on the residential machine and a hundred on
-the central one, because the controller and the communications stay alive. A stopped inverter
-still draws it. If you are summing a fleet, that is real and a real meter reads it.
+**`activePower` goes negative overnight.** One to three watts on the string machines and a
+hundred on the central one, because the controller and the communications stay alive. A
+stopped inverter still draws it. Tags are rounded to two decimals of a kW, so the string
+machines read `-0.0` and only the VC-2500K shows `-0.1`; summed over a fleet, it is real and a
+real meter reads it.
 
 **`availableDcPower` above `pvActivePower` means clipping.** The first is what the modules
 could give at their maximum power point, the second is what the inverter actually pulled them
@@ -431,28 +439,29 @@ it as realistic and not as ground truth.
 |---|---|---|
 | `getProductionRate()` | number | Joules delivered last tick |
 | `canSeeSun()` | boolean | over half the beam is getting through |
-| `getActivePower()` | number | kW delivered — **zero with no inverter in range** |
+| `getActivePower()` | number | kW delivered — **zero unless a running inverter has claimed it over cable**, directly or through a combiner box |
 | `getRatedPower()` | number | this product's DC nameplate, kW |
 | `getIrradiance()` | number | W/m² in the plane of the modules |
 | `getCellTemperature()` | number | °C |
 | `getAmbientTemperature()` | number | °C |
 | `getCloudCover()` | number | the diffuse share of the light on the plane, 0–1 |
 | `getPerformanceRatio()` | number | output over what the nameplate would make in this light |
-| `getTrackerMode()` / `setTrackerMode(mode)` | string / — | `AUTO`, `MANUAL`, `STOW`; throws on a fixed mounting |
+| `getTrackerMode()` / `setTrackerMode(mode)` | string / — | `AUTO`, `MANUAL`, `STOW`; setting it throws on a fixed mounting |
 | `getTrackerAngle()` | number | degrees from horizontal, positive facing west |
 | `setTrackerAngle(deg)` | — | clamped to the drive's travel, and switches to `MANUAL` |
-| `stow()` | — | flat, and held there |
-| `getModule()` | table | designation, technology, watts, efficiency, bifaciality, count |
-| `getInverter()` | table or nil | `{x, y, z}`, or nil if there is none in range |
+| `stow()` | — | flat, and held there; throws on a fixed mounting |
+| `getModule()` | table | `designation`, `technology`, `ratedPowerW`, `efficiency`, `bifaciality`, `count` |
+| `getCollector()` | table or nil | `{x, y, z}` of the inverter or combiner box that has claimed it, or nil |
 | `getTelemetry()` / `getTelemetryKinds()` | table | |
 
 Plus a generated getter per tag. **Measured:** `poaIrradiance`, `poaBeam`, `poaDiffuse`,
 `poaGround`, `poaRear`, `effectiveIrradiance`, `moduleTemp`, `ambientTemp`, `windSpeed`,
 `soiling`, `snowDepth`, `rowShading`, `obstruction`, `skyView`, `availableDcPower`,
 `deliveredDcPower`, `trackerAngle`, `trackerTarget`, `trackerMode`, `trackerStow`,
-`trackerSlewing`, `backtracking`, `inverterConnected`. **Derived:** `incidenceAngle`,
+`trackerSlewing`, `backtracking`, `wired`, `harnessed`. **Derived:** `incidenceAngle`,
 `tiltAngle`, `planeAzimuth`, `stringVoltage`, `stringCurrent`, `arrayCurrent`,
-`performanceRatio`, `spectralFactor`, `moduleCount`, `dcNameplate`, `groundCoverRatio`.
+`performanceRatio`, `spectralFactor`, `moduleCount`, `dcNameplate`, `groundCoverRatio`,
+`dcRunLength`, `dcRunBuried`, `dcCableLoss`.
 **Simulated:** `trackerMotorPower`, `trackerDriveTemp`.
 
 `setTrackerAngle` switches the mode for you on purpose. Holding an angle and tracking the sun
@@ -468,7 +477,7 @@ hand mode.
 
 | Function | Returns | Notes |
 |---|---|---|
-| `getInstruments()` | table | every instrument: designation, class, response time, uncertainty, unit |
+| `getInstruments()` | table | every instrument: `designation`, `instrument`, `class`, `responseTimeS`, `uncertaintyPercent`, `unit`, `onArray`, and the spectral range of a radiometer |
 | `getTelemetry()` / `getTelemetryKinds()` | table | |
 
 Plus a generated getter per tag. **Measured:** `globalIrradiation`, `diffusedIrradiation`,
