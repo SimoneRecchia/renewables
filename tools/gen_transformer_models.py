@@ -173,7 +173,11 @@ def machine_transformer():
              uv_scale=0.2, caps=relief)
     hemisphere(mesh, relief, (-0.26, PAD_TANK + 0.048, -0.10), 0.030, sides=FITTING, rings=4,
                squash=0.5, uv_scale=0.3)
-    # the oil level dial on the tank's flank, and the drain valve under it
+    # the oil level dial on the tank's flank, and the drain valve under it, each on its own boss welded to the
+    # wall: a dial and a valve stood off the tank on nothing were what this drew
+    for y, reach in ((PAD_TANK - 0.10, 0.020), (PAD_BASE + 0.05, 0.020)):
+        cylinder(mesh, relief, (PAD_HALF_X + reach / 2.0 - 0.002, y, 0.0), 'x', 0.010, reach / 2.0 + 0.002,
+                 sides=FITTING, uv_scale=0.2, caps=relief)
     cylinder(mesh, mesh.faces('fittings', 'plate'), (PAD_HALF_X + 0.026, PAD_TANK - 0.10, 0.0), 'x',
              0.036, 0.006, sides=FITTING, uv_scale=1.0, caps=mesh.faces('fittings', 'plate'))
     cylinder(mesh, relief, (PAD_HALF_X + 0.030, PAD_BASE + 0.05, 0.0), 'x', 0.016, 0.010,
@@ -214,19 +218,24 @@ def radiator(mesh, centre, half_z, height, fins):
     cx, cy, cz = centre
     steel = mesh.faces('radiator', 'steel')
     fin_faces = mesh.faces('radiator', 'fin')
+    out = 1.0 if cz > 0 else -1.0
 
-    # the two headers, and the pipes back to the tank
+    # the two headers, and the flanged valve each one is bolted to the tank through: the headers run straight
+    # out of the wall, and these drew them along it, a hand's width off the tank with nothing to hold them
     for y in (cy, cy + height):
         box(mesh, steel, (cx - 0.020, y - 0.022, cz - half_z), (cx + 0.020, y + 0.022, cz + half_z),
             uv_scale=0.2)
-    for y in (cy + 0.006, cy + height - 0.006):
-        cylinder(mesh, steel, (cx, y, cz + half_z * 0.7), 'x', 0.020, 0.030, sides=FITTING,
+        wall, start = out * (SUB_HALF_Z - 0.003), out * (abs(cz) - half_z + 0.006)
+        cylinder(mesh, steel, (cx, y, (wall + start) / 2.0), 'z', 0.016, abs(start - wall) / 2.0, sides=FITTING,
+                 uv_scale=0.2, caps=steel)
+        cylinder(mesh, steel, (cx, y, out * (SUB_HALF_Z + 0.012)), 'z', 0.026, 0.004, sides=FITTING,
                  uv_scale=0.2, caps=steel)
 
+    # the pressed panels: a centimetre of steel round an oil channel, five apart, so the air goes between them
     for i in range(fins):
         z = cz - half_z + (2 * half_z) * (i + 0.5) / fins
-        box(mesh, fin_faces, (cx - 0.030, cy + 0.022, z - 0.006),
-            (cx + 0.030, cy + height - 0.022, z + 0.006), uv_scale=0.3)
+        box(mesh, fin_faces, (cx - 0.040, cy + 0.022, z - 0.0022),
+            (cx + 0.040, cy + height - 0.022, z + 0.0022), uv_scale=0.3)
 
 
 def substation_transformer():
@@ -279,10 +288,10 @@ def substation_transformer():
         for z in (-SUB_HALF_Z - 0.008, SUB_HALF_Z - 0.006):
             bolt(mesh, steel, (x, SUB_TANK + 0.030, z), 'y', 0.008, 0.014, uv_scale=0.08)
 
-    # The four radiator banks a side, standing off the flanks on their pipes.
+    # The four radiator banks a side, standing off the flanks on their valves, each between two stiffeners.
     for sz in (-1, 1):
         for i in range(SUB_RADIATORS):
-            x = -SUB_HALF_X + 0.14 + i * (2 * SUB_HALF_X - 0.28) / (SUB_RADIATORS - 1)
+            x = -SUB_HALF_X + (2 * SUB_HALF_X) * (i + 1) / (SUB_RADIATORS + 1)
             radiator(mesh, (x, SUB_BUND + 0.16, sz * (SUB_HALF_Z + 0.11)), 0.08,
                      SUB_TANK - SUB_BUND - 0.34, SUB_FINS)
 

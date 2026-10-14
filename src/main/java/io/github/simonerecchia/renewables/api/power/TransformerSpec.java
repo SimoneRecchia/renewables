@@ -2,6 +2,8 @@ package io.github.simonerecchia.renewables.api.power;
 
 
 
+import io.github.simonerecchia.renewables.api.Nameplate;
+
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -53,6 +55,6 @@ public record TransformerSpec(
 
 	/** The ratio, for a tooltip: 0.8/33 reads better than two numbers in volts. */
 	public String ratioText() {
-		return String.format("%.3g/%.3g kV", primaryVolts / 1000.0, secondaryVolts / 1000.0);
+		return Nameplate.fmt("%.3g/%.3g kV", primaryVolts / 1000.0, secondaryVolts / 1000.0);
 	}
 }

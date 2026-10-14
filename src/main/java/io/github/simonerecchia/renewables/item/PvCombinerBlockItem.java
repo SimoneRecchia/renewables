@@ -1,5 +1,6 @@
 package io.github.simonerecchia.renewables.item;
 
+import io.github.simonerecchia.renewables.api.Nameplate;
 import io.github.simonerecchia.renewables.api.power.CombinerSpec;
 import io.github.simonerecchia.renewables.block.PvCombinerBlock;
 import io.github.simonerecchia.renewables.block.PvInverterBlock;
@@ -93,6 +94,6 @@ public class PvCombinerBlockItem extends BlockItem {
 	}
 
 	private static String fmt(double value) {
-		return value == Math.floor(value) ? String.valueOf((long) value) : String.format("%.1f", value);
+		return Nameplate.figure(value);
 	}
 }
