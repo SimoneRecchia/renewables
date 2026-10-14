@@ -14,32 +14,47 @@ import javax.annotation.Nullable;
  * On top of that, when it is asked to, the pool remembers which loaded machine holds which id, so that a second
  * machine that turns up claiming an id already held (a block copied together with its data, a pasted structure)
  * is given a fresh one instead, and the spans stay with the first.
+ *
+ * What is persisted is not the counter but a reservation ahead of it ({@link #RESERVE} ids at a time), written
+ * before the first id past it is handed out: a chunk is saved when it unloads, the world's data only at the next
+ * autosave, so a server killed in between would otherwise restart below an id that a saved machine already holds.
  */
 final class IdPool {
+	/** How many ids each reservation covers: a restart skips at most this many. */
+	static final int RESERVE = 1024;
 	/** How many remembered holders the table may grow to before the ones that no longer hold their id are swept out. */
 	private static final int SWEEP_FROM = 1024;
 
 	private final boolean detectDuplicates;
 	@Nullable
-	private final IntConsumer onChange;
+	private final IntConsumer persist;
 	private int highest;
+	/** No id above this has been handed out or written down anywhere this pool knows of. */
+	private int reserved;
 	/** Which array of ids holds each id.  Weakly, so a machine that vanishes without a word does not pin its entry. */
 	private final Map<Integer, WeakReference<int[]>> holders = new HashMap<>();
 	private int sweepAt = SWEEP_FROM;
 
 	/**
-	 * @param highest          the largest id ever used
+	 * @param persisted        what was persisted last: no id above it was ever handed out
 	 * @param detectDuplicates whether to track holders and re-issue an id held by another machine
-	 * @param onChange         told the new value whenever {@code highest} moves, so the owner can save it
+	 * @param persist          told each new reservation, before any id under it is handed out; it must be on disk
+	 *                         when it returns
 	 */
-	IdPool(int highest, boolean detectDuplicates, @Nullable IntConsumer onChange) {
-		this.highest = Math.max(0, highest);
+	IdPool(int persisted, boolean detectDuplicates, @Nullable IntConsumer persist) {
+		this.highest = Math.max(0, persisted);
+		this.reserved = highest;
 		this.detectDuplicates = detectDuplicates;
-		this.onChange = onChange;
+		this.persist = persist;
 	}
 
 	synchronized int highest() {
 		return highest;
+	}
+
+	/** The value persisted last: an id at or below it may have been handed out before a restart. */
+	synchronized int reserved() {
+		return reserved;
 	}
 
 	/** {@link #claim(int[], IntPredicate)} with nothing known about where an id belongs. */
@@ -63,8 +78,8 @@ final class IdPool {
 			if (id > 0) {
 				raise(id);
 			} else {
-				id = ++highest;
-				changed();
+				id = highest + 1;
+				raise(id);
 				ids[i] = id;
 			}
 
@@ -92,14 +107,13 @@ final class IdPool {
 	}
 
 	private void raise(int id) {
-		if (id > highest) {
-			highest = id;
-			changed();
-		}
-	}
+		if (id <= highest) return;
 
-	private void changed() {
-		if (onChange != null) onChange.accept(highest);
+		highest = id;
+		if (id > reserved) {
+			reserved = id >= Integer.MAX_VALUE - RESERVE ? Integer.MAX_VALUE : id + RESERVE - 1;
+			if (persist != null) persist.accept(reserved);
+		}
 	}
 
 	private boolean heldElsewhere(int id, int[] ids) {

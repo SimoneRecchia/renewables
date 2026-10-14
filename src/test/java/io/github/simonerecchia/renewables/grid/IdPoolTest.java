@@ -61,15 +61,49 @@ class IdPoolTest {
 		IdPool before = new IdPool(0, true, saved::set);
 		int[] ids = new int[5];
 		before.claim(ids);
-		assertEquals(5, saved.get());
+		assertTrue(saved.get() >= 5);
 
 		// a new process: a new pool, seeded from what was saved
 		IdPool after = new IdPool(saved.get(), true, saved::set);
 		int[] fresh = new int[1];
 		after.claim(fresh);
 
-		assertEquals(6, fresh[0]);
-		assertEquals(6, saved.get());
+		assertTrue(fresh[0] > 5);
+		assertTrue(saved.get() >= fresh[0]);
+	}
+
+	/**
+	 * A chunk is saved when it unloads, the world's data only at the autosave: killed in between, a server used to come
+	 * back with the counter below an id a saved machine holds.  What is persisted is a reservation ahead of the counter,
+	 * written before the first id under it is handed out, so whatever the server dies after, it comes back above.
+	 */
+	@Test
+	void aServerKilledBeforeItsAutosaveNeverReissuesAnId() {
+		AtomicInteger onDisk = new AtomicInteger(100);
+		IdPool pool = new IdPool(onDisk.get(), true, onDisk::set);
+		Set<Integer> handedOut = new HashSet<>();
+		for (int machine = 0; machine < 300; machine++) {
+			int[] ids = new int[8];
+			pool.claim(ids);
+			for (int id : ids) handedOut.add(id);
+
+			// the server can die here, after any machine: what is on disk is all the next one knows
+			int[] next = new int[1];
+			new IdPool(onDisk.get(), true, null).claim(next);
+			assertTrue(next[0] > handedOut.stream().mapToInt(Integer::intValue).max().orElse(0), "reissued " + next[0]);
+		}
+	}
+
+	@Test
+	void theReservationIsWrittenOncePerBlockOfIds() {
+		AtomicInteger writes = new AtomicInteger();
+		IdPool pool = new IdPool(0, true, reserved -> writes.incrementAndGet());
+		int[] ids = new int[IdPool.RESERVE];
+		pool.claim(ids);
+		assertEquals(1, writes.get());
+
+		pool.claim(new int[1]);
+		assertEquals(2, writes.get());
 	}
 
 	/** A copy that loads while its original is away: the saved spans say where the id belongs, and it is not here. */

@@ -3,6 +3,7 @@ package io.github.simonerecchia.renewables.grid;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
 import javax.annotation.Nullable;
@@ -12,10 +13,10 @@ import javax.annotation.Nullable;
  *
  * Spans are saved on these ids, so they have to outlive a restart and must never point at the wrong machine.  The
  * counter is world data (kept with the Overworld, like every dimension's spans refer to ids from this one
- * sequence): a restart does not wind it back, and an id read from a machine in a chunk that is not loaded yet still
- * counts, because every span names its ids and {@link WireLedger} adopts them all when the world opens.  Two
- * machines that claim the same id (a block copied with its data) are told apart: the one the saved spans do not put
- * the id on, or else the second to load, is given a new one.
+ * sequence), saved a reservation ahead so that not even a crash winds it back, and an id read from a machine in a
+ * chunk that is not loaded yet still counts, because every span names its ids and {@link WireLedger} adopts them all
+ * when the world opens.  Two machines that claim the same id (a block copied with its data) are told apart: the one
+ * the saved spans do not put the id on, or else the second to load, is given a new one.
  *
  * The three entry points are the contract machines call.  They are safe to call from any thread, but only the
  * server thread works on the world's counter; a client (even the client half of a single-player game) takes its
@@ -78,9 +79,14 @@ public final class InsulatorIds {
 			sealed = false;
 			if (world != null && server == overworld.getServer()) return;
 
-			InsulatorIdData data = overworld.getDataStorage().computeIfAbsent(InsulatorIdData::load, InsulatorIdData::new, InsulatorIdData.NAME);
+			DimensionDataStorage storage = overworld.getDataStorage();
+			InsulatorIdData data = storage.computeIfAbsent(InsulatorIdData::load, InsulatorIdData::new, InsulatorIdData.NAME);
 			server = overworld.getServer();
-			world = new IdPool(data.highest(), true, data::setHighest);
+			// a reservation is on disk before the first id under it is out (see IdPool), so it is saved there and then
+			world = new IdPool(data.highest(), true, reserved -> {
+				data.setHighest(reserved);
+				storage.save();
+			});
 		}
 	}
 
