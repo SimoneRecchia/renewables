@@ -312,8 +312,8 @@ def single_boxes(model_faces):
     return found
 
 
-# One model whose file is not named after its directory, which is inherited and stays that way: a rename
-# would move the asset every existing world's cabins are loaded from.
+# One model whose file is not named after its directory: ModelDefinitions loads the cabin from electric_cab/cab.obj,
+# and the two have to agree.
 OBJ_NAME = {'electric_cab': 'cab'}
 
 

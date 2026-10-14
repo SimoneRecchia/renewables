@@ -3,9 +3,8 @@
 
     python3 tools/gen_cab_models.py
 
-Authored about the block's centre facing north, in the envelope the inherited model had - x plus and minus
-0.55, z plus and minus 1.16, and 2.8 tall - because every cabin in every existing world has its collision
-cells and its wire anchors hung off those figures.
+Authored about the block's centre facing north, in a fixed envelope - x plus and minus 0.55, z plus and minus
+1.16, and 2.8 tall - because the cabin's collision cells and its wire anchors are hung off those figures.
 
 The two fittings are ``insulator_input`` and ``insulator_output`` in that order, which ModelDefinitions names
 and a span is stored against the *index* of.  The names carry the direction as well:
@@ -40,7 +39,7 @@ MATERIALS = {
     'arrester': 'cab_arrester.png',
 }
 
-# The envelope, which is the inherited model's and cannot move without moving every cabin in every world.
+# The envelope: the cabin's cell table and its anchors are hung off it, so it cannot move on its own.
 HALF_X = 0.55
 HALF_Z = 1.16
 PLINTH = 0.14
