@@ -36,6 +36,20 @@ public class PvCombinerBlockEntity extends BlockEntity {
 
 	private int stringsConnected = 0;
 	private double stringCurrentHeadroom = 0.0;
+	/**
+	 * What the strings in the box carry at standard conditions, in amps: what an inverter sizes its trunk input
+	 * against.  Kept as found, because a headroom worked back from the output's ceiling changes with the trunk, and
+	 * the trunk is let go every time the inverter rescans.
+	 */
+	private double currentConnected = 0.0;
+	/** The highest open-circuit voltage any string in the box reaches on a cold morning: what the inverter's input has to stand. */
+	private double coldOpenCircuitVolts = 0.0;
+	/** The highest open-circuit voltage of the strings now, at their own temperatures: where the bus would go unloaded. */
+	private double openCircuitVolts = 0.0;
+	/** Irradiance and module temperature of the nearest row, for an inverter fed only through boxes to report against. */
+	private double referenceIrradiance = 0.0;
+	private double referenceModuleTempC = 15.0;
+	private boolean hasReference = false;
 	/** Nameplate of everything wired into the box, kW: what an inverter sizes itself against. */
 	private double nameplateDcKw = 0.0;
 	/** Why the last string was turned away, for the panel to name. */
@@ -99,6 +113,7 @@ public class PvCombinerBlockEntity extends BlockEntity {
 		arrays.clear();
 		stringsConnected = 0;
 		nameplateDcKw = 0.0;
+		coldOpenCircuitVolts = 0.0;
 		refusal = CombinerSpec.Refusal.NONE;
 
 		double currentCeiling = outputCeiling(spec);
@@ -122,8 +137,10 @@ public class PvCombinerBlockEntity extends BlockEntity {
 			stringsConnected += wanted.strings();
 			nameplateDcKw += wanted.dcPowerKw();
 			currentConnected += wanted.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE) * wanted.strings();
+			coldOpenCircuitVolts = Math.max(coldOpenCircuitVolts, wanted.stringOpenCircuitVoltage(PvArraySpec.COLDEST_DESIGN_CELL_C));
 		}
 
+		this.currentConnected = currentConnected;
 		stringCurrentHeadroom = currentCeiling - currentConnected;
 	}
 
@@ -146,6 +163,7 @@ public class PvCombinerBlockEntity extends BlockEntity {
 		availableDcKw = 0.0;
 		busCurrent = 0.0;
 		double highest = 0.0;
+		double open = 0.0;
 		List<PvArrayBlockEntity> live = new ArrayList<>();
 
 		for (BlockPos pos : arrays) {
@@ -156,11 +174,18 @@ public class PvCombinerBlockEntity extends BlockEntity {
 			live.add(array);
 			availableDcKw += array.offeredDcKw();
 			highest = Math.max(highest, array.stringVoltageAtCollector());
+			open = Math.max(open, array.stringOpenCircuitVoltage());
 		}
 
 		busVoltage = highest;
+		openCircuitVolts = open;
 		// the box has no thermometer of its own; the trunk lies in the same air as the rows
-		if (!live.isEmpty()) ambientTempC = live.get(0).ambientTempC();
+		hasReference = !live.isEmpty();
+		if (hasReference) {
+			ambientTempC = live.get(0).ambientTempC();
+			referenceIrradiance = live.get(0).poaFront();
+			referenceModuleTempC = live.get(0).moduleTempC();
+		}
 		// the switch open means the group is off the inverter
 		// operating point goes to zero, which is what isolating a combiner box actually does
 		double fraction = isolated() ? 0.0 : mpptFraction;
@@ -252,12 +277,32 @@ public class PvCombinerBlockEntity extends BlockEntity {
 		return trunk == null ? ambientTempC : trunk.conductorTemperature(ambientTempC, trunkAmps(), runBuriedFraction);
 	}
 
-	/** The current the box is wired for, in amps: everything in it at standard conditions. */
+	/** The current the box is wired for, in amps: everything in it at standard conditions, whatever the trunk. */
 	public double designAmps() {
-		CombinerSpec spec = spec();
-		if (spec == null) return 0.0;
+		return currentConnected;
+	}
 
-		return Math.max(0.0, outputCeiling(spec) - stringCurrentHeadroom);
+	/** The highest cold-morning open-circuit voltage of the strings in the box, volts. */
+	public double coldOpenCircuitVolts() {
+		return coldOpenCircuitVolts;
+	}
+
+	/** The highest open-circuit voltage of the strings as they are now, volts: past it the bus gives nothing. */
+	public double openCircuitVolts() {
+		return openCircuitVolts;
+	}
+
+	/** Whether a row behind the box is reporting, so its readings can stand for the plant's. */
+	public boolean hasReference() {
+		return hasReference;
+	}
+
+	public double referenceIrradiance() {
+		return referenceIrradiance;
+	}
+
+	public double referenceModuleTempC() {
+		return referenceModuleTempC;
 	}
 
 	/** Nameplate of everything behind the box, kW. */
@@ -328,6 +373,8 @@ public class PvCombinerBlockEntity extends BlockEntity {
 		tag.putInt("stringsConnected", stringsConnected);
 		tag.putDouble("nameplateDc", nameplateDcKw);
 		tag.putDouble("headroom", stringCurrentHeadroom);
+		tag.putDouble("currentConnected", currentConnected);
+		tag.putDouble("coldVoc", coldOpenCircuitVolts);
 		tag.putString("refusal", refusal.name());
 		tag.putDouble("availableDc", availableDcKw);
 		tag.putDouble("busVoltage", busVoltage);
@@ -352,6 +399,8 @@ public class PvCombinerBlockEntity extends BlockEntity {
 		stringsConnected = tag.getInt("stringsConnected");
 		nameplateDcKw = tag.getDouble("nameplateDc");
 		stringCurrentHeadroom = tag.getDouble("headroom");
+		currentConnected = tag.getDouble("currentConnected");
+		coldOpenCircuitVolts = tag.getDouble("coldVoc");
 		refusal = readRefusal(tag.getString("refusal"));
 		availableDcKw = tag.getDouble("availableDc");
 		busVoltage = tag.getDouble("busVoltage");
