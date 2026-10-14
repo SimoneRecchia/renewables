@@ -2,6 +2,7 @@ package io.github.simonerecchia.renewables.block;
 
 import io.github.simonerecchia.renewables.api.power.SwitchgearSpec;
 import io.github.simonerecchia.renewables.grid.Grid;
+import io.github.simonerecchia.renewables.item.Tools;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 
 import java.util.List;
@@ -33,7 +34,8 @@ import net.minecraft.world.phys.shapes.Shapes;
 /**
  * A disconnector or a breaker: one cell, six insulators (line side first), an open/closed state.
  *
- * <b>By hand</b> (an empty hand only; with anything in it the click goes to the item): a breaker opens and
+ * <b>By hand</b> (an empty hand only, and no tool of the mod in the other; otherwise the click goes to the item -
+ * {@link Tools#emptyHanded}): a breaker opens and
  * closes whenever it is asked.  A disconnector closes whenever it is asked but will not open with load on it -
  * an arc across bare blades in air does not go out - and says so; open the breaker first.
  *
@@ -109,7 +111,7 @@ public class SwitchgearBlock extends MachineBlock {
 
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 
 		boolean wantOpen = !open(state);

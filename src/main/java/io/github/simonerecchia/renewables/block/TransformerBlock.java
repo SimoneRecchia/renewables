@@ -5,6 +5,7 @@ import io.github.simonerecchia.renewables.api.power.TransformerSpec;
 import io.github.simonerecchia.renewables.grid.WireLedger;
 
 import io.github.simonerecchia.renewables.Renewables;
+import io.github.simonerecchia.renewables.item.Tools;
 import java.util.List;
 import java.util.Locale;
 import javax.annotation.Nullable;
@@ -158,7 +159,7 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 	 */
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 		if (!(level.getBlockEntity(pos) instanceof TransformerBlockEntity transformer)) return InteractionResult.PASS;
 
