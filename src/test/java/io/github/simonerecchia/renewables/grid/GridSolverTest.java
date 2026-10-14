@@ -10,10 +10,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.DoubleUnaryOperator;
 import org.junit.jupiter.api.Test;
 
 /**
- * The solver against the numbers of grid.md section 19 and the rules of section 8, on small hand-built networks.
+ * The solver against the rules of grid.md section 8, on small hand-built networks, with the I²R loss of real
+ * conductors: every expected figure below is {@code P - k P^2} worked out by hand, k = 1000 R / U^2 per kW.
  *
  * The machine rules (who may feed whom) are the table of section 8.2a, written out here, so that these tests check
  * the whole decision - machine rule and role rule together - and not just the walk.
@@ -22,6 +24,17 @@ class GridSolverTest {
 	private static final double EPS = 1e-6;
 	/** The nameplate used throughout the manual tests: 78.75 kW at rated wind. */
 	private static final double X = 78.75;
+	/** Metres a block stands for, as WorldConditions has it. */
+	private static final double METRES_PER_BLOCK = 10.0;
+
+	/** A conductor as the solver sees it: ohms a km at 20 C, and the line-to-line volts it is worked at. */
+	private record Line(double ohmsPerKm, double volts) {
+	}
+
+	/** 4 x 70 mm2 aerial bundled cable at 400 V: 10 blocks is k = 2.76875e-4 per kW. */
+	private static final Line LV = new Line(0.443, 400.0);
+	/** Aster 228 at 33 kV: 10 blocks is k = 1.34068e-8 per kW. */
+	private static final Line MV = new Line(0.146, 33_000.0);
 
 	/** The table of section 8.2a: which machine kind may feed which. */
 	private static final Map<String, Set<String>> FEEDS = Map.of(
@@ -61,6 +74,10 @@ class GridSolverTest {
 		}
 
 		void span(int a, int b) {
+			span(a, b, LV);
+		}
+
+		void span(int a, int b, Line line) {
 			for (int id : new int[] {a, b}) {
 				if (nodes.stream().noneMatch(n -> n.id() == id)) nodes.add(new GridSolver.Node(id, positionOf.get(id), busOf.get(id)));
 			}
@@ -76,19 +93,25 @@ class GridSolverTest {
 
 			boolean forward = FlowRules.allows(FEEDS.get(ka).contains(kb), kb.equals("switch"), roleOf.get(a), roleOf.get(b), same);
 			boolean backward = FlowRules.allows(FEEDS.get(kb).contains(ka), ka.equals("switch"), roleOf.get(b), roleOf.get(a), same);
-			edges.add(new GridSolver.Edge(a, b, length, forward, backward));
+			double ohms = line.ohmsPerKm() * length * METRES_PER_BLOCK / 1000.0;
+			edges.add(new GridSolver.Edge(a, b, ohms, line.volts(), forward, backward));
 		}
 
 		void generator(int node, double kw) {
 			sources.add(new GridSolver.Source(node, kw, PowerDeliveryEvent.NONE));
 		}
 
+		final Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
+
 		Map<Long, GridSolver.Reading> solve() {
-			return GridSolver.byPosition(nodes, GridSolver.solve(nodes, edges, sources));
+			return GridSolver.byPosition(nodes, GridSolver.solve(nodes, edges, sources, passages));
 		}
 	}
 
-	/** Turbine T (0), cabin C (10), pole P1 (30), power box B (40): the chain of manual test 1. */
+	/**
+	 * Turbine T (0), cabin C (10), pole P1 (30), power box B (40): the chain of manual test 1, with the turbine on the
+	 * 33 kV collector and the cabin feeding a street bundle at 400 V.
+	 */
 	private static World baseChain(boolean turbineToInput) {
 		World w = new World();
 		w.machine(1, "turbine", 0);
@@ -103,7 +126,7 @@ class GridSolverTest {
 		w.fitting(31, 3, "bidirectional");
 		w.fitting(40, 4, "bidirectional");
 
-		w.span(10, turbineToInput ? 20 : 21);
+		w.span(10, turbineToInput ? 20 : 21, MV);
 		w.span(21, 30);
 		w.span(31, 40);
 		w.generator(10, X);
@@ -116,15 +139,11 @@ class GridSolverTest {
 	void theBaseChainCarriesTheNumbersOfTheManualTest() {
 		Map<Long, GridSolver.Reading> out = baseChain(true).solve();
 
+		// 100 m of 33 kV line costs 0.08 W; 200 m of 400 V bundle 3.43 kW, and the last 100 m 1.57 kW
 		assertEquals(X, out.get(1L).powerKw(), EPS);
-		assertEquals(0.9 * X, out.get(2L).powerKw(), EPS);
-		assertEquals(0.72 * X, out.get(3L).powerKw(), EPS);
-		assertEquals(0.648 * X, out.get(4L).powerKw(), EPS);
-
-		// the figures a player reads off the wrench
-		assertEquals(70.875, out.get(2L).powerKw(), 0.01);
-		assertEquals(56.70, out.get(3L).powerKw(), 0.01);
-		assertEquals(51.03, out.get(4L).powerKw(), 0.01);
+		assertEquals(78.749917, out.get(2L).powerKw(), EPS);
+		assertEquals(75.315809, out.get(3L).powerKw(), EPS);
+		assertEquals(73.745243, out.get(4L).powerKw(), EPS);
 	}
 
 	// ---- manual test 2 ----
@@ -151,9 +170,9 @@ class GridSolverTest {
 
 		Map<Long, GridSolver.Reading> out = w.solve();
 
-		assertEquals(0.72 * X, out.get(3L).powerKw(), EPS);
-		assertEquals(0.72 * X * 0.92592593, out.get(4L).powerKw(), 1e-4);
-		assertEquals(0.6667 * X, out.get(4L).powerKw(), 0.01 * X / 100);
+		// two equal spans in parallel are half the resistance, so half the loss: 0.785 kW where one lost 1.571
+		assertEquals(75.315809, out.get(3L).powerKw(), EPS);
+		assertEquals(74.530526, out.get(4L).powerKw(), EPS);
 	}
 
 	// ---- manual test 6 ----
@@ -170,8 +189,8 @@ class GridSolverTest {
 		w.fitting(20, 2, "bidirectional", 0);
 		w.fitting(21, 2, "bidirectional", open ? 1 : 0);
 		w.fitting(30, 3, "input");
-		w.span(10, 20);
-		w.span(21, 30);
+		w.span(10, 20, MV);
+		w.span(21, 30, MV);
 		w.generator(10, X);
 		return w;
 	}
@@ -180,8 +199,9 @@ class GridSolverTest {
 	void aClosedSwitchLetsPowerThrough() {
 		Map<Long, GridSolver.Reading> out = switched(false).solve();
 
-		assertEquals(X * GridMath.efficiency(1, 5) * GridMath.efficiency(1, 5), out.get(3L).powerKw(), EPS);
-		assertTrue(out.get(3L).powerKw() > 0.0);
+		// two 50 m hops of 33 kV line: 41.6 mW each
+		assertEquals(78.749958, out.get(2L).powerKw(), EPS);
+		assertEquals(78.749917, out.get(3L).powerKw(), EPS);
 	}
 
 	@Test
@@ -190,7 +210,7 @@ class GridSolverTest {
 
 		assertEquals(0.0, out.get(3L).powerKw(), EPS);
 		// the switch itself reads what is on its supply side
-		assertEquals(X * GridMath.efficiency(1, 5), out.get(2L).powerKw(), EPS);
+		assertEquals(78.749958, out.get(2L).powerKw(), EPS);
 		assertEquals(X, out.get(1L).powerKw(), EPS);
 	}
 
@@ -214,8 +234,9 @@ class GridSolverTest {
 
 		// the middle fitting (21) is on the pole's bus but has no span: it takes no part, so it is not a node
 		Map<Long, GridSolver.Reading> out = w.solve();
-		assertEquals(80.0, out.get(2L).powerKw(), EPS);
-		assertEquals(80.0 * 0.8, out.get(3L).powerKw(), EPS);
+		// 200 m of bundle each (k = 5.5375e-4): 100 - 5.5375, then 94.4625 - 4.9412
+		assertEquals(94.4625, out.get(2L).powerKw(), EPS);
+		assertEquals(89.521298, out.get(3L).powerKw(), EPS);
 	}
 
 	@Test
@@ -238,10 +259,11 @@ class GridSolverTest {
 		w.generator(10, 100.0);
 
 		Map<Long, GridSolver.Reading> out = w.solve();
-		// the first pole is next to the turbine (no loss); each of the two ways takes half, less its own loss
+		// the first pole is next to the turbine (no loss); each of the two ways takes half, less its own loss:
+		// 50 - 2500 k over 100 m and over 200 m
 		assertEquals(100.0, out.get(2L).powerKw(), EPS);
-		assertEquals(50.0 * 0.9, out.get(3L).powerKw(), EPS);
-		assertEquals(50.0 * 0.8, out.get(4L).powerKw(), EPS);
+		assertEquals(49.3078125, out.get(3L).powerKw(), EPS);
+		assertEquals(48.615625, out.get(4L).powerKw(), EPS);
 	}
 
 	@Test
@@ -268,9 +290,9 @@ class GridSolverTest {
 		w.generator(10, 100.0);
 
 		Map<Long, GridSolver.Reading> out = w.solve();
-		// two ways (machine 3 by two cables, machine 4 by one): half each; the pair of cables loses less
-		assertEquals(50.0 * GridMath.efficiency(2, 10), out.get(3L).powerKw(), EPS);
-		assertEquals(50.0 * GridMath.efficiency(1, 10), out.get(4L).powerKw(), EPS);
+		// two ways (machine 3 by two cables, machine 4 by one): half each; the pair of cables is half the resistance
+		assertEquals(49.65390625, out.get(3L).powerKw(), EPS);
+		assertEquals(49.3078125, out.get(4L).powerKw(), EPS);
 	}
 
 	@Test
@@ -299,11 +321,10 @@ class GridSolverTest {
 		w.generator(10, 100.0);
 
 		Map<Long, GridSolver.Reading> out = w.solve();
-		// D is reached by two paths of 45 each (50 x 0.9 x 0.9, from either side); it keeps the larger, not the sum
-		double viaOne = 100.0 * 0.5 * 0.9 * 0.9;
-		assertEquals(viaOne, out.get(5L).powerKw(), EPS);
-		assertEquals(50.0 * 0.9, out.get(3L).powerKw(), EPS);
-		assertEquals(50.0 * 0.9, out.get(4L).powerKw(), EPS);
+		// D is reached by two equal paths (50, then two 100 m hops); it keeps the larger, not the sum
+		assertEquals(48.634657, out.get(5L).powerKw(), EPS);
+		assertEquals(49.3078125, out.get(3L).powerKw(), EPS);
+		assertEquals(49.3078125, out.get(4L).powerKw(), EPS);
 		// nothing is delivered back to the start, though D is wired to both of its neighbours
 		assertEquals(100.0, out.get(2L).powerKw(), EPS);
 	}
@@ -327,9 +348,85 @@ class GridSolverTest {
 		w.generator(11, 50.0);
 		w.generator(12, 30.0);
 
-		// each contributes its own power, already worn down by its own cable: no lines of the same generator are parallel
+		// each contributes its own power, already worn down by its own cable: no two of them share a span
 		Map<Long, GridSolver.Reading> out = w.solve();
-		assertEquals((100.0 + 50.0 + 30.0) * 0.9, out.get(4L).powerKw(), EPS);
+		assertEquals(97.23125 + 49.3078125 + 29.7508125, out.get(4L).powerKw(), EPS);
+	}
+
+	/**
+	 * Two generators down one span lose what their sum loses, k (P1 + P2)^2, which is more than k P1^2 + k P2^2:
+	 * 150 kW through 100 m of bundle loses 6.2297 kW, where 100 and 50 on spans of their own would lose 3.4609.
+	 */
+	@Test
+	void generatorsSharingASpanLoseWhatTheirSumLoses() {
+		World w = new World();
+		w.machine(1, "source", 0);
+		w.machine(2, "source", 0);
+		w.machine(3, "pole", 0);
+		w.machine(4, "box", 10);
+
+		w.fitting(10, 1, "output");
+		w.fitting(20, 2, "output");
+		w.fitting(30, 3, "bidirectional");
+		w.fitting(31, 3, "bidirectional");
+		w.fitting(32, 3, "bidirectional");
+		w.fitting(40, 4, "bidirectional");
+		w.span(10, 30);
+		w.span(20, 31);
+		w.span(32, 40);
+		w.generator(10, 100.0);
+		w.generator(20, 50.0);
+
+		Map<Long, GridSolver.Reading> out = w.solve();
+		assertEquals(150.0, out.get(3L).powerKw(), EPS);
+		assertEquals(143.7703125, out.get(4L).powerKw(), EPS);
+	}
+
+	/** A transformer reads what goes in and passes on what is left: 1 kW of core and 0.001 P^2 of windings. */
+	@Test
+	void aTransformerPassesOnWhatItDoesNotBurn() {
+		World w = new World();
+		w.machine(1, "source", 0);
+		w.machine(2, "pole", 0);
+		w.machine(3, "box", 0);
+		w.fitting(10, 1, "output");
+		w.fitting(20, 2, "bidirectional");
+		w.fitting(21, 2, "bidirectional");
+		w.fitting(30, 3, "bidirectional");
+		w.span(10, 20);
+		w.span(21, 30);
+		w.passages.put(2L, kw -> 1.0 + 0.001 * kw * kw);
+		w.generator(10, 100.0);
+
+		Map<Long, GridSolver.Reading> out = w.solve();
+		assertEquals(100.0, out.get(2L).powerKw(), EPS);
+		assertEquals(89.0, out.get(3L).powerKw(), EPS);
+	}
+
+	/** Two generators through one transformer: its core is burned once and its windings carry their sum. */
+	@Test
+	void generatorsThroughOneTransformerShareItsCore() {
+		World w = new World();
+		w.machine(1, "source", 0);
+		w.machine(2, "source", 0);
+		w.machine(3, "pole", 0);
+		w.machine(4, "box", 0);
+		w.fitting(10, 1, "output");
+		w.fitting(11, 2, "output");
+		w.fitting(30, 3, "bidirectional");
+		w.fitting(31, 3, "bidirectional");
+		w.fitting(32, 3, "bidirectional");
+		w.fitting(40, 4, "bidirectional");
+		w.span(10, 30);
+		w.span(11, 31);
+		w.span(32, 40);
+		w.passages.put(3L, kw -> 1.0 + 0.001 * kw * kw);
+		w.generator(10, 60.0);
+		w.generator(11, 40.0);
+
+		// 100 kW through: 1 + 10 = 11 kW, not (1 + 3.6) + (1 + 1.6) as two machines alone would have it
+		Map<Long, GridSolver.Reading> out = w.solve();
+		assertEquals(89.0, out.get(4L).powerKw(), EPS);
 	}
 
 	@Test
@@ -364,11 +461,15 @@ class GridSolverTest {
 		Map<Long, GridSolver.Reading> out = w.solve();
 		assertEquals(100.0, out.get(3L).powerKw(), EPS);
 		assertEquals(0.0, out.get(2L).powerKw(), EPS);
-		assertEquals(90.0, out.get(4L).powerKw(), EPS);
+		assertEquals(97.23125, out.get(4L).powerKw(), EPS);
 	}
 
+	/**
+	 * Five kilometres of street bundle is 2.215 ohm a phase, k = 0.01384 per kW: it can take 36.1 kW and deliver
+	 * 18.06, and a 100 kW generator gets no more across it than that.
+	 */
 	@Test
-	void aLongRunStillDeliversATenth() {
+	void aLongRunDeliversNoMoreThanItsTransferLimit() {
 		World w = new World();
 		w.machine(1, "source", 0);
 		w.machine(2, "pole", 500);
@@ -377,7 +478,7 @@ class GridSolverTest {
 		w.span(10, 20);
 		w.generator(10, 100.0);
 
-		assertEquals(10.0, w.solve().get(2L).powerKw(), EPS);
+		assertEquals(18.058691, w.solve().get(2L).powerKw(), EPS);
 	}
 
 	@Test
