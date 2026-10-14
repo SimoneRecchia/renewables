@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Whether every string in a GUI panel fits the space the layout gives it.
+"""Whether every string in a GUI panel fits the space the layout gives it, and comes from the language file.
 
     python3 tools/check_gui_fits.py
 
@@ -7,6 +7,9 @@ Measured at the widest each field can get, not at the value it happens to hold -
 today but overruns at the extremes of its own fields is a failure, not a warning.  SPANS is what bounds
 "the extremes": a reading with a unit this file knows is measured at what that unit can really reach, and
 one it does not know is measured at an absurd figure, because asking for too much room is the safe error.
+
+And the panel itself against the smallest GUI (SMALLEST_GUI, the default window at automatic scale): no wider,
+and taller only if PlantScreen scrolls it, with every widget and line inside its edge.
 """
 
 import json
@@ -264,6 +267,142 @@ def widgets(source, where):
     return bands
 
 
+def arguments(source, start):
+    """The top-level arguments of the call whose opening parenthesis is at {@code start}, as source text."""
+    depth, i, last, out = 1, start + 1, start + 1, []
+    in_string = False
+    while i < len(source) and depth > 0:
+        c = source[i]
+        if in_string:
+            if c == '\\':
+                i += 1
+            elif c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True
+        elif c in '([':
+            depth += 1
+        elif c in ')]':
+            depth -= 1
+            if depth == 0:
+                out.append(source[last:i].strip())
+        elif c == ',' and depth == 1:
+            out.append(source[last:i].strip())
+            last = i + 1
+        i += 1
+    return out
+
+
+def pair_calls(source):
+    """Every met-mast row, as (left key, left value expression, right key, right value expression)."""
+    rows = []
+    for match in re.finditer(r'\bpair\(graphics, row\+\+,', source):
+        args = arguments(source, match.start() + len('pair'))
+        if len(args) == 6:
+            rows.append((args[2].strip('"'), args[3], args[4].strip('"'), args[5]))
+    return rows
+
+
+def pair_value(expression, source, lang):
+    """The widest text a row's value can be: a {@code fmt("...")} or a translation filled with them."""
+    translated = re.match(r'Component\.translatable\("([\w.]+)"', expression)
+    if translated:
+        key = translated.group(1)
+        return widest_value(resolved(lang[key], key, source))
+    formatted = re.match(r'fmt\("([^"]+)"', expression)
+    if formatted:
+        return widest_value(formatted.group(1))
+    return None
+
+
+# The smallest GUI a panel has to work in: the default 854x480 window at automatic scale is 427x240, and the
+# smallest window the game allows at scale 1 is 320 wide.
+SMALLEST_GUI = (320, 240)
+
+
+def scrolls():
+    """Whether PlantScreen moves a panel taller than the screen with the wheel, widgets and all."""
+    base = open(os.path.join(SCREENS, 'PlantScreen.java')).read()
+    return ('scroll.top(height, imageHeight)' in base and 'mouseScrolled' in base
+            and 'widget.setY(' in base)
+
+
+def fits_screen(prefix, source, where):
+    """A panel wider than the smallest GUI is cut off; one taller has to scroll, and nothing may lie below its edge."""
+    out = []
+    width = where.get('WIDTH', where.get('IMAGE_WIDTH', 0))
+    height = where.get('HEIGHT', where.get('IMAGE_HEIGHT', 0))
+    min_width, min_height = SMALLEST_GUI
+    if width > min_width:
+        out.append('%s: %d px wide, and the smallest GUI is %d' % (prefix, width, min_width))
+
+    scrolling = height > min_height
+    if scrolling and not ('extends PlantScreen<' in source and scrolls()):
+        out.append('%s: %d px tall on a %d px GUI, and it does not scroll' % (prefix, height, min_height))
+
+    # what scrolling reaches is the panel: a widget or a line below its bottom edge is never on screen
+    for top, bottom in widgets(source, where):
+        if bottom > height:
+            out.append('%s: a widget at y=%d reaches %d, below the panel\'s %d' % (prefix, top, bottom, height))
+    for y in rows(source, where):
+        if y + 9 > height:
+            out.append('%s: a line at y=%d is below the panel\'s %d' % (prefix, y, height))
+
+    print('  %d x %d on the smallest GUI, %d x %d: %s' % (width, height, min_width, min_height,
+                                                       'scrolls' if scrolling else 'fits'))
+    return out
+
+
+# Units are symbols, not English, and stay in the code beside the number they belong to.
+UNIT_WORDS = {'kW', 'kWh', 'MW', 'MWh', 'Hz', 'cm', 'mm', 'kvar', 'rpm', 'kohm'}
+
+
+def string_literals(source):
+    """(start, end, text) of every string literal in a Java source, comments and char literals skipped."""
+    out, i, n = [], 0, len(source)
+    while i < n:
+        if source.startswith('//', i):
+            i = source.find('\n', i)
+            if i < 0:
+                break
+        elif source.startswith('/*', i):
+            end = source.find('*/', i + 2)
+            i = n if end < 0 else end + 2
+        elif source[i] in '"\'':
+            quote, j = source[i], i + 1
+            while j < n and source[j] != quote:
+                j += 2 if source[j] == '\\' else 1
+            if quote == '"':
+                out.append((i, j + 1, source[i + 1:j]))
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def hand_written(name, source):
+    """Words a panel writes itself instead of taking from the language file.
+
+    Two places a word hides: a format string ({@code fmt("%.0f rear")}) and a literal glued onto a reading
+    ({@code power(x) + " DC"}).  A word there reads in English whatever language the game is played in.  A
+    translation key glued to a mode name is a key, not text.
+    """
+    out = []
+    for start, end, text in string_literals(source):
+        before, after = source[:start].rstrip(), source[end:].lstrip()
+        if not (before.endswith('fmt(') or before.endswith('+') or after.startswith('+')):
+            continue
+        if re.fullmatch(r'[a-z0-9_]+(\.[a-z0-9_]+)+\.?', text):
+            continue
+
+        bare = re.sub(r'%[-+ 0,(#]*\d*(?:\.\d+)?[a-zA-Z%]', ' ', text)
+        words = [w for w in re.findall(r'[A-Za-z]{2,}', bare) if w not in UNIT_WORDS]
+        if words:
+            out.append('%s: "%s" is written in the code (%s): it belongs in the language file'
+                       % (name, text, ', '.join(words)))
+    return out
+
+
 def collisions(prefix, source, where):
     """Rows where two things are writing over each other: two helpers, or a helper and a widget."""
     out = []
@@ -296,11 +435,17 @@ def main():
                ('right', where['RIGHT_LABEL_X'], where['RIGHT_VALUE_X'])]
 
     print('=== met mast, %d wide ===' % where['WIDTH'])
-    for match in re.finditer(r'pair\(graphics, row\+\+, "(\w+)", fmt\("([^"]+)"[^;]*?, "(\w+)",\s*\n?\s*fmt\("([^"]+)"', source):
-        pairs = [(match.group(1), match.group(2)), (match.group(3), match.group(4))]
-        for (key, fmt), (side, label_x, value_x) in zip(pairs, columns):
+    calls = pair_calls(source)
+    if len(calls) != source.count('pair(graphics, row++,'):
+        problems.append('met mast: read %d of the %d rows' % (len(calls), source.count('pair(graphics, row++,')))
+    for left_key, left_value, right_key, right_value in calls:
+        pairs = [(left_key, left_value), (right_key, right_value)]
+        for (key, expression), (side, label_x, value_x) in zip(pairs, columns):
             label = lang['screen.renewables.met_station.' + key]
-            value = widest_value(fmt)
+            value = pair_value(expression, source, lang)
+            if value is None:
+                problems.append('met mast: cannot read the %s value of the %s row: %s' % (side, key, expression))
+                continue
             need = width_of(label, table) + width_of(value, table)
             room = value_x - label_x
             flag = 'ok' if need + 4 <= room else 'COLLIDES'
@@ -328,6 +473,7 @@ def main():
         problems.extend(collisions(prefix, source, where))
         inner = where.get('WIDTH', where.get('IMAGE_WIDTH', 0)) - 2 * 8
         print('=== %s, %d wide ===' % (prefix, inner + 16))
+        problems.extend(fits_screen(prefix, source, where))
         for key, text in sorted(lang.items()):
             if not key.startswith('screen.renewables.%s.' % prefix):
                 continue
@@ -351,6 +497,10 @@ def main():
                                 % (prefix, text, usual, worst, inner))
                 print('  OVERRUNS  %-52s %3d usual, %3d worst, of %3d' % (text[:50], usual, worst, inner))
         print('  inner width %d' % inner)
+
+    for name in sorted(os.listdir(SCREENS)):
+        if name.endswith('.java'):
+            problems.extend(hand_written(name, open(os.path.join(SCREENS, name)).read()))
 
     print()
     for problem in problems:
