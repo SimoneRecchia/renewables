@@ -21,14 +21,17 @@ import io.github.simonerecchia.renewables.weather.WeatherSnapshot;
 import io.github.simonerecchia.renewables.Renewables;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import io.github.simonerecchia.renewables.core.ModGameRules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -44,13 +47,17 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private static final double DIFFUSE_MARGIN = 1.25;
 	/** How long the diffuse decision is held after it has reversed, in ticks. */
 	private static final int DIFFUSE_DWELL_TICKS = 100;
-	/** How much of what a shower can wash off it takes away per tick, as a fraction. */
+	/** How much of what a shower can still wash off it takes away per game tick, as a fraction. */
 	private static final double RAIN_WASH_PER_TICK = 0.01;
+	/** The most day-clock ticks one server tick is allowed to account for: a night slept through, not a /time add of a year. */
+	private static final long MAX_ELAPSED_DAY_TICKS = 24000L;
+	/** How much of the gap to the server's angle the client's drawn row closes per tick: most of it within a second. */
+	private static final double CLIENT_EASING = 0.15;
 	/** How far the wind has to fall below the stow threshold before a row comes back out, as a fraction. */
 	private static final double STOW_RELEASE = 0.8;
 	/** How long a weather stow is held after its cause has gone, in ticks. */
 	private static final int STOW_DWELL_TICKS = 600;
-	/** Ticks of soiling accumulation per day-clock day. */
+	/** Day-clock ticks in a day, which the soiling rates are per. */
 	private static final double TICKS_PER_DAY = 24000.0;
 	/** How long a claim outlives the last word from the inverter that made it, in ticks. */
 	private static final int CLAIM_LEASE_TICKS = 100;
@@ -76,6 +83,11 @@ public class PvArrayBlockEntity extends BlockEntity {
 	/** Whether the row is lying flat because flat collects more, and its own shorter dwell. */
 	private boolean diffuseMode = false;
 	private int diffuseHoldTicks = 0;
+	/** The day clock at the last tick: the drive, the dwells and the dust run on the sky's time, not the server's. */
+	private long lastDayTime = Long.MIN_VALUE;
+	/** Client: the angle the server last gave, which the drawn row eases towards; and whether one has been heard. */
+	private double serverRotationDeg = 0.0;
+	private boolean rotationHeard = false;
 
 	// ---- what it is making ----
 
@@ -102,6 +114,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 	private double windSpeed = 0.0;
 	private double spectralFactor = 1.0;
 	private double soiling = 0.0;
+	/** What a shower that is falling now will leave: a flat table keeps some of its dust whatever the rain. NaN when dry. */
+	private double rainResidue = Double.NaN;
 	private double snowDepthM = 0.0;
 	private double rowShadedFraction = 0.0;
 	private double obstructionFraction = 1.0;
@@ -110,7 +124,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 	/** String current at the maximum power point */
 	private double stringCurrentMpp = 0.0;
 
-	private final ClientSync clientSync = new ClientSync();
+	/** Thousands of rows in a field: each sends only what has moved. */
+	private final ClientSync clientSync = ClientSync.deltas();
 
 	/** The latest published snapshot, safe to read from any thread. */
 	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
@@ -152,9 +167,13 @@ public class PvArrayBlockEntity extends BlockEntity {
 			skyViewCountdown = SKY_VIEW_TTL;
 		}
 
+		long dayTicks = elapsedDayTicks(serverLevel);
+		// the drive and its dwells run on the sky's clock; a stopped clock still lets a row settle and a stow end
+		long driveTicks = clockRuns(serverLevel) ? dayTicks : 1L;
+
 		snowDepthM = Shading.snowDepthOver(serverLevel, worldPosition);
-		updateSoiling(serverLevel, spec, weather);
-		updateTracker(spec, sky, weather);
+		updateSoiling(serverLevel, spec, dayTicks);
+		updateTracker(spec, sky, weather, driveTicks);
 		updatePlane(serverLevel, spec, sky);
 		shedSnow(serverLevel, spec);
 		updateTelemetry(spec);
@@ -162,27 +181,42 @@ public class PvArrayBlockEntity extends BlockEntity {
 		clientSync.throttled(this);
 	}
 
+	/** Day-clock ticks since the last tick, none on the first, and never backwards when the time is set. */
+	private long elapsedDayTicks(ServerLevel serverLevel) {
+		long now = serverLevel.getDayTime();
+		long elapsed = lastDayTime == Long.MIN_VALUE ? 0L : Math.max(0L, Math.min(now - lastDayTime, MAX_ELAPSED_DAY_TICKS));
+		lastDayTime = now;
+		return elapsed;
+	}
+
+	/** Whether the day clock is moving at all: by the daylight cycle, or by the mod's wall-clock rule. */
+	private static boolean clockRuns(ServerLevel serverLevel) {
+		return serverLevel.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)
+				|| serverLevel.getGameRules().getBoolean(ModGameRules.REAL_TIME_CLOCK);
+	}
+
 	/** Height of the module plane above the block's floor, in blocks. */
 	private double planeHeight() {
 		return getBlockState().getBlock() instanceof PvArrayBlock block ? block.planeHeight() : 0.5;
 	}
 
-	/** Interpolates the tracker on the client, so the plane moves between the server's ten-tick updates. */
+	/**
+	 * On the client the drawn row eases towards the angle the server last gave.  The server says it at most once a
+	 * second and only when it has moved, and moves the drive on the sky's clock, which the client cannot follow.
+	 */
 	public void clientTick() {
-		if (level == null || !level.isClientSide()) return;
+		if (level == null || !level.isClientSide() || tracker() == null) return;
 
-		TrackerSpec tracker = tracker();
-		if (tracker != null) {
-			slewTowardsTarget(tracker);
-		}
+		double gap = serverRotationDeg - rotationDeg;
+		rotationDeg = Math.abs(gap) < 0.01 ? serverRotationDeg : rotationDeg + gap * CLIENT_EASING;
 	}
 
-	/** Runs the drive, if it is worth running. */
-	private void slewTowardsTarget(TrackerSpec tracker) {
+	/** Runs the drive for so many ticks of the sky's clock, if it is worth running. */
+	private void slewTowardsTarget(TrackerSpec tracker, long ticks) {
 		double error = targetRotationDeg - rotationDeg;
 		if (!slewing && followingTheSun() && !tracker.worthMoving(error)) return;
 
-		double step = tracker.slewPerTick();
+		double step = tracker.slewPerTick() * ticks;
 		slewing = Math.abs(error) > step;
 		rotationDeg = slewing ? rotationDeg + Math.signum(error) * step : targetRotationDeg;
 	}
@@ -232,27 +266,32 @@ public class PvArrayBlockEntity extends BlockEntity {
 		return 1.0 + (unit - 0.5) * MODULE_TOLERANCE;
 	}
 
-	/** Dust building up and rain washing it off. */
-	private void updateSoiling(ServerLevel serverLevel, PvArraySpec spec, WeatherSnapshot weather) {
-		double perDay = Shading.soilingPerDay(LevelWeather.get(serverLevel).siteAt(worldPosition.below()).downfall());
-
+	/**
+	 * Dust building up by the day and rain washing it off.  A shower takes a row down to what it can wash - all of a
+	 * tilted one's, about half of a flat one's - over a few minutes, and the rest stays until a rack is tilted or
+	 * somebody cleans it.
+	 */
+	private void updateSoiling(ServerLevel serverLevel, PvArraySpec spec, long dayTicks) {
 		if (serverLevel.isRainingAt(worldPosition.above())) {
-			double washed = Shading.washedByRain(spec.tiltDeg(rotationDeg));
-			// a shower washes over a few minutes rather than instantly, which is why this is a decay
-			// rather than an assignment
-			soiling *= 1.0 - washed * RAIN_WASH_PER_TICK;
-		} else {
-			soiling = Math.min(Shading.soilingCeiling(), soiling + perDay / TICKS_PER_DAY);
+			if (Double.isNaN(rainResidue)) rainResidue = soiling * (1.0 - Shading.washedByRain(spec.tiltDeg(rotationDeg)));
+			soiling = rainResidue + (soiling - rainResidue) * (1.0 - RAIN_WASH_PER_TICK);
+			return;
 		}
+
+		rainResidue = Double.NaN;
+		if (dayTicks <= 0L) return;
+
+		double perDay = Shading.soilingPerDay(LevelWeather.get(serverLevel).siteAt(worldPosition.below()).downfall());
+		soiling = Math.min(Shading.soilingCeiling(), soiling + perDay * dayTicks / TICKS_PER_DAY);
 	}
 
-	/** Snow sliding off, and taking the block above with it. */
+	/** Snow sliding off, and taking the layers above with it - the vanilla snow, never a block a player put there. */
 	private void shedSnow(ServerLevel serverLevel, PvArraySpec spec) {
 		if (snowDepthM <= 0.0 || !spec.shedsSnow(rotationDeg, moduleTempC)) return;
 
 		BlockPos above = worldPosition.above();
 		BlockState state = serverLevel.getBlockState(above);
-		if (state.is(Blocks.SNOW) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW)) {
+		if (state.is(Blocks.SNOW)) {
 			serverLevel.setBlock(above, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
 			snowDepthM = 0.0;
 		}
@@ -260,7 +299,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 	// ---- the tracker drive ----
 
-	private void updateTracker(PvArraySpec spec, SkyConditions sky, WeatherSnapshot weather) {
+	private void updateTracker(PvArraySpec spec, SkyConditions sky, WeatherSnapshot weather, long ticks) {
 		TrackerSpec tracker = spec.tracker();
 		if (tracker == null) {
 			rotationDeg = spec.mounting().fixedTiltDeg();
@@ -268,8 +307,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 			return;
 		}
 
-		targetRotationDeg = commandedRotation(tracker, spec, sky, weather);
-		slewTowardsTarget(tracker);
+		targetRotationDeg = commandedRotation(tracker, spec, sky, weather, ticks);
+		slewTowardsTarget(tracker, ticks);
 	}
 
 	/** Whether the drive is following the sun, as opposed to being sent somewhere. */
@@ -278,7 +317,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 	}
 
 	/** Where the controller wants the row, and why. */
-	private double commandedRotation(TrackerSpec tracker, PvArraySpec spec, SkyConditions sky, WeatherSnapshot weather) {
+	private double commandedRotation(TrackerSpec tracker, PvArraySpec spec, SkyConditions sky, WeatherSnapshot weather, long ticks) {
 		if (trackerMode == TrackerMode.MANUAL) {
 			stowReason = TrackerMode.Stow.NONE;
 			backtracking = false;
@@ -293,8 +332,10 @@ public class PvArrayBlockEntity extends BlockEntity {
 			return tracker.nightStowDeg();
 		}
 
-		// night is not held, because its release is the one condition here that cannot chatter: the sun
-		TrackerMode.Stow putAway = sky.sun().up() ? heldPutAway(putAwayStow(tracker, sky, weather)) : TrackerMode.Stow.NIGHT;
+		// wind before snow before night: a gale at midnight still wants the wind stow, and night is not held
+		// because its release is the one condition here that cannot chatter - the sun
+		TrackerMode.Stow putAway = heldPutAway(putAwayStow(tracker, sky, weather), ticks);
+		if (putAway == TrackerMode.Stow.NONE && !sky.sun().up()) putAway = TrackerMode.Stow.NIGHT;
 		if (putAway == TrackerMode.Stow.NIGHT) {
 			stowReason = TrackerMode.Stow.NIGHT;
 			backtracking = false;
@@ -322,7 +363,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		// and the last decision is not a stow at all but a choice between two angles
 		// working out what each would collect rather than by testing the sky against a number
-		if (heldDiffuse(flatIsBetter(spec, sky, commanded))) {
+		if (heldDiffuse(flatIsBetter(spec, sky, commanded), ticks)) {
 			stowReason = TrackerMode.Stow.DIFFUSE;
 			backtracking = false;
 			return 0.0;
@@ -358,8 +399,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 		return diffuseMode ? tracking < flat * DIFFUSE_MARGIN : flat > tracking * DIFFUSE_MARGIN;
 	}
 
-	/** Holds a put-away stow for a while after its cause has gone. */
-	private TrackerMode.Stow heldPutAway(TrackerMode.Stow wanted) {
+	/** Holds a put-away stow for a while of the sky's time after its cause has gone. */
+	private TrackerMode.Stow heldPutAway(TrackerMode.Stow wanted, long ticks) {
 		if (wanted != TrackerMode.Stow.NONE) {
 			heldStow = wanted;
 			stowHoldTicks = STOW_DWELL_TICKS;
@@ -367,7 +408,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		}
 
 		if (heldStow != TrackerMode.Stow.NONE && stowHoldTicks > 0) {
-			stowHoldTicks--;
+			stowHoldTicks = (int) Math.max(0L, stowHoldTicks - ticks);
 			return heldStow;
 		}
 
@@ -382,7 +423,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 	}
 
 	/** The same for the diffuse choice, which keeps its own dwell because it is a much shorter one. */
-	private boolean heldDiffuse(boolean wanted) {
+	private boolean heldDiffuse(boolean wanted, long ticks) {
 		if (wanted) {
 			diffuseMode = true;
 			diffuseHoldTicks = DIFFUSE_DWELL_TICKS;
@@ -390,7 +431,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		}
 
 		if (diffuseMode && diffuseHoldTicks > 0) {
-			diffuseHoldTicks--;
+			diffuseHoldTicks = (int) Math.max(0L, diffuseHoldTicks - ticks);
 			return true;
 		}
 
@@ -683,7 +724,19 @@ public class PvArrayBlockEntity extends BlockEntity {
 	@Override
 	protected void saveAdditional(@Nonnull CompoundTag tag) {
 		super.saveAdditional(tag);
+		writeShared(tag);
 
+		// the controller's own memory, which no client draws or reads
+		tag.putBoolean("windStowLatched", windStowLatched);
+		tag.putBoolean("diffuseMode", diffuseMode);
+		tag.putInt("diffuseHoldTicks", diffuseHoldTicks);
+		tag.putString("heldStow", heldStow.name());
+		tag.putInt("stowHoldTicks", stowHoldTicks);
+		if (!Double.isNaN(rainResidue)) tag.putDouble("rainResidue", rainResidue);
+	}
+
+	/** What the renderer and the panel read: everything a client is sent, and a save holds too. */
+	private void writeShared(CompoundTag tag) {
 		// soiling is the only genuinely accumulated state here.
 		tag.putDouble("soiling", soiling);
 		tag.putDouble("rotation", rotationDeg);
@@ -693,11 +746,6 @@ public class PvArrayBlockEntity extends BlockEntity {
 		tag.putString("stowReason", stowReason.name());
 		tag.putBoolean("slewing", slewing);
 		tag.putBoolean("backtracking", backtracking);
-		tag.putBoolean("windStowLatched", windStowLatched);
-		tag.putBoolean("diffuseMode", diffuseMode);
-		tag.putInt("diffuseHoldTicks", diffuseHoldTicks);
-		tag.putString("heldStow", heldStow.name());
-		tag.putInt("stowHoldTicks", stowHoldTicks);
 
 		tag.putDouble("availableDc", availableDcKw);
 		tag.putDouble("mpptFraction", mpptFraction);
@@ -724,6 +772,8 @@ public class PvArrayBlockEntity extends BlockEntity {
 		tag.putDouble("skyView", skyViewFactor);
 		tag.putDouble("stringVoltage", stringVoltage);
 		tag.putDouble("stringCurrent", stringCurrent);
+		// the panel works the run's loss out of it, and without it read 0.00 % on every client
+		tag.putDouble("stringCurrentMpp", stringCurrentMpp);
 	}
 
 	@Override
@@ -731,8 +781,17 @@ public class PvArrayBlockEntity extends BlockEntity {
 		super.load(tag);
 
 		soiling = tag.getDouble("soiling");
-		rotationDeg = tag.getDouble("rotation");
-		targetRotationDeg = tag.contains("targetRotation") ? tag.getDouble("targetRotation") : rotationDeg;
+		double rotation = tag.getDouble("rotation");
+		if (level != null && level.isClientSide() && rotationHeard) {
+			// eased towards in clientTick rather than jumped to
+			serverRotationDeg = rotation;
+		} else {
+			rotationDeg = rotation;
+			serverRotationDeg = rotation;
+			rotationHeard = level != null && level.isClientSide();
+		}
+
+		targetRotationDeg = tag.contains("targetRotation") ? tag.getDouble("targetRotation") : rotation;
 		manualRotationDeg = tag.getDouble("manualRotation");
 		TrackerMode savedMode = TrackerMode.byName(tag.getString("trackerMode"));
 		trackerMode = savedMode != null ? savedMode : TrackerMode.AUTO;
@@ -744,6 +803,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		diffuseHoldTicks = tag.getInt("diffuseHoldTicks");
 		heldStow = stowByName(tag.getString("heldStow"));
 		stowHoldTicks = tag.getInt("stowHoldTicks");
+		rainResidue = tag.contains("rainResidue") ? tag.getDouble("rainResidue") : Double.NaN;
 
 		availableDcKw = tag.getDouble("availableDc");
 		mpptFraction = tag.getDouble("mpptFraction");
@@ -768,6 +828,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		skyViewFactor = tag.contains("skyView") ? tag.getDouble("skyView") : 1.0;
 		stringVoltage = tag.getDouble("stringVoltage");
 		stringCurrent = tag.getDouble("stringCurrent");
+		stringCurrentMpp = tag.getDouble("stringCurrentMpp");
 	}
 
 	private static TrackerMode.Stow stowByName(String name) {
@@ -778,21 +839,31 @@ public class PvArrayBlockEntity extends BlockEntity {
 		return TrackerMode.Stow.NONE;
 	}
 
+	/** A whole tag with a chunk, or a delta laid over what this client already holds. */
 	@Override
 	public void handleUpdateTag(CompoundTag tag) {
-		load(tag);
+		load(clientSync.heard(tag));
 	}
 
+	@Override
+	public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet) {
+		CompoundTag tag = packet.getTag();
+		if (tag != null) handleUpdateTag(tag);
+	}
+
+	/** Only what a client uses: the controller's own dwells and latches change every tick and stay here. */
 	@Override
 	public CompoundTag getUpdateTag() {
 		CompoundTag tag = new CompoundTag();
-		saveAdditional(tag);
+		writeShared(tag);
 		return tag;
 	}
 
+	/** A setting changed, or the block state did: what moved since the clients were last told, exactly. */
+	@Nullable
 	@Override
 	public Packet<ClientGamePacketListener> getUpdatePacket() {
-		return ClientboundBlockEntityDataPacket.create(this);
+		return clientSync.exactUpdate(this);
 	}
 
 	@Override
