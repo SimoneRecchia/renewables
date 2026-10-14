@@ -335,7 +335,7 @@
   "block.renewables.lattice_tension": "Tension Tower",
   "tooltip.renewables.lattice_tension": "Takes the difference between the pulls either side of it.",
   "block.renewables.lattice_terminal": "Terminal Tower",
-  "tooltip.renewables.lattice_terminal": "Takes the whole pull of a line, and is stayed back for it.",
+  "tooltip.renewables.lattice_terminal": "Takes the whole pull of a line from one side, on the widest foot.",
   "block.renewables.mv_disconnector": "Disconnector",
   "tooltip.renewables.mv_disconnector": "Makes a gap in a 33 kV line that you can see. Will not open under load: open the breaker first.",
   "block.renewables.plant_controller": "Plant Controller",
