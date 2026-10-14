@@ -456,7 +456,12 @@ public class PvArrayBlockEntity extends BlockEntity {
 	public double dcLossFraction() {
 		if (cable == null || runMetres <= 0.0) return 0.0;
 
-		return cable.lossFraction(stringCurrentMpp, stringVoltage, runMetres);
+		return cable.lossFraction(stringCurrentMpp, stringVoltage, runMetres, conductorTempC());
+	}
+
+	/** The run's copper temperature: the air, plus what the string current heats it by. */
+	private double conductorTempC() {
+		return cable == null ? ambientTempC : cable.conductorTemperature(ambientTempC, stringCurrentMpp, runBuriedFraction);
 	}
 
 	/** What arrives at the collector, in kW: everything the modules can make, less what the copper takes. */
@@ -468,7 +473,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 	public double stringVoltageAtCollector() {
 		if (cable == null || runMetres <= 0.0) return stringVoltage;
 
-		return Math.max(0.0, stringVoltage - cable.voltageDrop(stringCurrentMpp, runMetres));
+		return Math.max(0.0, stringVoltage - cable.voltageDrop(stringCurrentMpp, runMetres, conductorTempC()));
 	}
 
 	/** What the modules could deliver at their maximum power point, in kW, at the array's own terminals. */
