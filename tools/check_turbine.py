@@ -26,8 +26,8 @@ import gen_turbine_models as turbine                                            
 PATH = os.path.join(objlib.MODELS, 'wind_turbine', 'wind_turbine.obj')
 
 # The objects the model is made of and the renderer treats by prefix.  Anything else is a nacelle part.
-OBJECTS = ('pole', 'pole_base', 'motor', 'motor_hatch', 'motor_cooler', 'motor_sensors', 'motor_beacon',
-           'rotate_2', 'rotate_1', 'insulator', 'pivot_rotor')
+OBJECTS = ('pole', 'pole_base', 'motor', 'motor_shaft', 'motor_hatch', 'motor_cooler', 'motor_sensors',
+           'motor_beacon', 'rotate_2', 'rotate_1', 'insulator', 'insulator_duct', 'pivot_rotor')
 
 # A metre of margin between a blade and anything it should not touch, in blocks.
 GROUND_CLEARANCE = 0.80
