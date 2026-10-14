@@ -15,7 +15,7 @@ wants a gear set and a motor core round a bearing, and the bearing comes back do
 | **Wind** | Turbine Tower; six turbines from the 10 kW Cube SW-10 to the 4 MW Cube C130-4.0 |
 | **Solar** | six Meridian arrays (flat tables, fixed racks, a single-axis and a dual-axis tracker); four Volterra inverters, 10 kW to 2.5 MW; three combiner boxes; the Cabria SC-6 string cable and DT-240 trunk; the Meteorological Mast; the Plant Controller |
 | **Grid** | Electric Cabin, Utility Pole, Power Box (the kiosk at the end of a line); Machine and Substation Transformers; Disconnector and Circuit Breaker; Suspension, Tension and Terminal lattice towers |
-| **Components** | Circuit Board, CPU, Glass Screen, Insulator, Metal Casing, Motor Core, and thirty-two parts |
+| **Components** | Circuit Board, CPU, Glass Screen, Insulator, Metal Casing, Motor Core, and thirty-three parts |
 
 Three habits make everything else easier:
 

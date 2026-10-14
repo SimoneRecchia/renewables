@@ -20,6 +20,7 @@
     }
   },
   "result": {
-    "item": "renewables:cpu"
+    "item": "renewables:cpu",
+    "count": 12
   }
 }

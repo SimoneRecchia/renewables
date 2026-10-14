@@ -193,7 +193,7 @@ Metodi statici di `ServerConfig`: `maxCableRun()`, `externalEnergyEnabled()`, `p
 `entry.md` §8. I due "massimo J/tick" tornano `Double.MAX_VALUE` quando il valore configurato è 0. `ClientConfig.previewSnapping()`.
 
 ### 3.6 Registri (`RP.registry`, F, REALE)
-`ModBlocks`, `ModItems`, `ModBlockEntities`, `ModTabs` (38 blocchi, 76 item, 14 tipi di BE, 1 tab). Le mappe di famiglia
+`ModBlocks`, `ModItems`, `ModBlockEntities`, `ModTabs` (38 blocchi, 77 item, 14 tipi di BE, 1 tab). Le mappe di famiglia
 hanno chiave = id di specifica del catalogo (`renewables:c130_40`), ordine del catalogo:
 `ModBlocks.{PV_ARRAYS, PV_INVERTERS, DC_CABLES, PV_COMBINERS, LATTICE_TOWERS, GROUND_CONDUCTORS, TRANSFORMERS, SWITCHGEARS, TURBINES}`
 (`Map<ResourceLocation, RegistryObject<Block>>`), `ModItems.{CONDUCTORS, PV_ARRAYS, PV_INVERTERS, DC_CABLES, PV_COMBINERS, LATTICE_TOWERS,

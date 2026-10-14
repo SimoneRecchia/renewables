@@ -2,7 +2,7 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     " Z ",
-    "BCB",
+    "CBC",
     " P "
   ],
   "key": {
@@ -20,6 +20,7 @@
     }
   },
   "result": {
-    "item": "renewables:power_module"
+    "item": "renewables:power_module",
+    "count": 8
   }
 }

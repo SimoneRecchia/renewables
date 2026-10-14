@@ -14,6 +14,7 @@
     }
   },
   "result": {
-    "item": "renewables:motor_core"
+    "item": "renewables:motor_core",
+    "count": 16
   }
 }

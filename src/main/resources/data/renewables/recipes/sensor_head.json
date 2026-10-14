@@ -1,18 +1,18 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    " A ",
+    " y ",
     "CBC"
   ],
   "key": {
-    "A": {
-      "item": "renewables:tempered_glass"
-    },
     "B": {
       "item": "renewables:busbar"
     },
     "C": {
       "item": "renewables:circuit_board"
+    },
+    "y": {
+      "tag": "forge:glass_panes/colorless"
     }
   },
   "result": {

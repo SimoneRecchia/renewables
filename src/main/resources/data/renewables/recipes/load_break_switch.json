@@ -20,6 +20,7 @@
     }
   },
   "result": {
-    "item": "renewables:load_break_switch"
+    "item": "renewables:load_break_switch",
+    "count": 4
   }
 }

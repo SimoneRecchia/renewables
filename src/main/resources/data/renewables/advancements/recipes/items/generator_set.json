@@ -1,6 +1,16 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
+    "has_ingots_copper": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:ingots/copper"
+          }
+        ]
+      }
+    },
     "has_storage_blocks_iron": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
@@ -57,6 +67,7 @@
   "requirements": [
     [
       "has_copper_coil",
+      "has_ingots_copper",
       "has_magnetic_core",
       "has_steel_section",
       "has_storage_blocks_iron",

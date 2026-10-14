@@ -1,7 +1,7 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "OOO",
+    "OcO",
     "ele",
     "SSS"
   ],
@@ -11,6 +11,9 @@
     },
     "S": {
       "item": "renewables:steel_section"
+    },
+    "c": {
+      "tag": "forge:ingots/copper"
     },
     "e": {
       "item": "renewables:magnetic_core"

@@ -17,6 +17,7 @@
     }
   },
   "result": {
-    "item": "renewables:capacitor_bank"
+    "item": "renewables:capacitor_bank",
+    "count": 8
   }
 }

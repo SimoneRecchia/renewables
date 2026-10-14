@@ -23,6 +23,7 @@
     }
   },
   "result": {
-    "item": "renewables:pv_laminate"
+    "item": "renewables:pv_laminate",
+    "count": 12
   }
 }

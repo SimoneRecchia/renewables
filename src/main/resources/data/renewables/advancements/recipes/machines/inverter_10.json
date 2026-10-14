@@ -1,6 +1,18 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
+    "has_capacitor_bank": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:capacitor_bank"
+            ]
+          }
+        ]
+      }
+    },
     "has_control_board": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
@@ -25,13 +37,25 @@
         ]
       }
     },
-    "has_inverter_bridge": {
+    "has_magnetic_core": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
             "items": [
-              "renewables:inverter_bridge"
+              "renewables:magnetic_core"
+            ]
+          }
+        ]
+      }
+    },
+    "has_power_module": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:power_module"
             ]
           }
         ]
@@ -46,9 +70,11 @@
   },
   "requirements": [
     [
+      "has_capacitor_bank",
       "has_control_board",
       "has_enclosure",
-      "has_inverter_bridge",
+      "has_magnetic_core",
+      "has_power_module",
       "has_the_recipe"
     ]
   ],

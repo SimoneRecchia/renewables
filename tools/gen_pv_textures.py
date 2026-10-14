@@ -1182,6 +1182,21 @@ def blade_sprite(long_blade):
     return c
 
 
+def item_tower_section():
+    """A length of tubular tower standing up: a painted can, a bolted flange at each end."""
+    c = Canvas(16, 16)
+    dark, mid, light = PAINT
+    for y in range(2, 14):
+        half = 4 if y < 8 else 5
+        c.rect(8 - half, y, 8 + half, y + 1, mid)
+        c.rect(8 - half, y, 9 - half, y + 1, light)
+        c.rect(6 + half, y, 8 + half, y + 1, dark)
+    for y, half in ((1, 5), (13, 6)):
+        c.rect(8 - half, y, 8 + half, y + 2, STEEL[1])
+        c.rect(8 - half, y, 8 + half, y + 1, STEEL[2])
+    return c
+
+
 PARTS = {
     'steel_plate': item_steel_plate,
     'steel_section': item_steel_section,
@@ -1215,6 +1230,7 @@ PARTS = {
     'gearbox': item_gearbox,
     'turbine_blade': lambda: blade_sprite(False),
     'long_blade': lambda: blade_sprite(True),
+    'tower_section': item_tower_section,
 }
 
 

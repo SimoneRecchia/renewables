@@ -1,6 +1,16 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
+    "has_storage_blocks_iron": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/iron"
+          }
+        ]
+      }
+    },
     "has_bearing": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
@@ -49,6 +59,7 @@
       "has_bearing",
       "has_gear_set",
       "has_steel_plate",
+      "has_storage_blocks_iron",
       "has_the_recipe"
     ]
   ],

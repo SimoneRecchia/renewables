@@ -13,6 +13,7 @@
     }
   },
   "result": {
-    "item": "renewables:copper_coil"
+    "item": "renewables:copper_coil",
+    "count": 2
   }
 }

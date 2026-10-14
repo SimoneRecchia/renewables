@@ -3,13 +3,14 @@
 Ogni numero fisico della mod confrontato con la realtà: il valore, da dove viene, e perché è quello. Dove un
 prodotto ha un nome di fantasia (C130-4.0, HN-144-580, VX-110K…) il nome resta e i numeri sono quelli di una
 macchina reale della stessa classe, citata qui. Le scelte che la realtà non decide (scala dei blocchi,
-bilanciamento) non sono state toccate: sono in fondo, come domande.
+bilanciamento) sono in fondo, come domande; il costo delle ricette segue ora le masse reali a una scala scelta
+(domanda 14).
 
 Legenda: **corretto** = il valore o la formula sono cambiati; **verificato** = era già giusto e ora ha una fonte.
 I numeri dei test citati sono calcolati a mano e scritti nei test JUnit.
 
 Sezioni: rete AC · conduttori · trasformatori · quadri MT · tralicci · moduli FV · inverter · quadri di campo · cavi DC ·
-stazione meteo · tracker · turbine · atmosfera · unità di gioco · lasciato com'è · da aggiornare nelle guide · domande.
+stazione meteo · tracker · turbine · atmosfera · costo delle ricette · unità di gioco · lasciato com'è · da aggiornare nelle guide · domande.
 
 ## Rete AC: dove va la potenza e quanto se ne perde (`grid/GridMath`, `grid/GridSolver`, `grid/LevelGrid`)
 
@@ -366,6 +367,88 @@ Tre correzioni (segnalate dalla revisione del vento), il resto verificato:
 Il solo punto debole (non un errore) è il profilo a 10 m, dove la legge di potenza sovrastima il log dell'8 %; le
 turbine stanno fra 40 e 130 m, dove la differenza è sotto l'1 %.
 
+## Costo delle ricette (`tools/gen_crafting.py`, "what a recipe costs")
+
+### Prima (corretto)
+
+Il costo di una macchina non aveva relazione con la sua taglia. Con le materie prime risolte fino al vanilla
+(Fe-eq = lingotti di ferro, revisione M1/M2): il VC-2500K da 2,5 MW costava quanto il VX-110K (58 Fe-eq) e meno
+del VX-350K (71); 1 MW di FT-415 costava ~1460 Fe-eq e 945 rame, 1 MW di C130-4.0 ~32 Fe-eq: il fotovoltaico 45 volte
+l'eolico per MW, nel verso sbagliato; il C52 e il C80 costavano lo stesso metallo; un traliccio da 400 kV 7–8 Fe-eq,
+un trasformatore da 63 MVA 2,6 volte quello da 2,5 MVA. E le parti piccole erano pesanti: un VX-10K da 21 kg
+costava 24 lingotti di ferro e 38 di rame.
+
+### Ora: la formula
+
+Ogni ricetta costa, in lingotti di ferro, lingotti di rame, blocchi di vetro e quarzo, quello che la macchina vera
+pesa in acciaio, metallo conduttore, vetro e silicio:
+
+    unità(materiale) = tonnellate reali di quel materiale / TONNES_PER_UNIT,     TONNES_PER_UNIT = 2 t
+
+* **acciaio** = acciaio, ghisa e l'alluminio strutturale (telai dei moduli), che il gioco non ha; **metallo
+  conduttore** = rame e l'alluminio delle linee; **vetro** = vetro e la fibra di vetro delle pale; **silicio**.
+  Carbone, redstone, oro, sabbia, pietra, slime e favo sono la chimica e l'elettronica: costano quel che costano e qui
+  non pesano.
+* `recipe_units()` risolve ogni ricetta fino al vanilla, con le rese (una piastra è 1/12 di lingotto, una sbarra
+  1/24); `real_tonnes()` è la distinta dei materiali di ogni macchina; `cost_problems()` tiene ogni macchina al suo
+  costo, e `gen_crafting.py` esce con 1 senza scrivere nulla se una sola è fuori:
+  * sopra le **3 unità (6 t)**: totale, acciaio e rame entro **1,5×** in più o in meno della distinta;
+  * sotto: non più di **3 unità oltre la distinta** - un inverter pesa 21 kg, ma la sua ricetta ha comunque un
+    armadio e una scheda;
+  * ogni famiglia (inverter, turbine, trasformatori, quadri di campo, tralicci) costa di più quando cresce.
+* `python3 tools/gen_crafting.py --costs` stampa la tabella distinta/ricetta.
+* Il vetro delle pale è nel totale ma non è tenuto da solo: due pale (`turbine_blade`, `long_blade`) per cinque
+  rotori da 52 a 130 m non possono seguirlo una a una (domanda 3 della revisione dei dati).
+
+### Le distinte e le fonti
+
+| famiglia | come | fonte |
+|---|---|---|
+| moduli FV (6 file) | massa e numero di moduli dal catalogo; c-Si 76 % vetro, 8 % alluminio, 5 % silicio, 1 % rame; CdTe 97 % vetro | IRENA/IEA-PVPS, *End-of-Life Management: Solar Photovoltaic Panels* (2016), [pdf](https://iea-pvps.org/wp-content/uploads/2020/01/IRENA_IEAPVPS_End-of-Life_Solar_PV_Panels_2016.pdf) |
+| tavolo zavorrato (FT) | 97 kg di sottostruttura per 5,46 kWp: 17,8 kg/kWp | relazione di progetto, [Camden](https://camdocs.camden.gov.uk/CMWebDrawer/Record/10891584/file/document) |
+| struttura fissa (TR) | 5200 short ton di acciaio per 71 MWdc: 66 t/MW | Brantley, [Solar Power World 2018](https://www.solarpowerworldonline.com/2018/06/5200-tons-of-steel-went-into-71-mw-solar-flexrack-mounting-shipment-to-north-carolina-project/) |
+| inseguitore monoassiale (HX) | 1070 kg contro 962 della fissa per gli stessi 26 moduli: +11 % | [EPJ Photovoltaics 2024, tab. 1](https://www.epj-pv.org/articles/epjpv/full_html/2024/01/pv230059/T1.html) |
+| biassiale (AE) | una testa DEGERtraker 5000NT, 650 kg senza palo | scheda DEGER 5000NT |
+| turbine C52–C130 | rotore, navicella e torre del modello NREL (pala "advanced", trasmissione a tre stadi), torre tarata sui 160 t del V90-3.0 a 80 m; il modello dà al V90-3.0 una navicella di 64 t e un rotore di 42 t, Vestas ne pubblica 70 e 41 | Fingersh, Hand, Laxson, *Wind Turbine Design Cost and Scaling Model*, NREL/TP-500-40566 (2006), [pdf](https://docs.nlr.gov/docs/fy07osti/40566.pdf); brochure Vestas V90-3.0 (link nella sezione turbine) |
+| rame delle turbine | 2,5 t/MW (JRC: 3 t/MW per il DD-PMSG) | USGS, Wilburn, SIR 2011-5036, come tabulato da [MIT CBA](https://calischs.pages.cba.mit.edu/energy/studies/wind-turbine.html); Carrara et al., JRC EUR 30095 (2020) |
+| SW-10 e blocco di torre | Bergey Excel 10: 545 kg in cima, pale 180 lb, torre a traliccio strallata da 100 ft 4000 lb: 0,59 t ogni 10 m | [scheda Excel 10](https://www.renewableenergyhub.co.uk/uploads/products/10619/product_brochures/Excel_10_Spec_Sheet.pdf), [manuale della torre GL](https://www.bergey.com/wp-content/uploads/excel-10-guyed-lattice-tower-installation-manual.pdf), tab. 5 |
+| inverter | 21,2 kg (SUN2000-10KTL-M1 high current), 89 kg (SG110CX), 116 kg (SG350HX), < 3400 kg (SC 2200–3000-EV) | schede dei costruttori (link nella sezione inverter) |
+| trasformatori | 2500 kVA: 5900 kg; 63 MVA: 89,8 t, di cui 15,3 t olio e 58,5 t parte attiva; l'olio non conta, gli avvolgimenti sono un terzo della parte attiva (stima) | [Legrand](https://www.legrand.fr/pro/catalogue/transformateur-htabt-aaoak-2500kva-5900kg-primaire-20kv-aluminium-2050x1400x2380mm); SGB DOTR 63000/123, [resale.de](https://www.resale.de/sgb-dotr-63000-123-transformer-transformatoren/nr-166202035) |
+| tralicci | 600 t di acciaio per otto nuovi sostegni a 380 kV: 75 t in media; 50 / 75 / 100 t per sospensione, amarro, capolinea (ripartizione stimata) | TenneT, Dörpen–West Niederrhein, [europten](https://www.europten.com/en/whats-new/project-detail/380-kv-ltg-von-doerpen-nach-west-niederrhein-los-2b-in-planung/) |
+| conduttori (una bobina = una fase) | NFA2X 4×70: 0,757 kg/m di alluminio; Aster 228: 0,627 kg/m; Curlew: 1,978 kg/m × 4 | sezione conduttori sopra |
+| cavi DC | due conduttori di rame da 6 o 240 mm², 10 m a blocco | |
+| quadri di campo, palo meteo, controllore, sezionatore, interruttore, palo, cabina, power box | stime, tutte sotto la soglia | |
+
+### Come vengono le ricette
+
+`python3 tools/gen_crafting.py --costs`, in unità da 2 t (totale distinta → ricetta):
+
+| | distinta | ricetta | | distinta | ricetta |
+|---|---|---|---|---|---|
+| FT-415 | 0,59 | 1,29 | SW-10 (+3 blocchi di torre) | 1,2 | 1,8 |
+| TR-580 | 0,61 | 1,00 | C52-0.85 | 33 | 36 |
+| HX-700 | 0,56 | 1,42 | C80-2.0 | 100 | 128 |
+| AE-440 | 0,45 | 1,62 | C90-3.0 | 145 | 140 |
+| VX-10K | 0,01 | 0,81 | C112-3.0 | 230 | 201 |
+| VX-110K | 0,04 | 1,44 | C130-4.0 | 336 | 273 |
+| VX-350K | 0,06 | 2,46 | VT-2500 | 2,5 | 3,0 |
+| VC-2500K | 1,70 | 3,88 | VT-63000 | 37 | 47 |
+| traliccio S / A / E | 25 / 37,5 / 50 | 20 / 29 / 46 | bobina AT | 0,63 | 1,69 |
+
+Per MW, torre compresa: FT-415 ~140 t-eq, inseguitori 190–570 (blocchi piccoli, sotto la soglia), C52–C130 87–137
+(reale 82–169). Il fotovoltaico e l'eolico costano ora lo stesso ordine di grandezza per MW (nella realtà il
+fotovoltaico pesa 0,4–0,9 volte l'eolico); il VC-2500K costa 2,7 volte il VX-110K e 1,6 volte il VX-350K.
+
+Cosa è cambiato nell'albero per arrivarci: le scorte escono a dozzine (piastra, sbarra, scheda); una pala per classe
+di peso; un `generator_set` è circa un megawatt (le turbine ne prendono uno o due, da lì il loro rame); una nuova
+parte, `tower_section` (otto blocchi di ferro e i cavi), porta la torre delle turbine C nella loro ricetta, perché un
+blocco `turbine_tower` regge qualunque macchina ed è tarato sulla torre del SW-10; il SW-10 ha pale di resina e un
+alternatore (`motor_core`), niente moltiplicatore né imbardata; tutte le turbine C hanno il moltiplicatore, come
+`TurbineSpec.gearboxRatio()` e le macchine di riferimento; il TR-580 ha un laminato, non il "quarto laminato del
+modulo grande" (B1); gli array portano i laminati secondo il vetro reale (due ai tavoli da 44 moduli e al film
+sottile, uno agli altri); il trasformatore da 63 MVA è ferro e rame a blocchi; il conduttore AT è rame a lingotti
+(1,3 t a bobina).
+
 ## Unità di gioco
 
 1 kW = 50 FE/tick = 125 J/tick (Mekanism) — **coerenti fra loro**: Mekanism converte 1 FE = 2,5 J, e 50 × 2,5 = 125
@@ -484,4 +567,18 @@ altro agente).
     Tocca `PowerBoxBlockEntity` e il bug del buffer (A4 della revisione), che è di un altro ramo.
 13. **FT-430** ora è 4 stringhe da 11 (prima 2 da 22, che superavano i 1000 V a freddo): usa il doppio degli
     ingressi di stringa di un inverter. Va bene così, o preferisci 2 × 18 = 36 moduli?
+14. **Quante tonnellate vale un lingotto.** Ho scelto **2 t** (`TONNES_PER_UNIT`). A 1 t il C130-4.0 (678 t con la
+    torre) non entra in una griglia 3×3 nemmeno con la `tower_section`; a 4 t i blocchi fotovoltaici (0,9–1,3 t)
+    finiscono tutti sotto la soglia e il loro costo non dipende più da niente. A 2 t il C130 costa 273 unità (30
+    blocchi di ferro), un FT-415 1,3. Va bene, o preferisci un'altra scala?
+15. **La soglia e la banda.** Sotto 3 unità (6 t) una macchina può costare fino a 3 unità più della sua distinta
+    (l'elettronica pesa grammi, una ricetta no); sopra, totale, acciaio e rame entro 1,5 volte. Più stretto vuol dire
+    più parti intermedie.
+16. **La torre delle turbine C sta nella loro ricetta** (`tower_section`, nuova parte), perché un blocco
+    `turbine_tower` regge qualunque turbina ed è tarato sui 0,59 t ogni 10 m della torre del SW-10. L'alternativa è
+    un blocco di torre per classe di macchina (nuovi blocchi e modelli).
+17. **Stime nelle distinte:** la ripartizione 50/75/100 t dei tralicci attorno ai 75 t medi; gli avvolgimenti dei
+    trasformatori come un terzo della parte attiva; le masse dei quadri di campo, del palo meteo, del controllore, dei
+    sezionatori, del palo e della cabina (tutte sotto la soglia). Il SW-10 non usa più `turbine_blade` (le sue pale
+    pesano 27 kg l'una): resta aperta la domanda della revisione su una pala per classe di rotore.
 

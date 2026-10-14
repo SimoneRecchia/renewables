@@ -1,6 +1,16 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
+    "has_glass_panes_colorless": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:glass_panes/colorless"
+          }
+        ]
+      }
+    },
     "has_busbar": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
@@ -25,18 +35,6 @@
         ]
       }
     },
-    "has_tempered_glass": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:tempered_glass"
-            ]
-          }
-        ]
-      }
-    },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -48,7 +46,7 @@
     [
       "has_busbar",
       "has_circuit_board",
-      "has_tempered_glass",
+      "has_glass_panes_colorless",
       "has_the_recipe"
     ]
   ],
