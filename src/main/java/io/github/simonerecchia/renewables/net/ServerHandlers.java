@@ -53,9 +53,13 @@ final class ServerHandlers {
 
 	// ---- wires ----
 
+	/** The key span requests are counted under in {@link PanelGuard#admit}: they are about no single machine. */
+	private static final long SPAN_REQUESTS = Long.MIN_VALUE;
+
 	static void createSpan(CreateSpanPayload message, Supplier<NetworkEvent.Context> context) {
 		ServerPlayer player = context.get().getSender();
 		if (player == null || player.isSpectator()) return;
+		if (!PanelGuard.admit(player, SPAN_REQUESTS)) return;
 
 		// an unassigned id is not a fitting, and a span from a fitting to itself is not a span
 		if (message.startId() <= 0 || message.endId() <= 0 || message.startId() == message.endId()) return;

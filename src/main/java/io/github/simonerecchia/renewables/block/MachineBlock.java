@@ -108,7 +108,7 @@ public abstract class MachineBlock extends Block implements EntityBlock, Machine
 			MachineShell.clear(level, pos, state);
 			if (!level.isClientSide && level instanceof ServerLevel serverLevel
 					&& level.getBlockEntity(pos) instanceof InsulatorHost host) {
-				WireLedger.removeAttachedTo(serverLevel, host.getInsulatorIds());
+				WireLedger.removeAttachedTo(serverLevel, pos, host.getInsulatorIds());
 			}
 		}
 

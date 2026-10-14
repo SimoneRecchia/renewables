@@ -74,20 +74,59 @@ public final class WireLedger {
 	}
 
 	/**
-	 * Removes every span attached to any of these fittings, tells the level's players and refunds the reels.  Ids
-	 * that are not positive are ignored.  Called when a machine is taken out of the world, and when the grid finds
-	 * a span whose end is gone.
+	 * Removes every span attached to any of these fittings, wherever the span puts them, tells the level's players and
+	 * refunds the reels.  Ids that are not positive are ignored.  A machine that is going takes
+	 * {@link #removeAttachedTo(ServerLevel, BlockPos, int[])} instead, so that a copy of it cannot take another's spans.
 	 */
 	public static void removeAttachedTo(ServerLevel level, int[] insulatorIds) {
+		Set<Integer> ids = positive(insulatorIds);
+		if (ids.isEmpty()) return;
+
+		WireData data = WireData.of(level);
+		announceRemoved(level, data, data.store().removeAttachedTo(ids));
+	}
+
+	/**
+	 * Removes the spans that end on one of these fittings <em>at this position</em>, tells the level's players and
+	 * refunds the reels.  Called when the machine at {@code pos} is taken out of the world, and when the grid finds
+	 * that a span's end there is gone; a span that names one of the ids at another block is another machine's.
+	 */
+	public static void removeAttachedTo(ServerLevel level, BlockPos pos, int[] insulatorIds) {
+		Set<Integer> ids = positive(insulatorIds);
+		if (ids.isEmpty()) return;
+
+		WireData data = WireData.of(level);
+		announceRemoved(level, data, data.store().removeAttachedAt(pos, ids));
+	}
+
+	/**
+	 * Whether the saved spans say fitting {@code id} is on a machine other than the one at {@code pos} in
+	 * {@code level}, and on none at that one: then a machine there that carries the id is a copy of the real one,
+	 * in any dimension, and has to be given a new id.  An id no span uses belongs to nobody in particular.
+	 */
+	public static boolean belongsElsewhere(ServerLevel level, BlockPos pos, int id) {
+		boolean elsewhere = false;
+		for (ServerLevel each : level.getServer().getAllLevels()) {
+			for (BlockPos end : WireData.of(each).store().endsOf(id)) {
+				if (each == level && end.equals(pos)) return false;
+
+				elsewhere = true;
+			}
+		}
+
+		return elsewhere;
+	}
+
+	private static Set<Integer> positive(int[] insulatorIds) {
 		Set<Integer> ids = new LinkedHashSet<>();
 		for (int id : insulatorIds) {
 			if (id > 0) ids.add(id);
 		}
 
-		if (ids.isEmpty()) return;
+		return ids;
+	}
 
-		WireData data = WireData.of(level);
-		List<WireConnection> removed = data.store().removeAttachedTo(ids);
+	private static void announceRemoved(ServerLevel level, WireData data, List<WireConnection> removed) {
 		if (removed.isEmpty()) return;
 
 		data.setDirty();

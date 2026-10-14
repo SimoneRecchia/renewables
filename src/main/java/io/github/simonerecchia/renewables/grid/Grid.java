@@ -1,7 +1,5 @@
 package io.github.simonerecchia.renewables.grid;
 
-import io.github.simonerecchia.renewables.Renewables;
-
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.resources.ResourceKey;
@@ -22,9 +20,6 @@ import net.minecraft.world.level.Level;
 public final class Grid {
 	private static final Map<ResourceKey<Level>, LevelGrid> GRIDS = new HashMap<>();
 
-	/** A faulty machine must not take the server down, and must not flood the log either. */
-	private static int errorsLogged;
-
 	private Grid() {
 	}
 
@@ -41,7 +36,6 @@ public final class Grid {
 	/** The server is shutting down: drop every per-level state so a world loaded next in this JVM starts clean. */
 	public static void clear() {
 		GRIDS.clear();
-		errorsLogged = 0;
 		InsulatorIds.reset();
 	}
 
@@ -61,11 +55,11 @@ public final class Grid {
 			GRIDS.put(level.dimension(), grid);
 		}
 
+		// a faulty machine must not take the server down; the level's own log keeps it to a line a minute
 		try {
 			grid.solve(level);
 		} catch (RuntimeException e) {
-			if (errorsLogged++ < 5) Renewables.LOGGER.error("The grid of {} failed to {}", level.dimension().location(),
-					immediate ? "recalculate" : "tick", e);
+			grid.faults().report(level, immediate ? "failed to recalculate" : "failed to tick", e);
 		}
 
 		if (grid.idle() && WireLedger.size(level) == 0) GRIDS.remove(level.dimension());
