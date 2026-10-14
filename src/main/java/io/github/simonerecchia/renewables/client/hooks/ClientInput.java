@@ -98,6 +98,10 @@ public final class ClientInput {
 	public static boolean wrenchUse(Level level, Player player, @Nullable BlockHitResult hit) {
 		if (!level.isClientSide()) return false;
 
+		// use() after a useOn on a block that found nothing: the same click, and the same cube was just scanned
+		HitResult crosshair = Minecraft.getInstance().hitResult;
+		if (hit == null && crosshair != null && crosshair.getType() == HitResult.Type.BLOCK) return false;
+
 		BlockPos target = WrenchTargets.find(level, player);
 		if (target == null) return false;
 
