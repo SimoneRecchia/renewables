@@ -7,6 +7,9 @@ Measured at the widest each field can get, not at the value it happens to hold -
 today but overruns at the extremes of its own fields is a failure, not a warning.  SPANS is what bounds
 "the extremes": a reading with a unit this file knows is measured at what that unit can really reach, and
 one it does not know is measured at an absurd figure, because asking for too much room is the safe error.
+
+And the panel itself against the smallest GUI (SMALLEST_GUI, the default window at automatic scale): no wider,
+and taller only if PlantScreen scrolls it, with every widget and line inside its edge.
 """
 
 import json
@@ -312,6 +315,44 @@ def pair_value(expression, source, lang):
     return None
 
 
+# The smallest GUI a panel has to work in: the default 854x480 window at automatic scale is 427x240, and the
+# smallest window the game allows at scale 1 is 320 wide.
+SMALLEST_GUI = (320, 240)
+
+
+def scrolls():
+    """Whether PlantScreen moves a panel taller than the screen with the wheel, widgets and all."""
+    base = open(os.path.join(SCREENS, 'PlantScreen.java')).read()
+    return ('scroll.top(height, imageHeight)' in base and 'mouseScrolled' in base
+            and 'widget.setY(' in base)
+
+
+def fits_screen(prefix, source, where):
+    """A panel wider than the smallest GUI is cut off; one taller has to scroll, and nothing may lie below its edge."""
+    out = []
+    width = where.get('WIDTH', where.get('IMAGE_WIDTH', 0))
+    height = where.get('HEIGHT', where.get('IMAGE_HEIGHT', 0))
+    min_width, min_height = SMALLEST_GUI
+    if width > min_width:
+        out.append('%s: %d px wide, and the smallest GUI is %d' % (prefix, width, min_width))
+
+    scrolling = height > min_height
+    if scrolling and not ('extends PlantScreen<' in source and scrolls()):
+        out.append('%s: %d px tall on a %d px GUI, and it does not scroll' % (prefix, height, min_height))
+
+    # what scrolling reaches is the panel: a widget or a line below its bottom edge is never on screen
+    for top, bottom in widgets(source, where):
+        if bottom > height:
+            out.append('%s: a widget at y=%d reaches %d, below the panel\'s %d' % (prefix, top, bottom, height))
+    for y in rows(source, where):
+        if y + 9 > height:
+            out.append('%s: a line at y=%d is below the panel\'s %d' % (prefix, y, height))
+
+    print('  %d x %d on the smallest GUI, %d x %d: %s' % (width, height, min_width, min_height,
+                                                       'scrolls' if scrolling else 'fits'))
+    return out
+
+
 # Units are symbols, not English, and stay in the code beside the number they belong to.
 UNIT_WORDS = {'kW', 'kWh', 'MW', 'MWh', 'Hz', 'cm', 'mm', 'kvar', 'rpm', 'kohm'}
 
@@ -432,6 +473,7 @@ def main():
         problems.extend(collisions(prefix, source, where))
         inner = where.get('WIDTH', where.get('IMAGE_WIDTH', 0)) - 2 * 8
         print('=== %s, %d wide ===' % (prefix, inner + 16))
+        problems.extend(fits_screen(prefix, source, where))
         for key, text in sorted(lang.items()):
             if not key.startswith('screen.renewables.%s.' % prefix):
                 continue
