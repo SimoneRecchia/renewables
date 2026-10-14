@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
@@ -32,6 +33,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -39,6 +41,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -57,13 +60,16 @@ import org.joml.Vector3f;
  * <ul>
  * <li>The buffers are kept here, one cache per block entity type: one buffer per (block position, group), built the
  *     first time the group is drawn and again when the machine's light or the group's texture changes.  The buffers
- *     of a position its type's pass did not draw are closed, and all of them are when the level changes or the
- *     resources reload.  A cache per type, not one for all, because a pass only knows which of its own machines it
- *     drew; it also keeps a turbine and the bare tower it replaced, at the same position, from sharing buffers.</li>
- * <li>Within a machine the groups are batched by texture: one render state per texture, one draw per group.</li>
+ *     of a position its type's pass left out (out of range, filtered) are closed, and all of them are when the level
+ *     changes or the resources reload; a machine only off screen keeps them.  A cache per type, not one for all,
+ *     because a pass only knows which of its own machines it saw; it also keeps a turbine and the bare tower it
+ *     replaced, at the same position, from sharing buffers.  Every build goes through one shared builder.</li>
+ * <li>A machine whose box is outside the frustum is not drawn.</li>
+ * <li>Within a machine the groups are batched by texture: one render state per texture, one draw per group.  The
+ *     level's two lights are turned into each group's frame for its draw ({@link PoseLighting}).</li>
  * <li>A group that is given no matrix is not drawn, which is how a renderer hides a part.  Markers
  *     ({@code pivot_*}) are never drawn.</li>
- * <li>Light is sampled once, at the machine's own block.</li>
+ * <li>Light is sampled once, at the machine's own block and the one above it ({@link #lightAt}).</li>
  * </ul>
  */
 @OnlyIn(Dist.CLIENT)
@@ -71,6 +77,10 @@ public abstract class MachineRenderer {
 	/** A group's vertex buffer on the GPU, kept per (block position, group name). */
 	static final class GroupBuffer implements AutoCloseable {
 		private static final int VERTEX_BYTES = DefaultVertexFormat.NEW_ENTITY.getVertexSize();
+		/** What the shared builder holds before it first has to grow: a machine's larger groups. */
+		private static final int BUILDER_START_VERTICES = 16384;
+		@Nullable
+		private static BufferBuilder BUILDER;
 
 		@Nullable
 		private VertexBuffer buffer;
@@ -78,38 +88,73 @@ public abstract class MachineRenderer {
 		private final MeshModel.Group source;
 		private final ResourceLocation texture;
 		private final int light;
+		/** The scale along the model's axes baked into the vertices, or null for none. */
+		@Nullable
+		private final Vector3f baked;
 
-		private GroupBuffer(VertexBuffer buffer, MeshModel.Group source, ResourceLocation texture, int light) {
+		private GroupBuffer(VertexBuffer buffer, MeshModel.Group source, ResourceLocation texture, int light, @Nullable Vector3f baked) {
 			this.buffer = buffer;
 			this.source = source;
 			this.texture = texture;
 			this.light = light;
+			this.baked = baked;
 		}
 
-		static GroupBuffer build(MeshModel.Group group, ResourceLocation texture, int light) {
+		/**
+		 * The group's triangles in a buffer of their own.  {@code baked} is a scale along the model's axes that is not the
+		 * same on all three: it goes into the positions, and its inverse into the normals, so that what is left of the pose
+		 * is a rotation the lights can follow ({@link PoseLighting}).
+		 */
+		static GroupBuffer build(MeshModel.Group group, ResourceLocation texture, int light, @Nullable Vector3f baked) {
 			int count = group.vertexCount();
-			// the builder allocates six times what it is told; a third of the bytes is three times what the group needs
-			BufferBuilder builder = new BufferBuilder(count * VERTEX_BYTES / 2 + 64);
+			BufferBuilder builder = builder();
 			// triangles as they are: no need for the quad of four that the render type would otherwise ask for
 			builder.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.NEW_ENTITY);
 
 			float[] p = group.positions;
 			float[] n = group.normals;
 			float[] uv = group.uvs;
+			float sx = baked == null ? 1.0f : baked.x();
+			float sy = baked == null ? 1.0f : baked.y();
+			float sz = baked == null ? 1.0f : baked.z();
 			for (int i = 0; i < count; i++) {
-				builder.vertex(p[3 * i], p[3 * i + 1], p[3 * i + 2], 1.0f, 1.0f, 1.0f, 1.0f, uv[2 * i], uv[2 * i + 1],
-						OverlayTexture.NO_OVERLAY, light, n[3 * i], n[3 * i + 1], n[3 * i + 2]);
+				float nx = n[3 * i] / sx;
+				float ny = n[3 * i + 1] / sy;
+				float nz = n[3 * i + 2] / sz;
+				float length = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+				if (length > 0.0f) {
+					nx /= length;
+					ny /= length;
+					nz /= length;
+				}
+
+				builder.vertex(p[3 * i] * sx, p[3 * i + 1] * sy, p[3 * i + 2] * sz, 1.0f, 1.0f, 1.0f, 1.0f, uv[2 * i], uv[2 * i + 1],
+						OverlayTexture.NO_OVERLAY, light, nx, ny, nz);
 			}
 
 			VertexBuffer vertexBuffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
 			vertexBuffer.bind();
 			vertexBuffer.upload(builder.end());
 			VertexBuffer.unbind();
-			return new GroupBuffer(vertexBuffer, group, texture, light);
+			return new GroupBuffer(vertexBuffer, group, texture, light, baked == null ? null : new Vector3f(baked));
 		}
 
-		boolean isStale(MeshModel.Group group, ResourceLocation texture, int light) {
-			return buffer == null || source != group || this.light != light || !this.texture.equals(texture);
+		/**
+		 * The one builder every group is written through.  A {@code BufferBuilder}'s memory is native and 1.20.1 has no way
+		 * to free it, so one per build was megabytes lost each time a machine came back into range; this one grows to the
+		 * largest group once and is handed back empty by the upload.  Render thread only.
+		 */
+		static BufferBuilder builder() {
+			if (BUILDER == null) BUILDER = new BufferBuilder(BUILDER_START_VERTICES * VERTEX_BYTES / 6);
+
+			return BUILDER;
+		}
+
+		boolean isStale(MeshModel.Group group, ResourceLocation texture, int light, @Nullable Vector3f baked) {
+			if (buffer == null || source != group || this.light != light || !this.texture.equals(texture)) return true;
+			if (this.baked == null || baked == null) return this.baked != baked;
+
+			return !PoseLighting.sameScale(this.baked, baked);
 		}
 
 		void draw(Matrix4f modelView, Matrix4f projection, ShaderInstance shader) {
@@ -141,16 +186,25 @@ public abstract class MachineRenderer {
 	/** The buffers of every machine type that has been drawn: per position, per group. */
 	private static final Map<Class<?>, Map<BlockPos, Map<String, GroupBuffer>>> CACHES = new HashMap<>();
 	private static final Map<String, ResourceLocation> TEXTURES = new HashMap<>();
+	/** The squared range each type's pass draws to, as the pass last said. */
+	private static final Map<Class<?>, Double> RANGES = new HashMap<>();
 	private static final Set<String> REPORTED = new HashSet<>();
+	/** The lights of the pass under way: drawing happens on the render thread only, one pass at a time. */
+	private static final PoseLighting LIGHTING = new PoseLighting();
+	/** How much past the model's own reach the culling box goes; see {@link #aroundModel}. */
+	private static final double CULL_MARGIN = 1.5;
+	/** Scratch for {@link PoseLighting#axisScale}; a buffer that keeps it copies it. */
+	private static final Vector3f BAKED = new Vector3f();
 	@Nullable
 	private static Level lastLevel;
 
 	// ---- the pass ----
 
 	/**
-	 * Draws every tracked machine of a type with just the block's pose.  Returns the positions it drew.
+	 * Draws every tracked machine of a type with just the block's pose.  Returns the positions in range, drawn or only
+	 * off screen: what a renderer keeps its animation state for.
 	 *
-	 * One renderer draws a type, once a frame: the buffers of the type's positions that a pass did not draw are
+	 * One renderer draws a type, once a frame: the buffers of the type's positions that a pass did not return are
 	 * released at its end.
 	 */
 	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
@@ -168,12 +222,23 @@ public abstract class MachineRenderer {
 	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
 			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored, @Nullable Draw<T> draw,
 			@Nullable Predicate<T> filter) {
+		return drawAll(event, type, maxDistanceSq, facing, authored, draw, filter, null);
+	}
+
+	/**
+	 * As above, with the box a machine can be drawn anywhere inside, for a renderer whose model is not drawn about the
+	 * block (the turbine, from the foot of its tower); null for the box round the model's {@link MeshModel#radius}.
+	 */
+	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
+			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored, @Nullable Draw<T> draw,
+			@Nullable Predicate<T> filter, @Nullable BiFunction<T, MeshModel, AABB> bounds) {
 		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return SKIPPED;
 
 		Minecraft minecraft = Minecraft.getInstance();
 		ClientLevel level = minecraft.level;
 		if (level == null) return SKIPPED;
 
+		RANGES.put(type, maxDistanceSq);
 		FrameClock.begin(event.getRenderTick(), event.getPartialTick(), minecraft.isPaused());
 		watchLevel(level);
 		Map<BlockPos, Map<String, GroupBuffer>> cache = CACHES.computeIfAbsent(type, key -> new HashMap<>());
@@ -181,7 +246,10 @@ public abstract class MachineRenderer {
 		Vec3 camera = event.getCamera().getPosition();
 		PoseStack poseStack = event.getPoseStack();
 		Matrix4f projection = event.getProjectionMatrix();
+		Frustum frustum = event.getFrustum();
 		Set<BlockPos> seen = new HashSet<>();
+		// nothing is pushed yet, so the stage's pose is the camera's rotation: the frame the level's lights are set in
+		LIGHTING.forView(poseStack.last().pose(), level.effects().constantAmbientLight());
 
 		for (T machine : ClientBlockEntities.of(type)) {
 			if (machine.isRemoved() || machine.getLevel() != level) continue;
@@ -197,9 +265,14 @@ public abstract class MachineRenderer {
 			MeshModel model = ModelBindings.model(state.getBlock());
 			if (model == null) continue;
 
-			int light = LevelRenderer.getLightColor(level, pos);
+			// in range, so its buffers and its angles are kept whether it is off screen this frame or its drawing throws
+			seen.add(pos);
+			if (frustum != null && !frustum.isVisible(bounds == null ? aroundModel(machine, model) : bounds.apply(machine, model))) continue;
+
+			int light = lightAt(level, pos);
 			Map<String, GroupBuffer> buffers = cache.computeIfAbsent(pos.immutable(), key -> new HashMap<>());
-			RenderContext context = new RenderContext(model, ModelBindings.fallbackTexture(state.getBlock()), light, projection, buffers);
+			RenderContext context = new RenderContext(model, ModelBindings.fallbackTexture(state.getBlock()), light, projection, buffers,
+					LIGHTING);
 
 			poseStack.pushPose();
 			try {
@@ -216,8 +289,6 @@ public abstract class MachineRenderer {
 				} else {
 					draw.draw(machine, context, poseStack);
 				}
-
-				seen.add(pos);
 			} catch (RuntimeException e) {
 				// one machine's drawing going wrong must cost that machine, not the frame
 				reportOnce(machine.getClass().getName(), "A " + machine.getClass().getSimpleName() + " could not be drawn: " + e);
@@ -226,8 +297,52 @@ public abstract class MachineRenderer {
 			}
 		}
 
+		LIGHTING.restore();
 		release(cache, seen);
 		return seen;
+	}
+
+	/**
+	 * The light a machine is drawn with: the brighter of its own cell and the one above, per channel, which is what a
+	 * wire's end takes too ({@code WireRenderer.sampleLight}).  A machine whose own cell is shaded by its own shell or
+	 * shape would otherwise be drawn a step darker than the wire hanging from it and the ground it stands on.
+	 */
+	static int lightAt(Level level, BlockPos pos) {
+		int here = LevelRenderer.getLightColor(level, pos);
+		int above = LevelRenderer.getLightColor(level, pos.above());
+		int block = Math.max((here >> 4) & 15, (above >> 4) & 15);
+		int sky = Math.max((here >> 20) & 15, (above >> 20) & 15);
+		return (block << 4) | (sky << 20);
+	}
+
+	/**
+	 * Whether a machine is near enough to the camera for its renderer to draw it, by the renderer's own range; true for
+	 * one no renderer has drawn yet.  A wire asks it of both its ends, so it is never drawn hanging from nothing.
+	 */
+	public static boolean inRange(BlockEntity machine, Vec3 camera) {
+		Double range = RANGES.get(machine.getClass());
+		if (range == null) return true;
+
+		BlockPos pos = machine.getBlockPos();
+		double dx = pos.getX() + 0.5 - camera.x;
+		double dy = pos.getY() + 0.5 - camera.y;
+		double dz = pos.getZ() + 0.5 - camera.z;
+		return dx * dx + dy * dy + dz * dz <= range;
+	}
+
+	/**
+	 * A box the machine is drawn inside, whatever its facing and pose: a cube round the model's origin, half as large
+	 * again as the model's reach, because a part turning about a hinge away from the origin (a tracker's table, a
+	 * switch's blade) can swing a little past it.
+	 */
+	private static AABB aroundModel(BlockEntity machine, MeshModel model) {
+		double reach = model.radius() * CULL_MARGIN + 0.5;
+		if (machine instanceof ExtraPose pose) reach += pose.poseOffset().length();
+
+		BlockPos pos = machine.getBlockPos();
+		double x = pos.getX() + 0.5;
+		double z = pos.getZ() + 0.5;
+		return new AABB(x - reach, pos.getY() - reach, z - reach, x + reach, pos.getY() + reach, z + reach);
 	}
 
 	/** Offset, then yaw about the vertical, then pitch about the east-west axis: the order everything else uses. */
@@ -253,7 +368,7 @@ public abstract class MachineRenderer {
 			collect(batches, context, context.model().groups.get(entry.getKey()), entry.getValue());
 		}
 
-		drawBatches(batches, context.projection);
+		drawBatches(batches, context);
 	}
 
 	/** Draws every group of the machine with the one pose on the stack, except those {@code visible} rejects. */
@@ -264,7 +379,7 @@ public abstract class MachineRenderer {
 			if (visible.test(group.name)) collect(batches, context, group, pose);
 		}
 
-		drawBatches(batches, context.projection);
+		drawBatches(batches, context);
 	}
 
 	private static void collect(Map<ResourceLocation, List<Batch>> batches, RenderContext context, @Nullable MeshModel.Group group,
@@ -273,18 +388,21 @@ public abstract class MachineRenderer {
 
 		ResourceLocation texture = textureOf(group, context.texture());
 		int light = context.packedLight();
+		// a scale that differs along the model's axes goes into the vertices, so the pose left is one the lights follow
+		Vector3f baked = PoseLighting.axisScale(pose, BAKED) ? BAKED : null;
 		GroupBuffer buffer = context.buffers.get(group.name);
-		if (buffer == null || buffer.isStale(group, texture, light)) {
+		if (buffer == null || buffer.isStale(group, texture, light, baked)) {
 			if (buffer != null) buffer.close();
-			buffer = GroupBuffer.build(group, texture, light);
+			buffer = GroupBuffer.build(group, texture, light, baked);
 			context.buffers.put(group.name, buffer);
 		}
 
-		batches.computeIfAbsent(texture, key -> new ArrayList<>()).add(new Batch(buffer, pose));
+		Matrix4f drawn = buffer.baked == null ? pose : new Matrix4f(pose).scale(1.0f / buffer.baked.x(), 1.0f / buffer.baked.y(), 1.0f / buffer.baked.z());
+		batches.computeIfAbsent(texture, key -> new ArrayList<>()).add(new Batch(buffer, drawn));
 	}
 
-	/** One render state per texture, however many groups share it. */
-	private static void drawBatches(Map<ResourceLocation, List<Batch>> batches, Matrix4f projection) {
+	/** One render state per texture, however many groups share it; the lights are turned into each group's frame. */
+	private static void drawBatches(Map<ResourceLocation, List<Batch>> batches, RenderContext context) {
 		for (Map.Entry<ResourceLocation, List<Batch>> entry : batches.entrySet()) {
 			RenderType type = RenderType.entityCutoutNoCull(entry.getKey());
 			type.setupRenderState();
@@ -292,7 +410,10 @@ public abstract class MachineRenderer {
 				ShaderInstance shader = RenderSystem.getShader();
 				if (shader == null) continue;
 
-				for (Batch batch : entry.getValue()) batch.buffer().draw(batch.pose(), projection, shader);
+				for (Batch batch : entry.getValue()) {
+					context.lighting.applyTo(batch.pose());
+					batch.buffer().draw(batch.pose(), context.projection, shader);
+				}
 			} finally {
 				type.clearRenderState();
 			}

@@ -22,6 +22,15 @@ public interface InsulatorHost {
 	Vec3 getWirePosition(int index);
 
 	/**
+	 * Where a wire running towards {@code toward} ends on fitting {@code index}: {@link #getWirePosition} for every
+	 * fitting that holds its wires at one point.  A tension tower holds each phase with two dead-ends, one each side of
+	 * the arm, and a span ends at the one on its own side; the server's single point stays the middle of the two.
+	 */
+	default Vec3 getWirePosition(int index, Vec3 toward) {
+		return getWirePosition(index);
+	}
+
+	/**
 	 * The name a saved connection stores for this kind of machine.
 	 *
 	 * Never change one: every wire in every existing world holds it.

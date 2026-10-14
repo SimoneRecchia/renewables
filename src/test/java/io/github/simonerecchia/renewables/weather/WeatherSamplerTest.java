@@ -18,14 +18,14 @@ class WeatherSamplerTest {
 	private static final long SEED = 123456789L;
 	private static final int SEA = 63;
 	/** Open grassland, flat: nothing makes it windier or calmer than the profile says. */
-	private static final SiteConditions GRASS = new SiteConditions(0.03, 0.4, 0.8, 0.22, Double.NaN);
+	private static final SiteConditions GRASS = new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, Double.NaN);
 
 	private static final long NOON = 6000L;
 	private static final long MIDNIGHT = 18000L;
 
 	private static Input input(int mast, long dayTime, boolean raining, boolean thundering, SiteConditions site, boolean withSky) {
 		// the machine stands on a tower of `mast` blocks over ground at y 70
-		return new Input(SEED, 1200, -340, 70, SEA, mast, dayTime, dayTime, raining, thundering, site, withSky);
+		return new Input(SEED, 1200, -340, 70, SEA, mast, dayTime, dayTime, dayTime, raining, thundering, site, withSky);
 	}
 
 	private static WeatherSnapshot at(int mast) {
@@ -65,7 +65,7 @@ class WeatherSamplerTest {
 
 	@Test
 	void roughGroundSlowsTheWindAtTheHub() {
-		SiteConditions forest = new SiteConditions(0.55, 0.8, 0.7, 0.14, Double.NaN);
+		SiteConditions forest = new SiteConditions(0.55, 0.8, 0.7, 0.14, 70.0, Double.NaN);
 		double over = WeatherSampler.sample(input(9, NOON, false, false, GRASS, false)).meanWind();
 		double inForest = WeatherSampler.sample(input(9, NOON, false, false, forest, false)).meanWind();
 		assertTrue(inForest < over);
@@ -73,9 +73,9 @@ class WeatherSamplerTest {
 
 	@Test
 	void aSiteThatStandsProudOfTheLandIsWindier() {
-		SiteConditions flat = new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0);
-		SiteConditions hill = new SiteConditions(0.03, 0.4, 0.8, 0.22, 40.0);
-		SiteConditions hollow = new SiteConditions(0.03, 0.4, 0.8, 0.22, 100.0);
+		SiteConditions flat = new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, 70.0);
+		SiteConditions hill = new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, 40.0);
+		SiteConditions hollow = new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, 100.0);
 
 		double onFlat = WeatherSampler.sample(input(9, NOON, false, false, flat, false)).meanWind();
 		double onHill = WeatherSampler.sample(input(9, NOON, false, false, hill, false)).meanWind();
@@ -86,11 +86,11 @@ class WeatherSamplerTest {
 
 	@Test
 	void exposureIsLimitedBothWays() {
-		assertEquals(0.30, new SiteConditions(0.03, 0.4, 0.8, 0.22, -500.0).exposure(70.0), 1e-9);
-		assertEquals(-0.12, new SiteConditions(0.03, 0.4, 0.8, 0.22, 500.0).exposure(70.0), 1e-9);
-		assertEquals(0.0, new SiteConditions(0.03, 0.4, 0.8, 0.22, Double.NaN).exposure(70.0), 1e-9);
+		assertEquals(0.30, new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, -500.0).exposure(), 1e-9);
+		assertEquals(-0.12, new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, 500.0).exposure(), 1e-9);
+		assertEquals(0.0, new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, Double.NaN).exposure(), 1e-9);
 		// thirty-two blocks of relief is 320 m: 0.64 of the way to the cap's own scale of 500 m
-		assertEquals(0.30, new SiteConditions(0.03, 0.4, 0.8, 0.22, 38.0).exposure(70.0), 1e-9);
+		assertEquals(0.30, new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, 38.0).exposure(), 1e-9);
 	}
 
 	@Test
@@ -118,8 +118,8 @@ class WeatherSamplerTest {
 
 	@Test
 	void turbulenceStaysInItsRange() {
-		SiteConditions rough = new SiteConditions(1.0, 1.0, 0.7, 0.12, Double.NaN);
-		SiteConditions smooth = new SiteConditions(Atmosphere.SMOOTHEST_ROUGHNESS, 0.5, 0.5, 0.07, Double.NaN);
+		SiteConditions rough = new SiteConditions(1.0, 1.0, 0.7, 0.12, 70.0, Double.NaN);
+		SiteConditions smooth = new SiteConditions(Atmosphere.SMOOTHEST_ROUGHNESS, 0.5, 0.5, 0.07, 70.0, Double.NaN);
 		for (int mast = 1; mast <= 13; mast++) {
 			for (SiteConditions site : new SiteConditions[] {rough, smooth}) {
 				double ti = WeatherSampler.sample(input(mast, NOON, true, true, site, false)).turbulence();
@@ -140,7 +140,7 @@ class WeatherSamplerTest {
 		int samples = 6000;
 		for (int i = 0; i < samples; i++) {
 			// the gusts run on the game clock: one reading every second over an hour and a half
-			WeatherSnapshot w = WeatherSampler.sample(new Input(SEED, 1200, -340, 70, SEA, 9, NOON, i * 20L, false, false, GRASS, false));
+			WeatherSnapshot w = WeatherSampler.sample(new Input(SEED, 1200, -340, 70, SEA, 9, NOON, i * 20L, NOON, false, false, GRASS, false));
 			assertTrue(w.instantWind() >= 0.0);
 			total += w.instantWind();
 		}
@@ -158,7 +158,7 @@ class WeatherSamplerTest {
 
 		// rougher ground turns the surface wind further off the geostrophic one
 		float aloft = Atmosphere.geostrophicWind(SEED, 1200, -340, NOON).direction();
-		SiteConditions forest = new SiteConditions(0.55, 0.8, 0.7, 0.14, Double.NaN);
+		SiteConditions forest = new SiteConditions(0.55, 0.8, 0.7, 0.14, 70.0, Double.NaN);
 		float over = WeatherSampler.sample(input(9, NOON, false, false, GRASS, false)).direction();
 		float inForest = WeatherSampler.sample(input(9, NOON, false, false, forest, false)).direction();
 		double turnOver = Math.floorMod(Math.round(aloft - over), 360);
@@ -175,8 +175,8 @@ class WeatherSamplerTest {
 
 	@Test
 	void highGroundHasThinnerColderAir() {
-		WeatherSnapshot low = WeatherSampler.sample(new Input(SEED, 1200, -340, 64, SEA, 9, NOON, NOON, false, false, GRASS, false));
-		WeatherSnapshot high = WeatherSampler.sample(new Input(SEED, 1200, -340, 180, SEA, 9, NOON, NOON, false, false, GRASS, false));
+		WeatherSnapshot low = WeatherSampler.sample(new Input(SEED, 1200, -340, 64, SEA, 9, NOON, NOON, NOON, false, false, GRASS, false));
+		WeatherSnapshot high = WeatherSampler.sample(new Input(SEED, 1200, -340, 180, SEA, 9, NOON, NOON, NOON, false, false, GRASS, false));
 		assertTrue(high.pressureHpa() < low.pressureHpa());
 		assertTrue(high.temperatureC() < low.temperatureC());
 		assertTrue(high.airDensity() < low.airDensity());
@@ -185,8 +185,8 @@ class WeatherSamplerTest {
 	@Test
 	void seaLevelAirIsNearTheReferenceDensity() {
 		// at sea level, near fifteen degrees, the density is close to the one every power curve is quoted at
-		SiteConditions mild = new SiteConditions(0.03, 0.4, 0.55, 0.22, Double.NaN);
-		WeatherSnapshot w = WeatherSampler.sample(new Input(SEED, 0, 0, SEA, SEA, 1, NOON, NOON, false, false, mild, false));
+		SiteConditions mild = new SiteConditions(0.03, 0.4, 0.55, 0.22, 70.0, Double.NaN);
+		WeatherSnapshot w = WeatherSampler.sample(new Input(SEED, 0, 0, SEA, SEA, 1, NOON, NOON, NOON, false, false, mild, false));
 		assertEquals(WorldConditions.REFERENCE_AIR_DENSITY, w.airDensity(), 0.12);
 	}
 
@@ -201,7 +201,7 @@ class WeatherSamplerTest {
 	@Test
 	void sameWorldSamePlaceSameMomentSameAnswer() {
 		assertEquals(at(9), at(9));
-		Input other = new Input(SEED + 1, 1200, -340, 70, SEA, 9, NOON, NOON, false, false, GRASS, true);
+		Input other = new Input(SEED + 1, 1200, -340, 70, SEA, 9, NOON, NOON, NOON, false, false, GRASS, true);
 		assertNotEquals(at(9).meanWind(), WeatherSampler.sample(other).meanWind());
 	}
 
@@ -252,13 +252,13 @@ class WeatherSamplerTest {
 	 */
 	@Test
 	void groundUnderTheSeaIsReadAtTheSurface() {
-		SiteConditions mild = new SiteConditions(0.03, 0.4, 0.55, 0.22, Double.NaN);
-		WeatherSnapshot under = WeatherSampler.sample(new Input(SEED, 0, 0, -60, SEA, 1, NOON, NOON, false, false, mild, false));
-		WeatherSnapshot at = WeatherSampler.sample(new Input(SEED, 0, 0, SEA, SEA, 1, NOON, NOON, false, false, mild, false));
+		SiteConditions mild = new SiteConditions(0.03, 0.4, 0.55, 0.22, 70.0, Double.NaN);
+		WeatherSnapshot under = WeatherSampler.sample(new Input(SEED, 0, 0, -60, SEA, 1, NOON, NOON, NOON, false, false, mild, false));
+		WeatherSnapshot at = WeatherSampler.sample(new Input(SEED, 0, 0, SEA, SEA, 1, NOON, NOON, NOON, false, false, mild, false));
 		assertEquals(at.pressureHpa(), under.pressureHpa(), 1e-9);
 		assertTrue(under.airDensity() < 1.3, "density " + under.airDensity());
 
-		WeatherSnapshot flat = WeatherSampler.sample(new Input(SEED, 0, 0, -60, -63, 1, NOON, NOON, false, false, mild, false));
+		WeatherSnapshot flat = WeatherSampler.sample(new Input(SEED, 0, 0, -60, -63, 1, NOON, NOON, NOON, false, false, mild, false));
 		assertTrue(flat.pressureHpa() < at.pressureHpa());
 		assertEquals(at.pressureHpa(), flat.pressureHpa(), 5.0);
 	}
@@ -277,7 +277,7 @@ class WeatherSamplerTest {
 	 */
 	@Test
 	void cloudCoverDoesNotJumpAfterHoursOfPlay() {
-		SiteConditions wet = new SiteConditions(0.03, 0.8, 0.8, 0.22, Double.NaN);
+		SiteConditions wet = new SiteConditions(0.03, 0.8, 0.8, 0.22, 70.0, Double.NaN);
 		for (long start : new long[] {216_000L, 720_000L, 5_000_000L}) {
 			for (int x = -4000; x <= 4000; x += 800) {
 				double previous = Atmosphere.cloudCover(SEED, x, 77, start, start, wet.downfall(), false, false);
@@ -338,11 +338,70 @@ class WeatherSamplerTest {
 		for (int i = 0; i < 2000; i++) {
 			int x = (i % 50) * 997 - 25_000;
 			int z = (i / 50) * 1013 - 20_000;
-			WeatherSnapshot w = WeatherSampler.sample(new Input(SEED, x, z, 70, SEA, 9, NOON, NOON, false, false, GRASS, false));
+			WeatherSnapshot w = WeatherSampler.sample(new Input(SEED, x, z, 70, SEA, 9, NOON, NOON, NOON, false, false, GRASS, false));
 			double[] grad = pressureGradient(x, z, NOON);
 			double towards = Math.toRadians(w.direction());
 			double along = (grad[0] + background[0]) * Math.cos(towards) + (grad[1] + background[1]) * Math.sin(towards);
 			assertTrue(along < 0.0, "point " + i);
 		}
+	}
+
+	/**
+	 * The weather systems ran on the day clock, so {@code /time set} moved the mean wind from 4.8 to 15.7 m/s in one tick,
+	 * a night slept through skipped half a day of weather, and with the day cycle off the field never moved again.  They
+	 * run on the weather clock now: the same weather-clock reading is the same weather whatever the day clock says.
+	 */
+	@Test
+	void settingTheTimeOfDayDoesNotMoveTheWeather() {
+		long weather = 1_234_567L;
+		for (long jump : new long[] {24000L, 5 * 24000L, 1000 * 24000L}) {
+			Input before = new Input(SEED, 1200, -340, 70, SEA, 9, NOON, weather, weather, false, false, GRASS, true);
+			Input after = new Input(SEED, 1200, -340, 70, SEA, 9, NOON + jump, weather, weather, false, false, GRASS, true);
+			assertEquals(WeatherSampler.sample(before), WeatherSampler.sample(after), "a jump of " + jump + " ticks");
+		}
+
+		// what the day clock still decides is the daily cycle of the air: a calm, stable night against a mixed noon
+		Input noon = new Input(SEED, 1200, -340, 70, SEA, 9, NOON, weather, weather, false, false, GRASS, false);
+		Input night = new Input(SEED, 1200, -340, 70, SEA, 9, MIDNIGHT, weather, weather, false, false, GRASS, false);
+		assertNotEquals(WeatherSampler.sample(noon).meanWind(), WeatherSampler.sample(night).meanWind());
+	}
+
+	/** With the day cycle switched off the day clock stands still, and the wind still comes and goes. */
+	@Test
+	void theWindKeepsChangingWithTheDayCycleOff() {
+		double lowest = Double.MAX_VALUE;
+		double highest = 0.0;
+		for (long weather = 0; weather <= 4 * 24000L; weather += 1000L) {
+			double mean = WeatherSampler.sample(new Input(SEED, 1200, -340, 70, SEA, 9, NOON, weather, weather, false, false, GRASS, false)).meanWind();
+			lowest = Math.min(lowest, mean);
+			highest = Math.max(highest, mean);
+		}
+
+		assertTrue(highest - lowest > 1.0, "the wind ranged only " + lowest + " to " + highest);
+	}
+
+	/** And the weather clock moves it a little at a time: no tick of it changes the mean wind by a noticeable step. */
+	@Test
+	void theWeatherClockMovesTheWindSmoothly() {
+		double previous = WeatherSampler.sample(new Input(SEED, 1200, -340, 70, SEA, 9, NOON, 0, 500_000L, false, false, GRASS, false)).meanWind();
+		for (long weather = 500_001L; weather <= 502_000L; weather++) {
+			double mean = WeatherSampler.sample(new Input(SEED, 1200, -340, 70, SEA, 9, NOON, 0, weather, false, false, GRASS, false)).meanWind();
+			assertTrue(Math.abs(mean - previous) < 0.02, "step " + (mean - previous) + " at " + weather);
+			previous = mean;
+		}
+	}
+
+	/**
+	 * A tower stood on a pillar or a building had the top of the pillar for its ground, and its exposure went to the cap:
+	 * 14.5 m/s against 11.3 for the same machine on the ground.  The exposure is the lie of the land the world made, and
+	 * what is under the foot changes the air's pressure and nothing about the wind.
+	 */
+	@Test
+	void aPillarUnderTheFootIsNotAHill() {
+		SiteConditions plain = new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, 70.0);
+		WeatherSnapshot onTheGround = WeatherSampler.sample(new Input(SEED, 1200, -340, 70, SEA, 13, NOON, NOON, NOON, false, false, plain, false));
+		WeatherSnapshot onAPillar = WeatherSampler.sample(new Input(SEED, 1200, -340, 84, SEA, 13, NOON, NOON, NOON, false, false, plain, false));
+		assertEquals(onTheGround.meanWind(), onAPillar.meanWind(), 0.0);
+		assertEquals(0.0, plain.exposure(), 0.0);
 	}
 }

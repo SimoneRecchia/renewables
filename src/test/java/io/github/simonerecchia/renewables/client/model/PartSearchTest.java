@@ -6,7 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.simonerecchia.renewables.api.power.InverterSpec;
 import io.github.simonerecchia.renewables.block.ModelFacing;
+import io.github.simonerecchia.renewables.catalog.InverterCatalog;
+import io.github.simonerecchia.renewables.client.render.PvInverterRenderer;
+import io.github.simonerecchia.renewables.client.render.TurbineTowerRenderer;
 import io.github.simonerecchia.renewables.model.ExtraPose;
 import io.github.simonerecchia.renewables.model.PartBox;
 
@@ -246,6 +250,60 @@ class PartSearchTest {
 		assertEquals(normal.y - 6, low.y, 1e-5);
 		assertEquals(normal.x, low.x, 1e-5);
 		assertEquals(normal.z, low.z, 1e-5);
+	}
+
+	// ---- a renderer's own pose of its groups ----
+
+	@Test
+	void aSmallInvertersFittingIsPickedWhereItsCabinetIsDrawnAndWhereItsWireEnds() throws IOException {
+		MeshModel inverter = load("models/pv_inverter/pv_inverter.obj");
+		List<String> fittings = List.of("insulator_porcelain");
+
+		for (InverterSpec spec : InverterCatalog.all()) {
+			float scale = (float) spec.renderScale();
+			GroupPoses.Posed drawn = group -> PvInverterRenderer.cabinet(group, scale);
+			for (Direction facing : Direction.Plane.HORIZONTAL) {
+				PartSearch search = new PartSearch(inverter, PartFrame.of(POS, Direction.NORTH, facing, null), fittings, drawn);
+
+				// the block entity's anchor: the porcelain's middle times the scale, through the one transform
+				Vec3 anchor = ExtraPose.toWorld(centre(inverter, "insulator_porcelain").scale(scale), POS, Direction.NORTH, facing, null);
+				Vec3 picked = search.center("insulator_porcelain");
+				assertEquals(0.0, anchor.distanceTo(picked), 1e-5, spec.displayName() + " " + facing);
+
+				// straight down onto the drawn porcelain finds it; onto the full-size model's porcelain, a small one does not
+				assertEquals("insulator_porcelain", search.fitting(picked.add(0, 3, 0), new Vec3(0, -1, 0)).name());
+				Vec3 authored = ExtraPose.toWorld(centre(inverter, "insulator_porcelain"), POS, Direction.NORTH, facing, null);
+				if (scale < 0.9f) assertNull(search.fitting(authored.add(0, 3, 0), new Vec3(0, -1, 0)).name(), spec.displayName());
+			}
+		}
+	}
+
+	@Test
+	void theCableEntriesStayAtFullSizeOnAScaledCabinet() {
+		assertEquals(new org.joml.Matrix4f(), PvInverterRenderer.cabinet("entry_north_body", 0.62f));
+		assertEquals(new org.joml.Matrix4f().scaling(0.62f), PvInverterRenderer.cabinet("cabinet_body", 0.62f));
+	}
+
+	@Test
+	void aBareTowerIsPickedAsTheTubeItDrawsAndNotAsTheWholeTurbine() throws IOException {
+		MeshModel turbine = load("models/wind_turbine/wind_turbine.obj");
+		float height = 7.0f;
+		GroupPoses.Posed drawn = group -> {
+			org.joml.Matrix4f pose = new org.joml.Matrix4f();
+			return TurbineTowerRenderer.groupPose(group, turbine, height, pose) ? pose : null;
+		};
+		PartSearch search = new PartSearch(turbine, PartFrame.of(POS, Direction.NORTH, Direction.NORTH, null), List.of(), drawn);
+		Vec3 axis = Vec3.atLowerCornerOf(POS).add(0.5, 0, 0.5);
+
+		// the tube, up to the top of the column and no higher
+		assertTrue(search.any(axis.add(0, 3.5, 6), new Vec3(0, 0, -1)).name().startsWith("pole"));
+		assertTrue(search.any(axis.add(0, height - 0.2, 6), new Vec3(0, 0, -1)).found());
+		assertFalse(search.any(axis.add(0, height + 0.5, 6), new Vec3(0, 0, -1)).found(), "nothing above the column");
+
+		// where the full model has its nacelle and its rotor there is sky; where it has its fitting, grass
+		assertFalse(search.any(axis.add(0, 13.3, 6), new Vec3(0, 0, -1)).found(), "no nacelle at the model's hub height");
+		assertFalse(search.any(axis.add(3, 15, 1.2), new Vec3(-1, 0, 0)).found(), "no blade");
+		assertNull(search.center("insulator_insulator_porcelain"));
 	}
 
 	private static MeshModel.Group group(String name, PartBox box) {
