@@ -13,8 +13,8 @@ import net.minecraft.server.level.ServerLevel;
  * rain on the spot, the survey of the ground, and a cache of those surveys so a hundred machines on the same hill
  * do not each walk the terrain every tick.
  *
- * One manager per level, created on first use and dropped when the level unloads or the server stops.  There is no
- * filter by dimension: the Nether and the End have weather too, as far as the machines in them are concerned.
+ * One manager per level, created on first use and dropped when the level unloads or the server stops.  The Nether
+ * and the End have wind and air like anywhere else, but no sun: a dimension without skylight samples a dark sky.
  */
 public final class LevelWeather {
 	/** A survey of the ground stays good this long, in ticks: the land does not change in a minute. */
@@ -87,7 +87,18 @@ public final class LevelWeather {
 
 		return WeatherSampler.sample(new WeatherSampler.Input(level.getSeed(), pos.getX(), pos.getZ(), ground.getY(),
 				seaLevel(), towerBlocks, level.getDayTime(), level.getGameTime(), raining,
-				raining && level.isThundering(), siteAt(ground), withSky));
+				raining && level.isThundering(), siteAt(ground), withSky, sunPhase()));
+	}
+
+	/**
+	 * Where the sun this level draws is: its own celestial angle, which honours a dimension's fixed time, and none at
+	 * all where the dimension has no sky - a module under the Nether's roof is in the dark whatever the Overworld's
+	 * clock says.
+	 */
+	private double sunPhase() {
+		if (!level.dimensionType().hasSkyLight()) return Double.NaN;
+
+		return Atmosphere.sunPhase(level.dimensionType().timeOfDay(level.getDayTime()));
 	}
 
 	/**
