@@ -415,8 +415,8 @@ public final class CCTweakedPeripherals {
 			inverter.setPowerFactor(requireFinite(factor, "power factor"));
 		}
 
-		/** Where the arrays this inverter is wired to are, as a list of {x, y, z} tables. */
-		@LuaFunction
+		/** Where the arrays this inverter is wired to are, as a list of {x, y, z} tables.  On the server thread: the list changes there. */
+		@LuaFunction(mainThread = true)
 		public final List<Map<String, Object>> getArrays() {
 			List<Map<String, Object>> out = new ArrayList<>();
 			for (BlockPos pos : inverter.arrayPositions()) {

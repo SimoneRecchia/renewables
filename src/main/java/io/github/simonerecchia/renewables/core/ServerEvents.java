@@ -6,6 +6,7 @@ import io.github.simonerecchia.renewables.grid.Grid;
 import io.github.simonerecchia.renewables.grid.InsulatorIds;
 import io.github.simonerecchia.renewables.grid.WireLedger;
 import io.github.simonerecchia.renewables.net.Net;
+import io.github.simonerecchia.renewables.net.PanelGuard;
 import io.github.simonerecchia.renewables.weather.LevelWeather;
 
 import net.minecraft.server.level.ServerLevel;
@@ -15,6 +16,7 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -88,10 +90,24 @@ public final class ServerEvents {
 	@SubscribeEvent
 	public static void onServerStopping(ServerStoppingEvent event) {
 		WireLedger.onServerStopping(event.getServer());
+		clearStatics();
+	}
+
+	/**
+	 * Again once the server has stopped, which Forge posts however the server ended: a crash in the tick loop skips
+	 * {@link ServerStoppingEvent}, and the next world in this JVM must not inherit a dead server's levels.
+	 */
+	@SubscribeEvent
+	public static void onServerStopped(ServerStoppedEvent event) {
+		clearStatics();
+	}
+
+	/** Static state outlives a singleplayer world in the same JVM, so it is emptied here and not just replaced next time. */
+	private static void clearStatics() {
 		LevelWeather.clear();
 		TowerCollapse.clear();
-		// static state outlives a singleplayer world in the same JVM, so it is emptied here and not just replaced next time
 		Grid.clear();
+		PanelGuard.clear();
 	}
 
 	@SubscribeEvent

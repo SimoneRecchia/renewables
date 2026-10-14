@@ -455,7 +455,7 @@ public class LatticeTowerBlock extends Block implements EntityBlock, MachineShel
 			MachineShell.clear(level, pos, state);
 			if (!level.isClientSide && level instanceof ServerLevel serverLevel
 					&& level.getBlockEntity(pos) instanceof LatticeTowerBlockEntity tower) {
-				WireLedger.removeAttachedTo(serverLevel, tower.getInsulatorIds());
+				WireLedger.removeAttachedTo(serverLevel, pos, tower.getInsulatorIds());
 			}
 		}
 
