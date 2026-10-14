@@ -33,6 +33,8 @@ public final class InsulatorIds {
 	private static MinecraftServer server;
 	@Nullable
 	private static IdPool world;
+	/** Set when the world closes, so a machine unloading during shutdown cannot bind the counter to the dying server again. */
+	private static boolean sealed;
 
 	private InsulatorIds() {
 	}
@@ -62,6 +64,7 @@ public final class InsulatorIds {
 	 */
 	public static void attach(ServerLevel overworld) {
 		synchronized (LOCK) {
+			sealed = false;
 			if (world != null && server == overworld.getServer()) return;
 
 			InsulatorIdData data = overworld.getDataStorage().computeIfAbsent(InsulatorIdData::load, InsulatorIdData::new, InsulatorIdData.NAME);
@@ -75,13 +78,14 @@ public final class InsulatorIds {
 		synchronized (LOCK) {
 			server = null;
 			world = null;
+			sealed = true;
 			CLIENT.forgetHolders();
 		}
 	}
 
 	private static IdPool pool() {
 		synchronized (LOCK) {
-			if (world == null) {
+			if (world == null && !sealed) {
 				// a machine may load before the level-created event reaches us on some path; the first claim on the server thread attaches
 				MinecraftServer current = ServerLifecycleHooks.getCurrentServer();
 				if (current != null && current.isSameThread() && current.overworld() != null) attach(current.overworld());
