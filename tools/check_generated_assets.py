@@ -78,7 +78,7 @@ def outputs():
             if any(isinstance(v, str) for v in table.values()):
                 continue
 
-            folder = 'item' if 'ITEM' in attribute else 'block'
+            folder = 'gui' if 'GUI' in attribute else 'item' if 'ITEM' in attribute else 'block'
             for key in table:
                 claimed.setdefault('%s/%s.png' % (folder, key), []).append(name)
     return claimed
@@ -166,13 +166,15 @@ def referenced():
                              re.findall(r'renewables:%s/([a-z0-9_/]+)' % kind, text)}
                 # an mtl names a bare file, and the folder it sits in says which kind it is
                 seen |= {'block/%s' % m for m in re.findall(r'map_Kd\s+([a-z0-9_]+\.png)', text)}
+                # a screen names its sheet by path, not as a model's renewables:gui/... reference
+                seen |= {'gui/%s.png' % m for m in re.findall(r'"textures/gui/([a-z0-9_]+)\.png"', text)}
     return seen
 
 
 def sizes():
     """The pixel size of every texture on disk."""
     out = {}
-    for kind in ('block', 'item'):
+    for kind in ('block', 'item', 'gui'):
         folder = os.path.join(TEXTURES, kind)
         for name in sorted(os.listdir(folder)):
             if not name.endswith('.png'):
@@ -185,9 +187,64 @@ def sizes():
     return out
 
 
+SCREENS = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'client', 'screen')
+
+
+def panels(measured):
+    """Every panel sheet against the screen that blits it.
+
+    PlantScreen blits a panel as a PANEL_SHEET-sided sheet and draws its bars at the screen's own *_BAR_Y.  The
+    turbine's sheet was a hand-made 256 read as a 512, so its wells sat at twice their height and off the panel.
+    """
+    import gen_pv_textures
+    problems = []
+    base = open(os.path.join(SCREENS, 'PlantScreen.java')).read()
+    sheet = int(re.search(r'PANEL_SHEET\s*=\s*(\d+)', base).group(1))
+    bar_x = int(re.search(r'BAR_X\s*=\s*(\d+)', base).group(1))
+    if sheet != gen_pv_textures.PANEL_SHEET:
+        problems.append('PlantScreen blits a %d sheet and gen_pv_textures draws a %d one'
+                        % (sheet, gen_pv_textures.PANEL_SHEET))
+
+    drawn = set()
+    for name in sorted(os.listdir(SCREENS)):
+        source = open(os.path.join(SCREENS, name)).read()
+        texture = re.search(r'"textures/gui/([a-z0-9_]+)\.png"', source)
+        if texture is None:
+            continue
+
+        panel = texture.group(1)
+        drawn.add(panel)
+        spec = gen_pv_textures.PANELS.get(panel)
+        if spec is None:
+            problems.append('%s blits gui/%s.png, which no entry of gen_pv_textures.PANELS draws' % (name, panel))
+            continue
+
+        ints = {k: int(v) for k, v in re.findall(r'static final int (\w+)\s*=\s*(\d+);', source)}
+        width = ints.get('WIDTH', ints.get('IMAGE_WIDTH'))
+        height = ints.get('HEIGHT', ints.get('IMAGE_HEIGHT'))
+        bars = sorted(v for k, v in ints.items() if k.endswith('_BAR_Y'))
+        rules = sorted({v for k, v in ints.items() if k.endswith('SEPARATOR_Y')}
+                       | {int(y) for y in re.findall(r'separator\(graphics, (\d+)\)', source)})
+        wanted = dict(width=width, height=height, bar_x=bar_x, bar_width=None if width is None else width - 2 * bar_x,
+                      bars=bars, separators=rules)
+        for key, value in wanted.items():
+            got = sorted(spec[key]) if isinstance(spec[key], tuple) else spec[key]
+            if got != value:
+                problems.append('gui/%s.png: %s is %s in gen_pv_textures and %s in %s' % (panel, key, got, value, name))
+
+        size = measured.get('gui/%s.png' % panel)
+        if size is not None and size != (sheet, sheet):
+            problems.append('gui/%s.png is %dx%d and PlantScreen reads it as a %d sheet' % (panel, size[0], size[1], sheet))
+
+    for panel in sorted(set(gen_pv_textures.PANELS) - drawn):
+        problems.append('gen_pv_textures.PANELS draws gui/%s.png and no screen blits it' % panel)
+    return problems
+
+
 def main():
     problems = []
     claimed, used, measured = outputs(), referenced(), sizes()
+    problems.extend(panels(measured))
 
     for path, tools in sorted(claimed.items()):
         if len(tools) > 1:
