@@ -193,7 +193,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 		// three separate ways the beam can be taken away, and they multiply: what is built or grown
 		// over the array, what is standing on it
-		rowShadedFraction = Shading.rowShadedFraction(spec.groundCoverRatio(), tilt, sky.sun().elevationDeg());
+		rowShadedFraction = Shading.rowShadedFraction(spec.groundCoverRatio(), tilt, azimuth, sky.sun());
 		obstructionFraction = Shading.beamFraction(serverLevel, worldPosition, sky.sun())
 				 * Shading.entityBeamFraction(serverLevel, worldPosition, sky.sun());
 
@@ -474,6 +474,11 @@ public class PvArrayBlockEntity extends BlockEntity {
 		if (cable == null || runMetres <= 0.0) return stringVoltage;
 
 		return Math.max(0.0, stringVoltage - cable.voltageDrop(stringCurrentMpp, runMetres, conductorTempC()));
+	}
+
+	/** Open-circuit string voltage at the modules' own temperature, nothing in the dark: past it a bus gets no power from them. */
+	public double stringOpenCircuitVoltage() {
+		return effectiveIrradiance <= 0.0 ? 0.0 : spec().stringOpenCircuitVoltage(moduleTempC);
 	}
 
 	/** What the modules could deliver at their maximum power point, in kW, at the array's own terminals. */
