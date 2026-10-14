@@ -1,6 +1,7 @@
 package io.github.simonerecchia.renewables.core;
 
 import io.github.simonerecchia.renewables.Renewables;
+import io.github.simonerecchia.renewables.block.DispatchLedger;
 import io.github.simonerecchia.renewables.block.TowerCollapse;
 import io.github.simonerecchia.renewables.grid.Grid;
 import io.github.simonerecchia.renewables.grid.InsulatorIds;
@@ -76,6 +77,8 @@ public final class ServerEvents {
 		// the block entities have already run, so the grid sees this tick's residue of every energy budget
 		for (ServerLevel level : event.getServer().getAllLevels()) {
 			Grid.tick(level);
+			// after the controllers have renewed their holds this tick, the lapsed ones are given back
+			DispatchLedger.tick(level);
 		}
 
 		for (ServerLevel level : event.getServer().getAllLevels()) {

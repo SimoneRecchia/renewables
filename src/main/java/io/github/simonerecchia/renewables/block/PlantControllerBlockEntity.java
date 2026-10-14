@@ -4,11 +4,14 @@ import io.github.simonerecchia.renewables.api.power.Dispatchable;
 
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
@@ -25,7 +28,9 @@ import net.minecraft.world.level.chunk.LevelChunk;
  *
  * The one rule that is easy to get wrong: a unit this has curtailed has to be *given back* - when the mode
  * goes to OFF, when it leaves range, and when the cabinet is broken - or it stays held down for ever with
- * nothing left in the world to say why.  {@link #release()} is called from all three.
+ * nothing left in the world to say why.  {@link #release()} is called from all three, and behind it the hold is a
+ * lease in the level's {@link DispatchLedger}: saved with the world, renewed every tick this dispatches, and given
+ * back by the ledger itself when it lapses - with this cabinet unloaded, or a unit out of memory at the time.
  */
 public class PlantControllerBlockEntity extends BlockEntity {
 	/** What the cabinet's radio reaches, in blocks. */
@@ -49,8 +54,6 @@ public class PlantControllerBlockEntity extends BlockEntity {
 	private Mode mode = Mode.OFF;
 	private double setpointKw = 0.0;
 
-	/** The units in range, and the limit each was given, so each can be handed back what it had. */
-	private final Map<BlockPos, Double> dispatched = new LinkedHashMap<>();
 	private final List<BlockPos> units = new ArrayList<>();
 	private final ClientSync sync = new ClientSync();
 	/** How many units the panel is told about: the positions themselves are the server's business. */
@@ -94,8 +97,8 @@ public class PlantControllerBlockEntity extends BlockEntity {
 		}
 
 		// whatever dropped out of range keeps the limit it had while it was in, which is wrong: hand it back
-		for (BlockPos gone : List.copyOf(dispatched.keySet())) {
-			if (!found.contains(gone)) restore(serverLevel, gone);
+		for (BlockPos held : DispatchLedger.of(serverLevel).heldBy(worldPosition)) {
+			if (!found.contains(held)) DispatchLedger.release(serverLevel, held, worldPosition);
 		}
 
 		units.clear();
@@ -126,10 +129,7 @@ public class PlantControllerBlockEntity extends BlockEntity {
 
 	/** Shares the plant setpoint out in proportion to nameplate, which is what a real controller does. */
 	private void dispatch(ServerLevel serverLevel) {
-		if (mode == Mode.OFF) {
-			if (!dispatched.isEmpty()) release();
-			return;
-		}
+		if (mode == Mode.OFF) return;
 
 		double target = mode == Mode.REDSTONE
 				? capacityKw * serverLevel.getBestNeighborSignal(worldPosition) / 15.0
@@ -141,29 +141,18 @@ public class PlantControllerBlockEntity extends BlockEntity {
 			Dispatchable unit = unitAt(serverLevel, pos);
 			if (unit == null) continue;
 
-			double limit = unit.getNameplateKw() * share;
-			// the limit it had before this cabinet touched it, kept so it can be handed back
-			dispatched.putIfAbsent(pos, unit.getActivePowerLimit());
-			if (Math.abs(unit.getActivePowerLimit() - limit) > 0.01) unit.setActivePowerLimit(limit);
+			// the ledger writes down the limit it had before this cabinet touched it, the first time only
+			DispatchLedger.dispatch(serverLevel, pos, worldPosition, unit, unit.getNameplateKw() * share);
 		}
 	}
 
-	/** Hands every unit back the limit it had before this cabinet took hold of it. */
+	/** Hands every unit back the limit it had before this cabinet took hold of it: now, or as soon as it is loaded. */
 	public void release() {
-		if (!(level instanceof ServerLevel serverLevel)) {
-			dispatched.clear();
-			return;
-		}
+		if (!(level instanceof ServerLevel serverLevel)) return;
 
-		for (BlockPos pos : List.copyOf(dispatched.keySet())) {
-			restore(serverLevel, pos);
+		for (BlockPos pos : DispatchLedger.of(serverLevel).heldBy(worldPosition)) {
+			DispatchLedger.release(serverLevel, pos, worldPosition);
 		}
-	}
-
-	private void restore(ServerLevel serverLevel, BlockPos pos) {
-		Double had = dispatched.remove(pos);
-		Dispatchable unit = unitAt(serverLevel, pos);
-		if (unit != null && had != null) unit.setActivePowerLimit(had);
 	}
 
 	private Dispatchable unitAt(ServerLevel serverLevel, BlockPos pos) {
@@ -229,6 +218,11 @@ public class PlantControllerBlockEntity extends BlockEntity {
 		ClientSync.now(this);
 	}
 
+	/** Whether there is anything to set a setpoint against: with no capacity in range, a slider's zero means nothing. */
+	public boolean hasCapacity() {
+		return capacityKw > 0.0;
+	}
+
 	@Override
 	protected void saveAdditional(CompoundTag tag) {
 		super.saveAdditional(tag);
@@ -266,5 +260,19 @@ public class PlantControllerBlockEntity extends BlockEntity {
 		running = tag.getInt("running");
 		curtailed = tag.getInt("curtailed");
 		unitCount = tag.getInt("units");
+	}
+
+	/** Without a packet vanilla sends nothing after the chunk itself: the panel never saw a mode or a reading change. */
+	@Nullable
+	@Override
+	public Packet<ClientGamePacketListener> getUpdatePacket() {
+		return ClientboundBlockEntityDataPacket.create(this);
+	}
+
+	/** The default would call load, which reads the settings and not the readings. */
+	@Override
+	public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet) {
+		CompoundTag tag = packet.getTag();
+		if (tag != null) handleUpdateTag(tag);
 	}
 }
