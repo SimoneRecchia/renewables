@@ -127,4 +127,153 @@ class TurbineGeometryTest {
 	void scanReachesPastTheTallestPileThatCanBeBuilt() {
 		assertTrue(TurbineGeometry.SCAN_LIMIT > TurbineGeometry.MAX_SEGMENTS);
 	}
+
+	// ---- the rotor ----
+
+	/** The hub is pivot H of docs/turbine-model.md: 0.30 over the nacelle floor and 1.04 ahead of the axis, at the nacelle's scale. */
+	@Test
+	void theHubIsAheadOfTheTowerAtTheNacellesScale() {
+		TurbineSpec c130 = TurbineCatalog.C130_40;
+		double[] south = TurbineGeometry.hubOffset(c130, 0.0);
+		assertEquals(0.0, south[0], 1e-9);
+		assertEquals(0.300, south[1], 1e-9);
+		assertEquals(1.040, south[2], 1e-9);
+		// turned 90 the front of the model points to +x, the way MachineShell turns a cell
+		double[] east = TurbineGeometry.hubOffset(c130, 90.0);
+		assertEquals(1.040, east[0], 1e-9);
+		assertEquals(0.0, east[2], 1e-9);
+
+		TurbineSpec sw10 = TurbineCatalog.SW_10;
+		assertEquals(0.26, TurbineGeometry.hubOffset(sw10, 0.0)[2], 1e-9);
+		assertEquals(1.155, TurbineGeometry.rotorRadius(sw10), 0.001);
+		assertEquals(6.5, TurbineGeometry.rotorRadius(c130), 1e-9);
+	}
+
+	/** About a point a block over the swept disc, all on the disc, spread evenly: a quarter of them inside half the radius. */
+	@Test
+	void theDiscIsCoveredEvenly() {
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			for (double yaw : new double[] {0.0, 37.0, 90.0, 213.0}) {
+				double[] hub = TurbineGeometry.hubOffset(spec, yaw);
+				double radius = TurbineGeometry.rotorRadius(spec);
+				var disc = TurbineGeometry.rotorDisc(spec, yaw);
+				assertTrue(disc.size() >= 12 && disc.size() <= 160, spec.displayName() + " " + disc.size());
+
+				double frontX = Math.sin(Math.toRadians(yaw));
+				double frontZ = Math.cos(Math.toRadians(yaw));
+				int inner = 0;
+				double[] centroid = new double[3];
+				for (double[] p : disc) {
+					double dx = p[0] - hub[0];
+					double dy = p[1] - hub[1];
+					double dz = p[2] - hub[2];
+					assertTrue(Math.sqrt(dx * dx + dy * dy + dz * dz) <= radius + 1e-9, "on the disc");
+					assertEquals(0.0, dx * frontX + dz * frontZ, 1e-9, "in the rotor's plane");
+					if (Math.sqrt(dx * dx + dy * dy + dz * dz) < radius / 2.0) inner++;
+					for (int i = 0; i < 3; i++) centroid[i] += p[i] / disc.size();
+				}
+
+				assertEquals(0.25, inner / (double) disc.size(), 0.08, spec.displayName());
+				for (int i = 0; i < 3; i++) assertEquals(hub[i], centroid[i], radius * 0.08, spec.displayName() + " centroid");
+			}
+		}
+
+		assertEquals(133, TurbineGeometry.rotorDisc(TurbineCatalog.C130_40, 0.0).size());
+	}
+
+	// ---- the nacelle, turned with the wind ----
+
+	/** A box of a cell turned by quarter turns, the way MachineShell turns one. */
+	private static double[] quarterTurned(double[] b, int quarters) {
+		double[] box = b.clone();
+		for (int i = 0; i < quarters; i++) {
+			box = new double[] {box[2], box[1], 1.0 - box[3], box[5], box[4], 1.0 - box[0]};
+		}
+
+		return box;
+	}
+
+	private static double[] bounds(List<double[]> boxes) {
+		double[] out = {1, 1, 1, 0, 0, 0};
+		for (double[] b : boxes) {
+			for (int i = 0; i < 3; i++) {
+				out[i] = Math.min(out[i], b[i]);
+				out[i + 3] = Math.max(out[i + 3], b[i + 3]);
+			}
+		}
+
+		return out;
+	}
+
+	/** On the block's axes the turned nacelle is the tabulated box turned, exactly, strip by strip. */
+	@Test
+	void atAQuarterTurnTheNacelleIsTheTabulatedBoxTurned() {
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			List<double[]> authored = TurbineGeometry.nacelleBoxes(spec);
+			for (int quarters = 0; quarters < 4; quarters++) {
+				List<double[]> turned = TurbineGeometry.nacelleBoxes(spec, 90.0 * quarters);
+				double area = 0.0;
+				for (double[] b : turned) area += (b[3] - b[0]) * (b[5] - b[2]) * (b[4] - b[1]);
+
+				double expectedArea = 0.0;
+				for (double[] b : authored) expectedArea += (b[3] - b[0]) * (b[5] - b[2]) * (b[4] - b[1]);
+				assertEquals(expectedArea, area, 1e-9, spec.displayName() + " at " + quarters);
+
+				// the hull's strips together are the hull's box, turned
+				double[] hull = quarterTurned(authored.get(0), quarters);
+				List<double[]> hullStrips = turned.stream().filter(b -> Math.abs(b[1] - hull[1]) < 1e-9 && Math.abs(b[4] - hull[4]) < 1e-9).toList();
+				double[] got = bounds(hullStrips);
+				for (int i = 0; i < 6; i++) assertEquals(hull[i], got[i], 1e-9, spec.displayName() + " at " + quarters + ", " + i);
+			}
+		}
+	}
+
+	/**
+	 * The review's case: a C130 placed facing south and yawed a quarter turn draws its hull across x 0..16 px and z
+	 * 3.55..12.48 px, and collided the other way round.  The collision is now where the hull is drawn.
+	 */
+	@Test
+	void aYawedNacelleCollidesWhereItIsDrawn() {
+		List<double[]> hull = TurbineGeometry.nacelleBoxes(TurbineCatalog.C130_40, 90.0).stream().filter(b -> b[1] == 0.0).toList();
+		double[] got = bounds(hull);
+		assertEquals(0.0, got[0] * 16.0, 0.01);
+		assertEquals(16.0, got[3] * 16.0, 0.01);
+		assertEquals(3.55, got[2] * 16.0, 0.05);
+		assertEquals(12.48, got[5] * 16.0, 0.05);
+	}
+
+	/** Off the axes it is a staircase that holds every point of the turned nacelle in the cell, and adds little air. */
+	@Test
+	void atAnyYawTheStaircaseHoldsTheNacelle() {
+		TurbineSpec spec = TurbineCatalog.C130_40;
+		double scale = spec.nacelleRenderScale();
+		double[] hull = {-0.278 * scale, -0.888 * scale, 0.280 * scale, 0.660 * scale};
+		for (double yaw = 0.0; yaw < 360.0; yaw += 5.0) {
+			List<double[]> boxes = TurbineGeometry.nacelleBoxes(spec, yaw);
+			double cos = Math.cos(Math.toRadians(yaw));
+			double sin = Math.sin(Math.toRadians(yaw));
+			int inside = 0;
+			int covered = 0;
+			for (double u = hull[0]; u <= hull[2]; u += 0.01) {
+				for (double v = hull[1]; v <= hull[3]; v += 0.01) {
+					double x = 0.5 + u * cos + v * sin;
+					double z = 0.5 + v * cos - u * sin;
+					if (x <= 0.001 || x >= 0.999 || z <= 0.001 || z >= 0.999) continue;
+
+					inside++;
+					for (double[] b : boxes) {
+						if (x >= b[0] - 1e-9 && x <= b[3] + 1e-9 && z >= b[2] - 1e-9 && z <= b[5] + 1e-9 && b[1] == 0.0) {
+							covered++;
+							break;
+						}
+					}
+				}
+			}
+
+			assertEquals(inside, covered, "yaw " + yaw);
+			for (double[] b : boxes) {
+				for (int i = 0; i < 6; i++) assertTrue(b[i] >= -1e-9 && b[i] <= 1.0 + 1e-9, "inside the cell at " + yaw);
+			}
+		}
+	}
 }
