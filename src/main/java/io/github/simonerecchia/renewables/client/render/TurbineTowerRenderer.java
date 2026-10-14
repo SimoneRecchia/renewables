@@ -3,6 +3,7 @@ package io.github.simonerecchia.renewables.client.render;
 import io.github.simonerecchia.renewables.Renewables;
 import io.github.simonerecchia.renewables.block.TurbineTowerBlock;
 import io.github.simonerecchia.renewables.block.TurbineTowerBlockEntity;
+import io.github.simonerecchia.renewables.client.model.GroupPoses;
 import io.github.simonerecchia.renewables.client.model.MeshModel;
 import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.model.ModelDefinition;
@@ -56,23 +57,31 @@ public class TurbineTowerRenderer extends MachineRenderer {
 
 		MeshModel model = context.model();
 		float height = 1 + segmentsAbove(level, tower.getBlockPos());
-		float width = width(height);
+		Matrix4f base = poseStack.last().pose();
 
 		Map<String, Matrix4f> poses = new HashMap<>();
 		for (String groupName : model.groups.keySet()) {
-			if (!groupName.startsWith("pole")) continue;
-
-			poseStack.pushPose();
-			if (groupName.startsWith("pole_base")) {
-				poseStack.scale(width, width, width);
-			} else {
-				poseStack.scale(width, height / WindTurbineRenderer.authoredTowerHeight(model), width);
-			}
-			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
-			poseStack.popPose();
+			Matrix4f pose = new Matrix4f(base);
+			if (groupPose(groupName, model, height, pose)) poses.put(groupName, pose);
 		}
 
 		renderGrouped(context, poses);
+	}
+
+	/**
+	 * Multiplies onto {@code pose} what one group of the turbine's model is drawn with on a bare column this many blocks
+	 * tall; false for every group that is not the tube.  The picker calls it too.
+	 */
+	public static boolean groupPose(String groupName, MeshModel model, float height, Matrix4f pose) {
+		if (!groupName.startsWith("pole")) return false;
+
+		float width = width(height);
+		if (groupName.startsWith("pole_base")) {
+			pose.scale(width);
+		} else {
+			pose.scale(width, height / WindTurbineRenderer.authoredTowerHeight(model), width);
+		}
+		return true;
 	}
 
 	/** Tower blocks directly above {@code pos}. */
@@ -101,5 +110,16 @@ public class TurbineTowerRenderer extends MachineRenderer {
 		}
 
 		ModelBindings.register(ModBlocks.TURBINE_TOWER.get(), turbine.obj(), null);
+		// a tower block is pointed at as the tube it draws: only the foot of a bare column draws one, and that tube is
+		// the stretched pole, not the whole turbine the model also holds.  A column under a turbine is the turbine's.
+		GroupPoses.register(TurbineTowerBlockEntity.class, (tower, model) -> {
+			if (!isBareFoot(tower) || tower.getLevel() == null) return groupName -> null;
+
+			float height = 1 + segmentsAbove(tower.getLevel(), tower.getBlockPos());
+			return groupName -> {
+				Matrix4f pose = new Matrix4f();
+				return groupPose(groupName, model, height, pose) ? pose : null;
+			};
+		});
 	}
 }
