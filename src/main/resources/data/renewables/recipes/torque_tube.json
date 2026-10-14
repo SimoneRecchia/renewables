@@ -16,6 +16,7 @@
     }
   },
   "result": {
-    "item": "renewables:torque_tube"
+    "item": "renewables:torque_tube",
+    "count": 8
   }
 }

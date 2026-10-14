@@ -357,8 +357,8 @@ python3 tools/gen_grid_models.py        # the pole and the pad-mount kiosk
 python3 tools/gen_cab_models.py         # the substation cabin
 python3 tools/gen_cable_models.py       # the string cable (--java prints the shape tables)
 python3 tools/gen_trunk_models.py       # the trunk, on the same framework and its own fittings
-python3 tools/gen_core_data.py          # the language file, core item models and recipes: run before gen_crafting
-python3 tools/gen_crafting.py           # recipes, part item models, blockstates, loot, tags; merges its language keys
+python3 tools/gen_core_data.py          # the language file (the only writer: its keys and gen_crafting's), core item models and recipes
+python3 tools/gen_crafting.py           # recipes and their advancements, part item models, blockstates, loot, tags; fails on a gap
 python3 tools/gen_turbine_models.py     # the wind turbine, one mesh for all six (--java prints its hitbox tables)
 python3 tools/gen_turbine_textures.py   # its textures
 python3 tools/gen_tower_models.py       # the three lattice towers (--java prints the cell tables)
@@ -395,6 +395,7 @@ python3 tools/gen_conductor_models.py   # the same, per conductor, and the shape
 python3 tools/gen_tower_models.py       # "LatticeTowerBlock declares the cells this authors"
 python3 tools/render_blocks.py          # and then *look* at build/render/
 ./gradlew build                         # compiles and runs the JUnit tests
+python3 tools/check_regenerated.py      # "every file under src/ what its generator writes": all of section 6, in order
 ```
 
 `check_gui_fits.py` measures text with Minecraft's own font sheet, which is not in this repo; take it out of the
@@ -410,6 +411,11 @@ store, the turbine's dynamics and telemetry, the weather sampler, the OBJ reader
 wire maths, and the anchor transform. A test is named `*Test` and lives beside what it tests under
 `src/test/java`. What only a running world can show is checked on the headless server (`./gradlew runServer`)
 over RCON with `tools/rcon.py`; enable RCON in `run/server.properties` for the session and put it back after.
+
+The CI (`.github/workflows/build.yml`) runs all of it: the build, `check_regenerated.py`, then every
+`tools/check_*.py` with the font extracted from the cache the build has just filled. Only `render_blocks.py`,
+which has to be looked at, is left to you. A PNG is compared by its pixels, within one level a channel: libm
+rounds the last bit differently on Linux and macOS, and five textures land on a .5 somewhere.
 
 A checker that finds nothing is not evidence the work is right; a checker that has never found
 anything is usually not looking. Every one of these was written because something shipped broken.

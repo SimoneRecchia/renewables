@@ -8,7 +8,7 @@
       "item": "minecraft:honeycomb"
     },
     "m": {
-      "item": "minecraft:slime_ball"
+      "tag": "forge:slimeballs"
     }
   },
   "result": {

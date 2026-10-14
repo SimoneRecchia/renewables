@@ -14,6 +14,7 @@
     }
   },
   "result": {
-    "item": "renewables:mounting_rack"
+    "item": "renewables:mounting_rack",
+    "count": 4
   }
 }

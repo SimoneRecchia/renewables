@@ -2,12 +2,12 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     " d ",
-    "dMd",
+    "dFd",
     " j "
   ],
   "key": {
-    "M": {
-      "item": "renewables:metal_casing"
+    "F": {
+      "item": "renewables:resin"
     },
     "d": {
       "item": "renewables:bypass_diode"
@@ -17,6 +17,7 @@
     }
   },
   "result": {
-    "item": "renewables:junction_box"
+    "item": "renewables:junction_box",
+    "count": 4
   }
 }

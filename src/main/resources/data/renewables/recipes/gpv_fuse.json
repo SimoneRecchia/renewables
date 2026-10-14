@@ -9,14 +9,14 @@
       "item": "renewables:busbar"
     },
     "a": {
-      "item": "minecraft:sand"
+      "tag": "forge:sand"
     },
     "y": {
-      "item": "minecraft:glass_pane"
+      "tag": "forge:glass_panes/colorless"
     }
   },
   "result": {
     "item": "renewables:gpv_fuse",
-    "count": 4
+    "count": 8
   }
 }

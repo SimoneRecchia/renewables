@@ -78,7 +78,7 @@ def outputs():
             if any(isinstance(v, str) for v in table.values()):
                 continue
 
-            folder = 'item' if 'ITEM' in attribute else 'block'
+            folder = 'gui' if 'GUI' in attribute else 'item' if 'ITEM' in attribute else 'block'
             for key in table:
                 claimed.setdefault('%s/%s.png' % (folder, key), []).append(name)
     return claimed
@@ -166,13 +166,15 @@ def referenced():
                              re.findall(r'renewables:%s/([a-z0-9_/]+)' % kind, text)}
                 # an mtl names a bare file, and the folder it sits in says which kind it is
                 seen |= {'block/%s' % m for m in re.findall(r'map_Kd\s+([a-z0-9_]+\.png)', text)}
+                # a screen names its sheet by path, not as a model's renewables:gui/... reference
+                seen |= {'gui/%s.png' % m for m in re.findall(r'"textures/gui/([a-z0-9_]+)\.png"', text)}
     return seen
 
 
 def sizes():
     """The pixel size of every texture on disk."""
     out = {}
-    for kind in ('block', 'item'):
+    for kind in ('block', 'item', 'gui'):
         folder = os.path.join(TEXTURES, kind)
         for name in sorted(os.listdir(folder)):
             if not name.endswith('.png'):
@@ -185,9 +187,112 @@ def sizes():
     return out
 
 
+SCREENS = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'client', 'screen')
+
+
+def panels(measured):
+    """Every panel sheet against the screen that blits it.
+
+    PlantScreen blits a panel as a PANEL_SHEET-sided sheet and draws its bars at the screen's own *_BAR_Y.  The
+    turbine's sheet was a hand-made 256 read as a 512, so its wells sat at twice their height and off the panel.
+    """
+    import gen_pv_textures
+    problems = []
+    base = open(os.path.join(SCREENS, 'PlantScreen.java')).read()
+    sheet = int(re.search(r'PANEL_SHEET\s*=\s*(\d+)', base).group(1))
+    bar_x = int(re.search(r'BAR_X\s*=\s*(\d+)', base).group(1))
+    if sheet != gen_pv_textures.PANEL_SHEET:
+        problems.append('PlantScreen blits a %d sheet and gen_pv_textures draws a %d one'
+                        % (sheet, gen_pv_textures.PANEL_SHEET))
+
+    drawn = set()
+    for name in sorted(os.listdir(SCREENS)):
+        source = open(os.path.join(SCREENS, name)).read()
+        texture = re.search(r'"textures/gui/([a-z0-9_]+)\.png"', source)
+        if texture is None:
+            continue
+
+        panel = texture.group(1)
+        drawn.add(panel)
+        spec = gen_pv_textures.PANELS.get(panel)
+        if spec is None:
+            problems.append('%s blits gui/%s.png, which no entry of gen_pv_textures.PANELS draws' % (name, panel))
+            continue
+
+        ints = {k: int(v) for k, v in re.findall(r'static final int (\w+)\s*=\s*(\d+);', source)}
+        width = ints.get('WIDTH', ints.get('IMAGE_WIDTH'))
+        height = ints.get('HEIGHT', ints.get('IMAGE_HEIGHT'))
+        bars = sorted(v for k, v in ints.items() if k.endswith('_BAR_Y'))
+        rules = sorted({v for k, v in ints.items() if k.endswith('SEPARATOR_Y')}
+                       | {int(y) for y in re.findall(r'separator\(graphics, (\d+)\)', source)})
+        wanted = dict(width=width, height=height, bar_x=bar_x, bar_width=None if width is None else width - 2 * bar_x,
+                      bars=bars, separators=rules)
+        for key, value in wanted.items():
+            got = sorted(spec[key]) if isinstance(spec[key], tuple) else spec[key]
+            if got != value:
+                problems.append('gui/%s.png: %s is %s in gen_pv_textures and %s in %s' % (panel, key, got, value, name))
+
+        size = measured.get('gui/%s.png' % panel)
+        if size is not None and size != (sheet, sheet):
+            problems.append('gui/%s.png is %dx%d and PlantScreen reads it as a %d sheet' % (panel, size[0], size[1], sheet))
+
+    for panel in sorted(set(gen_pv_textures.PANELS) - drawn):
+        problems.append('gen_pv_textures.PANELS draws gui/%s.png and no screen blits it' % panel)
+    return problems
+
+
+def data_files():
+    """Recipes, recipe advancements, item models and block tags: which generator writes each, and what is on disk.
+
+    gen_crafting and gen_core_data say what they write through planned(); the two cable generators write one
+    item model each, named by NAME.
+    """
+    import gen_core_data
+    import gen_crafting
+    claimed = {}
+    for name, module in (('gen_crafting.py', gen_crafting), ('gen_core_data.py', gen_core_data)):
+        for path in module.planned():
+            claimed.setdefault(path, []).append(name)
+    for module_name in ('gen_cable_models', 'gen_trunk_models'):
+        module = imported(module_name)
+        if module is not None:
+            claimed.setdefault(os.path.join(ASSETS, 'models', 'item', module.NAME + '.json'), []).append(module_name + '.py')
+
+    resources = os.path.join('src', 'main', 'resources')
+    folders = [os.path.join(resources, 'data', 'renewables', 'recipes'),
+               os.path.join(resources, 'data', 'renewables', 'advancements'),
+               os.path.join(resources, 'data', 'minecraft', 'tags'),
+               os.path.join(ASSETS, 'models', 'item')]
+    on_disk = sorted(os.path.join(root, name) for folder in folders for root, _, names in os.walk(folder)
+                     for name in names if name.endswith('.json'))
+    claimed = {path: tools for path, tools in claimed.items() if path.startswith(tuple(folders))}
+    return claimed, on_disk
+
+
+def language_writers():
+    """The generators that write the language file.  Two of them wrote it, each its own copy of ninety keys."""
+    return sorted(name for name in os.listdir(TOOLS) if name.startswith('gen_') and name.endswith('.py')
+                  and "'en_us.json'" in open(os.path.join(TOOLS, name)).read())
+
+
 def main():
     problems = []
     claimed, used, measured = outputs(), referenced(), sizes()
+    problems.extend(panels(measured))
+    writers = language_writers()
+    if len(writers) != 1:
+        problems.append('lang/en_us.json is written by %s - it must have exactly one writer'
+                        % (' and '.join(writers) or 'nothing'))
+
+    data, data_on_disk = data_files()
+    for path, tools in sorted(data.items()):
+        if len(tools) > 1:
+            problems.append('%s is written by %s - whichever runs last wins' % (path, ' and '.join(tools)))
+        elif path not in data_on_disk:
+            problems.append('%s is claimed by %s but is not on disk' % (path, tools[0]))
+    for path in data_on_disk:
+        if path not in data:
+            problems.append('%s is on disk but no generator writes it' % path)
 
     for path, tools in sorted(claimed.items()):
         if len(tools) > 1:

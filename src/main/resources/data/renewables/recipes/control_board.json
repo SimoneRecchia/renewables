@@ -16,6 +16,7 @@
     }
   },
   "result": {
-    "item": "renewables:control_board"
+    "item": "renewables:control_board",
+    "count": 4
   }
 }

@@ -42,3 +42,38 @@ jobs:
           name: Artifacts
           path: build/libs/
           if-no-files-found: error
+
+      # CLAUDE.md sections 6 and 7: every asset is generated, and the checkers must pass before anything is done.
+      # The tools are standard-library Python only.
+      - name: setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      # every generator, in section 6's order, and src/ must come out as committed (PNGs compared by pixels)
+      - name: regenerate the assets and compare
+        run: python3 tools/check_regenerated.py
+      - name: show what the generators changed
+        if: failure()
+        run: git status --short && git diff --stat
+      # check_gui_fits measures text with Minecraft's own font, which the build has just put in ForgeGradle's cache
+      - name: extract the vanilla font
+        run: |
+          jar=$(find ~/.gradle/caches/forge_gradle -name client-extra.jar -path '*1.20.1*' | head -n 1)
+          test -n "$jar"
+          mkdir -p build/gui-check
+          unzip -p "$jar" assets/minecraft/textures/font/ascii.png > build/gui-check/ascii.png
+      # every tools/check_*.py, so a new checker runs here without editing this file; check_deployed compares the
+      # tree with build/resources/main, which the build step wrote
+      - name: run the checkers
+        run: |
+          failed=""
+          for check in tools/check_*.py; do
+            [ "$check" = tools/check_regenerated.py ] && continue
+            echo "::group::$check"
+            python3 "$check" || failed="$failed $check"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::failed:$failed"
+            exit 1
+          fi

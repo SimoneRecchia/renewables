@@ -13,10 +13,11 @@
       "item": "renewables:steel_plate"
     },
     "r": {
-      "item": "minecraft:redstone"
+      "tag": "forge:dusts/redstone"
     }
   },
   "result": {
-    "item": "renewables:capacitor_bank"
+    "item": "renewables:capacitor_bank",
+    "count": 8
   }
 }

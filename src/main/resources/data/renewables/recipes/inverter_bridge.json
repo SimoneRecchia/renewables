@@ -23,6 +23,7 @@
     }
   },
   "result": {
-    "item": "renewables:inverter_bridge"
+    "item": "renewables:inverter_bridge",
+    "count": 2
   }
 }

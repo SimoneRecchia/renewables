@@ -611,7 +611,11 @@ TURBINES = {
 
 # ------------------------------------------------------------- panel layouts
 
+# One per screen, keyed by its textures/gui name.  check_generated_assets.py holds every entry to the screen that
+# draws it: width, height, bar wells and separators, and the sheet side PlantScreen blits from.
 PANELS = {
+    # 240 wide, the nameplate lines; the wind well under the power well, the tower line under the second rule
+    'wind_turbine': dict(width=240, height=190, bar_x=12, bar_width=216, bars=(69, 97), separators=(40, 112)),
     'pv_inverter': dict(width=288, height=252, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'pv_array': dict(width=288, height=244, bar_x=12, bar_width=264, bars=(70, 98, 126), separators=(40, 142)),
     'met_station': dict(width=288, height=208, bar_x=12, bar_width=264, bars=(), separators=(20, 176)),
@@ -1178,6 +1182,21 @@ def blade_sprite(long_blade):
     return c
 
 
+def item_tower_section():
+    """A length of tubular tower standing up: a painted can, a bolted flange at each end."""
+    c = Canvas(16, 16)
+    dark, mid, light = PAINT
+    for y in range(2, 14):
+        half = 4 if y < 8 else 5
+        c.rect(8 - half, y, 8 + half, y + 1, mid)
+        c.rect(8 - half, y, 9 - half, y + 1, light)
+        c.rect(6 + half, y, 8 + half, y + 1, dark)
+    for y, half in ((1, 5), (13, 6)):
+        c.rect(8 - half, y, 8 + half, y + 2, STEEL[1])
+        c.rect(8 - half, y, 8 + half, y + 1, STEEL[2])
+    return c
+
+
 PARTS = {
     'steel_plate': item_steel_plate,
     'steel_section': item_steel_section,
@@ -1211,6 +1230,7 @@ PARTS = {
     'gearbox': item_gearbox,
     'turbine_blade': lambda: blade_sprite(False),
     'long_blade': lambda: blade_sprite(True),
+    'tower_section': item_tower_section,
 }
 
 
@@ -1245,6 +1265,9 @@ ITEM_TEXTURES.update({name: (lambda s=spec: item_turbine(**s)) for name, spec in
 # and the parts, which are a family of their own
 ITEM_TEXTURES.update(PARTS)
 
+# The panel sheets, named *_TEXTURES so check_generated_assets.py claims textures/gui/ for this file too.
+GUI_TEXTURES = {name: (lambda s=spec: panel(s)) for name, spec in PANELS.items()}
+
 
 def main():
     for name, builder in ITEM_TEXTURES.items():
@@ -1252,10 +1275,11 @@ def main():
         builder().write(path)
         print('item/%s.png' % name)
 
-    for name, spec in PANELS.items():
-        path = os.path.join(OUT, 'gui', name + '.png')
-        panel(spec).write(path)
-        print('gui/%s.png  %dx%d, bars at %s' % (name, spec['width'], spec['height'], spec['bars']))
+    for name, builder in GUI_TEXTURES.items():
+        spec = PANELS[name]
+        builder().write(os.path.join(OUT, 'gui', name + '.png'))
+        print('gui/%s.png  %dx%d on a %d sheet, bars at %s'
+              % (name, spec['width'], spec['height'], PANEL_SHEET, spec['bars']))
 
 
 if __name__ == '__main__':

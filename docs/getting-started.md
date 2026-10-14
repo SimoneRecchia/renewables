@@ -15,7 +15,7 @@ wants a gear set and a motor core round a bearing, and the bearing comes back do
 | **Wind** | Turbine Tower; six turbines from the 10 kW Cube SW-10 to the 4 MW Cube C130-4.0 |
 | **Solar** | six Meridian arrays (flat tables, fixed racks, a single-axis and a dual-axis tracker); four Volterra inverters, 10 kW to 2.5 MW; three combiner boxes; the Cabria SC-6 string cable and DT-240 trunk; the Meteorological Mast; the Plant Controller |
 | **Grid** | Electric Cabin, Utility Pole, Power Box (the kiosk at the end of a line); Machine and Substation Transformers; Disconnector and Circuit Breaker; Suspension, Tension and Terminal lattice towers |
-| **Components** | Circuit Board, CPU, Glass Screen, Insulator, Metal Casing, Motor Core, and thirty-two parts |
+| **Components** | Circuit Board, CPU, Glass Screen, Insulator, Metal Casing, Motor Core, and thirty-three parts |
 
 Three habits make everything else easier:
 
@@ -42,7 +42,7 @@ its own voltage class only:
 | Reel | Class | Longest span | Blocks of span per reel |
 |---|---|---|---|
 | Aerial Bundled Cable (NFA2X 4×70) | low, 1 kV | 40 blocks | 4 |
-| Medium-Voltage Conductor (Aster 228) | medium, 24 kV | 90 blocks | 8 |
+| Medium-Voltage Conductor (Aster 228) | medium, 33 kV | 90 blocks | 8 |
 | High-Voltage Conductor (Curlew ACSR, quad) | high, 420 kV | 160 blocks | 16 |
 
 A span costs one reel per started stretch of that length, and is free in creative. Breaking a machine takes

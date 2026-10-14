@@ -6,17 +6,17 @@
   ],
   "key": {
     "c": {
-      "item": "minecraft:copper_ingot"
+      "tag": "forge:ingots/copper"
     },
     "g": {
-      "item": "minecraft:gold_nugget"
+      "tag": "forge:nuggets/gold"
     },
     "r": {
-      "item": "minecraft:redstone"
+      "tag": "forge:dusts/redstone"
     }
   },
   "result": {
     "item": "renewables:circuit_board",
-    "count": 2
+    "count": 16
   }
 }

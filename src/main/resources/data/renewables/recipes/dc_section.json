@@ -20,6 +20,7 @@
     }
   },
   "result": {
-    "item": "renewables:dc_section"
+    "item": "renewables:dc_section",
+    "count": 4
   }
 }

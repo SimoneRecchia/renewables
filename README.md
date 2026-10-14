@@ -8,7 +8,7 @@ photovoltaic array is modules on a mounting, wired in strings to an inverter tha
 point. Power leaves them on spans of real conductors, crosses cabins, poles, transformers and lattice towers,
 loses a little on every hop, and ends at a kiosk that hands it to the rest of the modpack as Forge Energy.
 
-* **Minecraft** 1.20.1, **Forge** 47.4.0 or later, **Java** 17
+* **Minecraft** 1.20.1 only, **Forge** 47.4.0 or later within 47 (`mods.toml` asks for `[47.4,48)`), **Java** 17
 * Optional: **Mekanism** 10.4 (Joules straight from the generators), **CC:Tweaked** 1.109 or later (SCADA from
   a computer)
 
@@ -22,7 +22,7 @@ the copper is on the panels.
 
 **Alternating current is strung between fittings.** Hold a conductor reel, right-click an insulator, then a
 second one, and a span hangs between them. Three conductors, each for its own voltage class — aerial bundled
-cable at 1 kV (spans up to 40 blocks), a medium-voltage conductor at 24 kV (90), a 400 kV quad bundle (160) —
+cable at 1 kV (spans up to 40 blocks), a medium-voltage conductor at 33 kV (90), a 400 kV quad bundle (160) —
 and every fitting says which class it takes. Every server tick the grid carries what the generators make down
 the spans: about 1% is lost per block of span, parallel spans share the loss, and where a line divides the
 power divides equally.
@@ -141,4 +141,5 @@ owns which file, what must pass before a change is done, and where the code is.
 
 ## License
 
-To be decided.
+To be decided. The jar's `mods.toml` says the same (`mod_license` in `gradle.properties`); change both
+together when one is chosen.

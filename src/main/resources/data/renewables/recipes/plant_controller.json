@@ -1,11 +1,14 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "ScS",
+    "SBS",
     "bEb",
     "PQP"
   ],
   "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
     "E": {
       "item": "renewables:enclosure"
     },
@@ -20,9 +23,6 @@
     },
     "b": {
       "item": "renewables:control_board"
-    },
-    "c": {
-      "item": "minecraft:copper_ingot"
     }
   },
   "result": {

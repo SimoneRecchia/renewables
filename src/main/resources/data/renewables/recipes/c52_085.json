@@ -3,20 +3,17 @@
   "pattern": [
     "sss",
     "XxY",
-    "ubE"
+    "lu "
   ],
   "key": {
-    "E": {
-      "item": "renewables:enclosure"
-    },
     "X": {
       "item": "renewables:gearbox"
     },
     "Y": {
       "item": "renewables:bearing"
     },
-    "b": {
-      "item": "renewables:control_board"
+    "l": {
+      "tag": "forge:storage_blocks/iron"
     },
     "s": {
       "item": "renewables:turbine_blade"

@@ -64,7 +64,7 @@ Tre conduttori, e ognuno va **solo** sulla sua classe di tensione:
 | Conduttore | Classe | Campata massima | Blocchi per bobina |
 |---|---|---|---|
 | **Aerial Bundled Cable NFA2X 4×70** | bassa (1 kV) | 40 blocchi | 4 |
-| **Aster 228** (conduttore MT) | media (24 kV) | 90 blocchi | 8 |
+| **Aster 228** (conduttore MT) | media (33 kV) | 90 blocchi | 8 |
 | **Curlew ACSR quadruplo** | alta (420 kV) | 160 blocchi | 16 |
 
 Se sbagli classe il gioco te lo dice: *"Neither of those fittings is built for … Match the conductor to the
@@ -213,7 +213,8 @@ un impianto dimensionato bene. `derating` quando è troppo caldo e si autolimita
 | **C130-4.0** | 4000 kW | 130 m | 3,0 m/s | 25 m/s | 9–13 |
 
 **Come si monta:** impila i blocchi **Turbine Tower** fino all'altezza che vuoi, poi posa la turbina
-sopra l'ultimo. Nient'altro sta in piedi sopra i 16 blocchi. La torre si fonda su terreno pieno: non su
+sopra l'ultimo. Una pila nuda di più di 16 blocchi crolla appena qualcosa ci sale sopra, e oltre i 20 crolla
+mentre la costruisci. La torre si fonda su terreno pieno: non su
 un'altra macchina, non su una lastra a metà blocco; e un pilastro sotto il piede non la rende più ventosa,
 perché la cresta che conta è quella del terreno com'era. In mare la torre si fonda sul fondale e il vento
 si misura dal pelo dell'acqua.
@@ -257,7 +258,7 @@ carico. Occupa diverse celle.
 I **tre isolatori bassi** vogliono conduttore **MT**, i **tre alti** vogliono conduttore **AT**. Da qui
 parte la linea di trasmissione, e da qui **solo** verso tralicci o verso un tratto posato.
 
-### 6.3 Sezionatore (Disconnector) e interruttore (Circuit Breaker), 24 kV
+### 6.3 Sezionatore (Disconnector) e interruttore (Circuit Breaker), 33 kV
 
 Si mettono **in mezzo** a una linea MT: tre isolatori sul lato linea, tre sul lato carico. Tira una
 campata da monte ai primi tre e da lì ai secondi tre verso valle.
@@ -265,7 +266,7 @@ campata da monte ai primi tre e da lì ai secondi tre verso valle.
 * **Click destro a mano vuota** lo apre o lo chiude.
 * Il **sezionatore** rifiuta di aprirsi se c'è carico: *"There is load on it. A disconnector cannot break
   current — open the breaker first."* È il comportamento vero di un sezionatore.
-* L'**interruttore** apre sotto carico, e **scatta da solo** sopra i 26 MW.
+* L'**interruttore** apre sotto carico, e **scatta da solo** sopra i 36 MW (630 A a 33 kV: sono apparecchi di classe 36 kV).
 * Quando è aperto, la potenza si ferma: il lato linea e il lato carico diventano due nodi separati.
 * **Come vedi lo stato:** il sezionatore mostra la lama alzata, la gola d'aria si vede da fuori.
   L'interruttore ha i contatti nel vuoto e non ha niente che si muova a vista: te lo dice con una
@@ -378,30 +379,38 @@ significati.
 
 Tutto si fa al banco da lavoro, in tre livelli.
 
-**Materia prima:** piastra d'acciaio (ferro + carbone), profilato (da due piastre), sbarra di rame
-(3 rame), matassa (3 sbarre + pepita), resina (favo + slime), lingotto e wafer di silicio (dalla sabbia
-fusa), vetro temperato.
+**Materia prima:** piastra d'acciaio (3 ferro + 3 carbone o carbone di legna: 12 piastre), profilato (da due
+piastre), sbarra di rame (3 rame: 24 sbarre), matassa (3 sbarre + pepita), resina (favo + slime), lingotto e wafer
+di silicio (dal quarzo fuso), vetro temperato. Ferro, rame, quarzo, slime e vetro di altre mod vanno bene: le
+ricette usano i tag.
 
 **Componenti:** cella solare, diodo di bypass, connettore DC, scatola di giunzione, modulo di potenza,
 banco di condensatori, nucleo magnetico, scheda di controllo, cuscinetto, ingranaggi, fusibile gPV,
 sezionatore in carico, testa di sensore.
 
 **Assiemi:** laminato PV, armadio, sezione DC, ponte inverter, rastrelliera, tubo di torsione, rotismo,
-gruppo generatore, riduttore, pala (e pala lunga).
+gruppo generatore (circa un megawatt), riduttore, pala (e pala lunga), tronco di torre (8 blocchi di ferro).
 
-**Macchine:** ogni macchina si compone dagli assiemi. Per esempio:
-* **FT-430** = 3 laminati + 2 piastre + profilato + rastrelliera + 2 connettori
-* **HX-700** = 3 laminati + 2 tubi di torsione + un motoriduttore + scheda + 2 connettori
-* **VX-350K** = armadio + 3 ponti + 2 sezioni DC + 2 nuclei + scheda
+**Macchine:** ogni macchina costa quanto pesa quella vera, a 2 tonnellate per lingotto (la formula e le fonti
+sono in `docs/data-sources.md`, "Costo delle ricette"). Per esempio:
+* **FT-415** = 2 laminati + 2 profilati + 2 connettori; **TR-580** = un laminato su una rastrelliera
+* **HX-700** = laminato + 2 tubi di torsione + motoriduttore + scheda + 2 connettori
+* **VX-10K** = modulo di potenza + condensatori + nucleo + armadio + scheda; **VX-350K** = un ponte + 2 sezioni DC
+  + armadio + 2 ventole + scheda; **VC-2500K** = 5 ponti + 2 sezioni DC + armadio + scheda
 * **CB-16** = armadio + sezionatore in carico + 3 fusibili + 2 sbarre
-* **C130-4.0** = armadio + scheda + motoriduttore + 3 gruppi generatore + 3 pale lunghe
-* **Machine Transformer** = 3 isolatori + 2 matasse + 3 piastre + nucleo
-* **Substation Transformer** = 3 isolatori + 2 piastre + sezionatore + 2 nuclei + tubo di torsione
-* **Plant Controller** = armadio + 2 schede di controllo + sezionatore + 2 piastre + 2 profilati + rame
+* **SW-10** = pale di resina e profilato + alternatore + scheda; **C52-0.85** = 3 pale + riduttore + generatore +
+  cuscinetto + motoriduttore + un blocco di ferro; **C130-4.0** = 3 pale lunghe + riduttore + 2 generatori +
+  3 tronchi di torre: la torre di una turbina grande sta nella sua ricetta, i blocchi Turbine Tower costano poco
+* **Machine Transformer** = 3 isolatori + 2 matasse + nucleo + 3 piastre; **Substation Transformer** = 3 isolatori
+  + un blocco di rame + 4 blocchi di ferro + sezionatore
+* **Plant Controller** = armadio + 2 schede di controllo + sezionatore + piastre, profilati e una sbarra
 * **Meteorological Mast** = schermo + scheda + 3 teste di sensore + 2 profilati
 
-Le bobine di conduttore e i cavi DC si fanno a mazzette: 8 bundle, 6 MT, 4 AT, 6 cavi solari, 4 dorsali
-per ricetta.
+Le bobine di conduttore e i cavi DC si fanno a mazzette: 8 bundle, 6 MT, 4 AT (sei lingotti di rame: una bobina
+AT è 1,3 tonnellate di conduttore), 6 cavi solari, 4 dorsali per ricetta.
+
+Il ricettario si riempie da solo: ogni ricetta si sblocca appena hai in inventario uno dei suoi ingredienti, e
+funziona anche con la regola `doLimitedCrafting`.
 
 **Attenzione all'attrezzo:** ogni macchina va rotta col piccone. Le macchine di acciaio pesante (pali,
 cabine, kiosk, torri, turbine, tralicci, trasformatori, sezionatori) vogliono almeno il **piccone di

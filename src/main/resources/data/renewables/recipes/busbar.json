@@ -5,11 +5,11 @@
   ],
   "key": {
     "c": {
-      "item": "minecraft:copper_ingot"
+      "tag": "forge:ingots/copper"
     }
   },
   "result": {
     "item": "renewables:busbar",
-    "count": 2
+    "count": 24
   }
 }

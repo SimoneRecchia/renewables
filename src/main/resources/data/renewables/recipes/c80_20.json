@@ -2,24 +2,15 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "zzz",
-    "XxY",
-    "ubE"
+    "xXx",
+    " % "
   ],
   "key": {
-    "E": {
-      "item": "renewables:enclosure"
+    "%": {
+      "item": "renewables:tower_section"
     },
     "X": {
       "item": "renewables:gearbox"
-    },
-    "Y": {
-      "item": "renewables:bearing"
-    },
-    "b": {
-      "item": "renewables:control_board"
-    },
-    "u": {
-      "item": "renewables:slew_drive"
     },
     "x": {
       "item": "renewables:generator_set"

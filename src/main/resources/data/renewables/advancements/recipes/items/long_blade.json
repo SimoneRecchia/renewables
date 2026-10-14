@@ -1,0 +1,61 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_resin": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:resin"
+            ]
+          }
+        ]
+      }
+    },
+    "has_tempered_glass": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:tempered_glass"
+            ]
+          }
+        ]
+      }
+    },
+    "has_turbine_blade": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:turbine_blade"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:long_blade"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_resin",
+      "has_tempered_glass",
+      "has_the_recipe",
+      "has_turbine_blade"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:long_blade"
+    ]
+  },
+  "sends_telemetry_event": false
+}

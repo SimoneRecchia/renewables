@@ -9,10 +9,11 @@
       "item": "renewables:busbar"
     },
     "n": {
-      "item": "minecraft:iron_nugget"
+      "tag": "forge:nuggets/iron"
     }
   },
   "result": {
-    "item": "renewables:copper_coil"
+    "item": "renewables:copper_coil",
+    "count": 2
   }
 }

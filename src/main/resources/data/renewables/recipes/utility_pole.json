@@ -10,7 +10,7 @@
       "item": "renewables:insulator"
     },
     "v": {
-      "item": "minecraft:stone"
+      "tag": "forge:stone"
     }
   },
   "result": {

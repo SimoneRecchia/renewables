@@ -1,0 +1,61 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_mc4_connector": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:mc4_connector"
+            ]
+          }
+        ]
+      }
+    },
+    "has_mounting_rack": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:mounting_rack"
+            ]
+          }
+        ]
+      }
+    },
+    "has_pv_laminate": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:pv_laminate"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:pv_tilt_580"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_mc4_connector",
+      "has_mounting_rack",
+      "has_pv_laminate",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:pv_tilt_580"
+    ]
+  },
+  "sends_telemetry_event": false
+}

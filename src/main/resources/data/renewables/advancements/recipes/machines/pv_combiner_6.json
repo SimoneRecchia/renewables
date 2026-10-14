@@ -1,0 +1,61 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_enclosure": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:enclosure"
+            ]
+          }
+        ]
+      }
+    },
+    "has_gpv_fuse": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:gpv_fuse"
+            ]
+          }
+        ]
+      }
+    },
+    "has_load_break_switch": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:load_break_switch"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:pv_combiner_6"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_enclosure",
+      "has_gpv_fuse",
+      "has_load_break_switch",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:pv_combiner_6"
+    ]
+  },
+  "sends_telemetry_event": false
+}

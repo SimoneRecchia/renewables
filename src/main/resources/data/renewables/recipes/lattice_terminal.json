@@ -1,19 +1,19 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "SIS",
-    "PPP",
-    "SPS"
+    "lIl",
+    "lll",
+    "S S"
   ],
   "key": {
     "I": {
       "item": "renewables:insulator"
     },
-    "P": {
-      "item": "renewables:steel_plate"
-    },
     "S": {
       "item": "renewables:steel_section"
+    },
+    "l": {
+      "tag": "forge:storage_blocks/iron"
     }
   },
   "result": {
