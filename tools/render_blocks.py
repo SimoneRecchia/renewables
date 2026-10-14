@@ -181,9 +181,12 @@ def read_obj(path, resolve, flip_v=False, shade=True, cull=True, forge_groups=Tr
     for face in faces:
         corners = [(point, _uv(uv, flip_v)) for point, uv in zip(face.points, face.uvs)]
         normal = face.normal or _face_normal(face.points)
+        # a corner's own normal where the file states one per corner: the game lights each vertex with it
+        each = face.normals if face.normals and len(set(face.normals)) > 1 else None
         for index in range(1, len(corners) - 1):
+            shown = (each[0], each[index], each[index + 1]) if each else normal
             out.append((face.group, materials.get(face.material),
-                        (corners[0], corners[index], corners[index + 1]), normal, shade, cull))
+                        (corners[0], corners[index], corners[index + 1]), shown, shade, cull))
 
     return out
 
@@ -227,6 +230,13 @@ def machine_model(name, obj=None):
 def placed(triangles, offset=(0.0, 0.0, 0.0), yaw=0, drop=()):
     """A model's triangles moved into the world, turned the way a blockstate's ``y`` turns them."""
     quarters = (yaw // 90) % 4
+
+    def turn(n):
+        nx, nz = n[0], n[2]
+        for _ in range(quarters):
+            nx, nz = -nz, nx
+        return (nx, n[1], nz)
+
     out = []
     for group, texture, corners, normal, shade, cull in triangles:
         if any(group.startswith(prefix) for prefix in drop):
@@ -238,10 +248,8 @@ def placed(triangles, offset=(0.0, 0.0, 0.0), yaw=0, drop=()):
             for _ in range(quarters):
                 x, z = -z, x
             moved.append(((x + 0.5 + offset[0], point[1] + offset[1], z + 0.5 + offset[2]), uv))
-        nx, nz = normal[0], normal[2]
-        for _ in range(quarters):
-            nx, nz = -nz, nx
-        out.append((group, texture, tuple(moved), (nx, normal[1], nz), shade, cull))
+        shown = tuple(turn(n) for n in normal) if isinstance(normal[0], tuple) else turn(normal)
+        out.append((group, texture, tuple(moved), shown, shade, cull))
     return out
 
 
@@ -337,8 +345,11 @@ def render(triangles, eye, target, path, size=1400, fov=42.0, up=(0.0, 1.0, 0.0)
         if cull and _dot(_face_normal([point for point, _ in corners]), _sub(corners[0][0], eye)) > 0.0:
             continue
 
-        lit = 1.0 if not shade else \
-            AMBIENT + (1.0 - AMBIENT) * max(0.0, sum(normal[i] * LIGHT[i] for i in range(3)))
+        # one normal a triangle, or one a corner (a smoothed surface): then the light is worked out at each corner
+        # and blended across, the way the game's vertex lighting does it
+        each = normal if isinstance(normal[0], tuple) else (normal, normal, normal)
+        lit = [1.0 if not shade else AMBIENT + (1.0 - AMBIENT) * max(0.0, sum(n[i] * LIGHT[i] for i in range(3)))
+               for n in each]
         screen = camera.corners([point for point, _ in corners])
         if screen is None:
             continue
@@ -451,6 +462,7 @@ def _line(canvas, depth, size, first, second, colour=(24, 24, 28)):
 
 def _triangle(canvas, depth, size, screen, texture, lit):
     (x0, y0, w0, t0), (x1, y1, w1, t1), (x2, y2, w2, t2) = screen
+    l0, l1, l2 = lit
     area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
     if abs(area) < 1e-9:
         return
@@ -485,7 +497,8 @@ def _triangle(canvas, depth, size, screen, texture, lit):
                 continue
 
             depth[index] = 1.0 / w
-            canvas.px[index] = [min(255, int(colour[i] * lit)) for i in range(3)] + [255]
+            light = a * l0 + b * l1 + c * l2
+            canvas.px[index] = [min(255, int(colour[i] * light)) for i in range(3)] + [255]
 
 
 def _sub(a, b):
@@ -786,11 +799,19 @@ def scene_switches_open():
         if group.startswith('rotate_'):
             corners = tuple((spun(point, switches.HINGE_Y, switches.REACH, 84.0), uv)
                             for point, uv in corners)
-            normal = spun((normal[0], normal[1], normal[2]), 0.0, 0.0, 84.0)
+            normal = tuple(turned_normal(n, 84.0) for n in normal) if isinstance(normal[0], tuple) \
+                else turned_normal(normal, 84.0)
         turned.append((group, texture, corners, normal, shade, cull))
     triangles += placed(turned, (1, 0, 2))
     triangles += placed(machine_model('mv_breaker'), (3, 0, 2), drop=('flag_shut',))
     return triangles, (2.5, 1.55, -1.6), (2.5, 0.30, 2.5)
+
+
+def turned_normal(normal, degrees):
+    """A normal turned with the blade about x: spun() measures from the block's corner, a direction has none."""
+    angle = math.radians(degrees)
+    return (normal[0], normal[1] * math.cos(angle) - normal[2] * math.sin(angle),
+            normal[1] * math.sin(angle) + normal[2] * math.cos(angle))
 
 
 def spun(point, hinge_y, hinge_z, degrees):

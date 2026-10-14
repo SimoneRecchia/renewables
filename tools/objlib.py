@@ -10,6 +10,8 @@ group.  Seven parsers is seven chances to make that mistake again in a different
 
 * ``normal`` is None where the file states none.  check_winding compares a face's winding against its
   *stated* normal, so a reader that made one up from the winding would make that check pass on everything.
+  A face whose corners state different normals (a curved surface, smoothed) has their mean here and each
+  corner's own in ``normals``, which is what the game lights the vertex with.
 * nothing is triangulated.  A polygon is a polygon: check_hitboxes bounds it whole.  ``triangles`` is the
   separate step, for the tools that rasterise.
 * ``occurrence`` is which ``o`` block a face came from, which is all ``forge_only`` needs.
@@ -27,7 +29,7 @@ import os
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models')
 
 # One face, as the file states it.  ``points`` and ``uvs`` are in file order, so the winding is the file's.
-Face = collections.namedtuple('Face', 'group material points uvs normal occurrence')
+Face = collections.namedtuple('Face', 'group material points uvs normal occurrence normals')
 
 
 def read(path):
@@ -59,15 +61,20 @@ def read(path):
 
 
 def _face(fields, verts, uvs, normals, group, material, occurrence):
-    points, texture, normal = [], [], None
+    points, texture, stated = [], [], []
     for field in fields:
         bits = field.split('/')
         points.append(verts[int(bits[0]) - 1])
         texture.append(uvs[int(bits[1]) - 1] if len(bits) > 1 and bits[1] else None)
-        if len(bits) > 2 and bits[2]:
-            normal = normals[int(bits[2]) - 1]
+        stated.append(normals[int(bits[2]) - 1] if len(bits) > 2 and bits[2] else None)
 
-    return Face(group, material, points, texture, normal, occurrence)
+    if any(n is None for n in stated):
+        return Face(group, material, points, texture, next((n for n in stated if n), None), occurrence, None)
+    if all(n == stated[0] for n in stated):
+        return Face(group, material, points, texture, stated[0], occurrence, stated)
+    mean = [sum(n[k] for n in stated) for k in range(3)]
+    length = sum(c * c for c in mean) ** 0.5 or 1.0
+    return Face(group, material, points, texture, tuple(c / length for c in mean), occurrence, stated)
 
 
 def grouped(faces, key=None):
