@@ -1,42 +1,53 @@
 #!/usr/bin/env python3
-"""Recipes, part item models, blockstates, loot tables and mineable tags, and the language keys of the parts.
+"""Recipes, their recipe-book advancements, part item models, blockstates, loot tables and the tool tags; and the
+language keys of the parts, which gen_core_data writes.
 
     python3 tools/gen_crafting.py
 
-Everything is a shaped crafting-table recipe.  check() reads every recipe on disk, mirrors included, and
-fails on an ambiguous pair - two recipes the game cannot tell apart resolve arbitrarily.
+Every file is planned first and checked before any is written (tree_problems): every item the mod registers has
+a recipe, an item model whose sprite is on disk and a name; every block a blockstate and, but the shell, a loot
+table; every part is used; no two recipes share a grid; every recipe has the advancement that puts it in the
+recipe book; and nothing is left on disk in recipes/ or advancements/ that no generator writes.  Any of those
+exits 1 with nothing written.
 """
 
 import json
 import os
 import re
+import sys
 
 DATA = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'recipes')
 ITEM_MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models', 'item')
 BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'blockstates')
 LOOT = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'loot_tables', 'blocks')
 TAGS = os.path.join('src', 'main', 'resources', 'data', 'minecraft', 'tags', 'blocks')
+SPRITES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'textures')
 JAVA = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables')
 CATALOGUE = os.path.join(JAVA, 'catalog', 'PartCatalog.java')
 
 SHAPED = 'minecraft:crafting_shaped'
 
-# Every ingredient letter used below, resolved once.
-# file, which is what makes the tree readable: X is always a gearbox, G always a generator set.
+# Every ingredient letter used below and in gen_core_data.CORE_RECIPES, resolved once, so a letter means the same
+# thing in every recipe of the mod: X is always a gearbox, G always a bridge.  A '#' is an item tag, and the
+# vanilla stock is named by tag wherever one says the same thing - charcoal is a coal, and a modpack's iron,
+# copper, quartz, slime and glass are accepted as vanilla's own are.
 ITEMS = {
     # vanilla
-    'i': 'minecraft:iron_ingot',
-    'n': 'minecraft:iron_nugget',
-    'c': 'minecraft:copper_ingot',
-    'o': 'minecraft:coal',
-    'r': 'minecraft:redstone',
-    'g': 'minecraft:gold_nugget',
-    'q': 'minecraft:quartz',
-    'a': 'minecraft:sand',
-    'y': 'minecraft:glass_pane',
+    'i': '#forge:ingots/iron',
+    'n': '#forge:nuggets/iron',
+    'c': '#forge:ingots/copper',
+    'o': '#minecraft:coals',
+    'r': '#forge:dusts/redstone',
+    'g': '#forge:nuggets/gold',
+    'q': '#forge:gems/quartz',
+    'a': '#forge:sand',
+    'y': '#forge:glass_panes/colorless',
+    'W': '#forge:glass/colorless',
+    'v': '#forge:stone',
+    # no tag holds honeycomb
     'h': 'minecraft:honeycomb',
-    'm': 'minecraft:slime_ball',
-    'l': 'minecraft:iron_block',
+    'm': '#forge:slimeballs',
+    'l': '#forge:storage_blocks/iron',
     # the mod's own older parts
     'C': 'renewables:circuit_board',
     'U': 'renewables:cpu',
@@ -274,6 +285,11 @@ def registered():
     return register_ids('ModItems', 'ITEMS'), set(register_ids('ModBlocks', 'BLOCKS'))
 
 
+def ingredient(name):
+    """An ingredient as a recipe or a trigger names it: {'tag': ...} for a '#' name, {'item': ...} otherwise."""
+    return {'tag': name[1:]} if name.startswith('#') else {'item': name}
+
+
 def key_for(pattern):
     """The key map for a pattern: every letter in it, resolved through ITEMS."""
     letters = {c for row in pattern for c in row if c != ' '}
@@ -281,7 +297,14 @@ def key_for(pattern):
     if unknown:
         raise SystemExit('gen_crafting: no ingredient for %s' % ', '.join(unknown))
 
-    return {c: {'item': ITEMS[c]} for c in sorted(letters)}
+    return {c: ingredient(ITEMS[c]) for c in sorted(letters)}
+
+
+def shaped(result, count, pattern):
+    recipe = {'type': SHAPED, 'pattern': pattern, 'key': key_for(pattern), 'result': {'item': 'renewables:' + result}}
+    if count > 1:
+        recipe['result']['count'] = count
+    return recipe
 
 
 def write(path, data):
@@ -291,53 +314,142 @@ def write(path, data):
         f.write('\n')
 
 
+def name_of(entry):
+    """'#forge:ingots/iron' or 'renewables:busbar' for one key entry or ingredient."""
+    return '#' + entry['tag'] if 'tag' in entry else entry['item']
+
+
 def grid_of(pattern, key):
-    """A recipe's grid as the game matches it: the items, laid out, with the letters resolved away."""
-    rows = tuple(tuple('.' if c == ' ' else key[c].get('item', str(key[c])) for c in row)
-                 for row in pattern)
+    """A recipe's grid as the game matches it: the ingredients, laid out, with the letters resolved away."""
+    rows = tuple(tuple('.' if c == ' ' else name_of(key[c]) for c in row) for row in pattern)
     return min(rows, tuple(row[::-1] for row in rows))
 
 
-def written_recipes():
-    """Every recipe file, generated or hand-written, as (name, type, grid)."""
-    found = []
-    for name in sorted(os.listdir(DATA)):
-        if not name.endswith('.json'):
-            continue
-
-        recipe = json.load(open(os.path.join(DATA, name)))
-        if 'pattern' not in recipe:
-            continue
-
-        found.append((name[:-5], recipe['type'], grid_of(recipe['pattern'], recipe['key'])))
-
-    return found
+def ingredients_of(recipe):
+    """Every distinct ingredient a recipe takes, by name."""
+    if 'key' in recipe:
+        return sorted({name_of(entry) for entry in recipe['key'].values()})
+    return [name_of(recipe['ingredient'])]
 
 
-def check(catalogue):
-    """Three things that have to hold"""
+ADVANCEMENTS = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'advancements', 'recipes')
+
+
+def advancement(recipe_id, recipe):
+    """What puts a recipe in the recipe book: holding any one of its ingredients, as vanilla's own recipes do.
+
+    In 1.20.1 a recipe with no advancement is in the book only after it has been made once by hand, and with
+    doLimitedCrafting it can never be made at all.  The reward is the recipe; the trigger is never shown.
+    """
+    criteria = {}
+    for name in ingredients_of(recipe):
+        predicate = {'tag': name[1:]} if name.startswith('#') else {'items': [name]}
+        criteria['has_' + re.sub(r'[^a-z0-9]+', '_', name.split(':', 1)[1])] = {
+            'trigger': 'minecraft:inventory_changed', 'conditions': {'items': [predicate]}}
+    criteria['has_the_recipe'] = {'trigger': 'minecraft:recipe_unlocked',
+                                  'conditions': {'recipe': 'renewables:' + recipe_id}}
+    return {'parent': 'minecraft:recipes/root', 'criteria': criteria, 'requirements': [sorted(criteria)],
+            'rewards': {'recipes': ['renewables:' + recipe_id]}, 'sends_telemetry_event': False}
+
+
+def advancement_path(recipe_id, blocks):
+    """recipes/machines/<id> for something placed, recipes/items/<id> for everything held."""
+    return os.path.join(ADVANCEMENTS, 'machines' if recipe_id in blocks else 'items', recipe_id + '.json')
+
+
+# The two furnace steps, which are the only recipes that are not a bench: (result, ingredient letter).
+SMELTING = [('tempered_glass', 'W'), ('silicon_ingot', 'q')]
+
+
+def recipe_files():
+    """{path: recipe} for every recipe this file owns."""
+    out = {os.path.join(DATA, result + '.json'): shaped(result, count, pattern)
+           for result, count, _, pattern in RECIPES}
+    for result, letter in SMELTING:
+        out[os.path.join(DATA, result + '.json')] = {
+            'type': 'minecraft:smelting', 'ingredient': ingredient(ITEMS[letter]),
+            'result': 'renewables:' + result, 'experience': 0.1, 'cookingtime': 200}
+    return out
+
+
+def tree_problems(own, core):
+    """Everything the tree must be, checked on what is about to be written, before any of it is.
+
+    own and core are {path: data} for this file and gen_core_data.  A row taken out of RECIPES leaves its item
+    with no recipe and its old JSON on disk, and both are reported: the tree used to call itself consistent
+    with the VC-2500K uncraftable.
+    """
     problems = []
+    items, blocks = registered()
+    planned = dict(core)
+    planned.update(own)
 
-    grids = {}
-    for result, kind, grid in written_recipes():
-        if (kind, grid) in grids:
-            problems.append('%s and %s have the same grid, so one of them is uncraftable'
-                            % (grids[(kind, grid)], result))
-        grids[(kind, grid)] = result
+    results = [result for result, _, _, _ in RECIPES] + [result for result, _ in SMELTING]
+    for result in sorted({r for r in results if results.count(r) > 1}):
+        problems.append('%s is the result of more than one row of RECIPES' % result)
 
-    made = {result for result, _, _, _ in RECIPES} | {'tempered_glass', 'silicon_ingot'}
-    used = {ITEMS[c].split(':')[1] for _, _, _, pattern in RECIPES for row in pattern
-            for c in row if c != ' ' and ITEMS[c].startswith('renewables:')}
-    for part_id, _, name, _ in catalogue:
-        if part_id not in made:
-            problems.append('%s has no recipe' % part_id)
+    recipes = {path: data for path, data in planned.items() if os.path.dirname(path) == DATA}
+    made, grids, smelted = {}, {}, {}
+    for path, recipe in sorted(recipes.items()):
+        name = os.path.basename(path)[:-5]
+        result = recipe['result']['item'] if isinstance(recipe['result'], dict) else recipe['result']
+        made.setdefault(result.split(':')[1], []).append(name)
+        for entry in ingredients_of(recipe):
+            if entry.startswith('renewables:') and entry.split(':')[1] not in items:
+                problems.append('%s takes %s, which the mod does not register' % (name, entry))
+        if 'pattern' in recipe:
+            grid = grid_of(recipe['pattern'], recipe['key'])
+            if grid in grids:
+                problems.append('%s and %s have the same grid, so one of them is uncraftable' % (grids[grid], name))
+            grids[grid] = name
+        else:
+            source = ingredients_of(recipe)[0]
+            if source in smelted:
+                problems.append('%s and %s smelt the same thing' % (smelted[source], name))
+            smelted[source] = name
+
+    used = {entry.split(':')[1] for recipe in recipes.values() for entry in ingredients_of(recipe)
+            if entry.startswith('renewables:')}
+    for part_id, _, _, _ in parts():
         if part_id not in used:
             problems.append('%s is made and never used' % part_id)
 
-    for line in problems:
-        print('    PROBLEM %s' % line)
+    import gen_core_data
+    lang, _ = gen_core_data.lang_table()
+    for item in sorted(items):
+        if item not in made:
+            problems.append('%s has no recipe' % item)
+        model_path = os.path.join(ITEM_MODELS, item + '.json')
+        model = planned.get(model_path) or (json.load(open(model_path)) if os.path.exists(model_path) else None)
+        if model is None:
+            problems.append('%s has no item model' % item)
+        else:
+            sprite = model.get('textures', {}).get('layer0', '').split(':')[-1]
+            if not os.path.exists(os.path.join(SPRITES, sprite + '.png')):
+                problems.append('%s shows textures/%s.png, which is not on disk' % (item, sprite))
+        if ('block.renewables.' if item in blocks else 'item.renewables.') + item not in lang:
+            problems.append('%s has no name' % item)
 
-    return len(problems)
+    for block in sorted(blocks):
+        state = os.path.join(BLOCKSTATES, block + '.json')
+        if state not in planned and not os.path.exists(state):
+            problems.append('block %s has no blockstate' % block)
+        if block != 'machine_shell' and os.path.join(LOOT, block + '.json') not in planned:
+            problems.append('block %s has no loot table' % block)
+
+    # what is on disk and nobody writes any more: the recipe of a row taken out, its advancement
+    for folder in (DATA, ADVANCEMENTS):
+        for root, _, names in os.walk(folder):
+            for name in names:
+                path = os.path.join(root, name)
+                if name.endswith('.json') and path not in planned:
+                    problems.append('%s is on disk and no generator writes it' % path)
+
+    for path in recipes:
+        recipe_id = os.path.basename(path)[:-5]
+        if advancement_path(recipe_id, blocks) not in planned:
+            problems.append('%s has no advancement, so the recipe book never shows it' % recipe_id)
+    return problems
 
 
 # A machine drawn by the mod's own OBJ renderer has an INVISIBLE render shape, so its blockstate only
@@ -476,17 +588,14 @@ DROPS = drops()
 
 def loot_tables():
     """One drop per block this file owns.  Without one a block breaks into nothing, silently."""
-    for block_id, item_id in DROPS.items():
-        write(os.path.join(LOOT, block_id + '.json'), {
-            'type': 'minecraft:block',
-            'pools': [{
-                'rolls': 1,
-                'entries': [{'type': 'minecraft:item', 'name': 'renewables:' + item_id}],
-                'conditions': [{'condition': 'minecraft:survives_explosion'}],
-            }],
-        })
-
-    return len(DROPS)
+    return {os.path.join(LOOT, block_id + '.json'): {
+        'type': 'minecraft:block',
+        'pools': [{
+            'rolls': 1,
+            'entries': [{'type': 'minecraft:item', 'name': 'renewables:' + item_id}],
+            'conditions': [{'condition': 'minecraft:survives_explosion'}],
+        }],
+    } for block_id, item_id in DROPS.items()}
 
 
 def tool_tags():
@@ -499,13 +608,14 @@ def tool_tags():
     # The shell is in both tags.  Every machine that fills cells is iron-tier, and a cell that breaks as the
     # machine does has to be as quick to break and as particular about its tool, or breaking the cell by hand
     # would be a way round the pickaxe the machine asks for.
-    mineable = sorted('renewables:' + name for name in MACHINES)
-    write(os.path.join(TAGS, 'mineable', 'pickaxe.json'), {'replace': False, 'values': mineable})
-    write(os.path.join(TAGS, 'needs_iron_tool.json'),
-          {'replace': False, 'values': sorted('renewables:' + name for name in NEEDS_IRON + ('machine_shell',))})
-    write(os.path.join(TAGS, 'needs_stone_tool.json'),
-          {'replace': False, 'values': sorted('renewables:' + name for name in needs_stone())})
-    return len(mineable)
+    return {
+        os.path.join(TAGS, 'mineable', 'pickaxe.json'):
+            {'replace': False, 'values': sorted('renewables:' + name for name in MACHINES)},
+        os.path.join(TAGS, 'needs_iron_tool.json'):
+            {'replace': False, 'values': sorted('renewables:' + name for name in NEEDS_IRON + ('machine_shell',))},
+        os.path.join(TAGS, 'needs_stone_tool.json'):
+            {'replace': False, 'values': sorted('renewables:' + name for name in needs_stone())},
+    }
 
 
 def needs_stone():
@@ -515,50 +625,54 @@ def needs_stone():
 
 def machine_assets():
     """The blockstate and item model for every machine the mod draws itself - see MACHINES."""
+    out = {}
     for name, (particle, sprite) in MACHINES.items():
-        write(os.path.join(BLOCKSTATES, name + '.json'),
-              {'multipart': [{'apply': {'model': 'renewables:block/' + particle}}]})
+        out[os.path.join(BLOCKSTATES, name + '.json')] = {
+            'multipart': [{'apply': {'model': 'renewables:block/' + particle}}]}
         if sprite is not None:
-            write(os.path.join(ITEM_MODELS, name + '.json'),
-                  {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'renewables:item/' + sprite}})
+            out[os.path.join(ITEM_MODELS, name + '.json')] = {
+                'parent': 'minecraft:item/generated', 'textures': {'layer0': 'renewables:item/' + sprite}}
+    return out
 
-    return len(MACHINES)
+
+def planned():
+    """{path: data} for every file this generator writes."""
+    out = machine_assets()
+    out.update(loot_tables())
+    out.update(tool_tags())
+    # one item model per part: a flat sprite, like every other ingredient in the game
+    for part_id, _, _, _ in parts():
+        out[os.path.join(ITEM_MODELS, part_id + '.json')] = {
+            'parent': 'minecraft:item/generated', 'textures': {'layer0': 'renewables:item/' + part_id}}
+
+    recipes = recipe_files()
+    out.update(recipes)
+    _, blocks = registered()
+    for path, recipe in recipes.items():
+        recipe_id = os.path.basename(path)[:-5]
+        out[advancement_path(recipe_id, blocks)] = advancement(recipe_id, recipe)
+    return out
 
 
 def main():
-    catalogue = parts()
-    machines = machine_assets()
-    drops = loot_tables()
-    mineable = tool_tags()
+    import gen_core_data
+    own = planned()
+    problems = tree_problems(own, gen_core_data.planned())
+    if problems:
+        for line in problems:
+            print('    PROBLEM %s' % line)
+        print('%d problem(s) in the tree: nothing written' % len(problems))
+        sys.exit(1)
 
-    # one item model per part: a flat sprite, like every other ingredient in the game
-    for part_id, _, _, _ in catalogue:
-        write(os.path.join(ITEM_MODELS, part_id + '.json'),
-              {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'renewables:item/' + part_id}})
+    for path, data in own.items():
+        write(path, data)
 
-    # and the recipes
-    ingots = 0
-    for result, count, kind, pattern in RECIPES:
-        recipe = {'type': kind, 'pattern': pattern, 'key': key_for(pattern),
-                  'result': {'item': 'renewables:' + result}}
-        if count > 1:
-            recipe['result']['count'] = count
-
-        write(os.path.join(DATA, result + '.json'), recipe)
-        ingots += 1
-
-    # the two furnace steps, which are the only ones that are not a bench
-    for result, source, name in (('tempered_glass', 'minecraft:glass', 'glass'),
-                                 ('silicon_ingot', 'minecraft:quartz', 'quartz')):
-        write(os.path.join(DATA, result + '.json'),
-              {'type': 'minecraft:smelting', 'ingredient': {'item': source},
-               'result': 'renewables:' + result, 'experience': 0.1, 'cookingtime': 200})
-
-    print('%d parts, %d bench recipes, 2 furnace recipes, %d machine blockstates, %d loot tables, '
-          '%d pickaxe-mineable' % (len(catalogue), ingots, machines, drops, mineable))
-    print('%d recipe files on disk, hand-written ones included' % len(written_recipes()))
-    problems = check(catalogue)
-    print('the tree is consistent' if problems == 0 else '%d problem(s) in the tree' % problems)
+    recipes = [path for path in own if os.path.dirname(path) == DATA]
+    print('%d parts, %d recipes (%d furnace), %d advancements, %d machine blockstates, %d loot tables, '
+          '%d pickaxe-mineable' % (len(parts()), len(recipes), len(SMELTING),
+                                   sum(1 for path in own if path.startswith(ADVANCEMENTS)), len(MACHINES),
+                                   len(DROPS), len(MACHINES)))
+    print('the tree is consistent: every item made, named, drawn and in the recipe book')
 
 
 if __name__ == '__main__':

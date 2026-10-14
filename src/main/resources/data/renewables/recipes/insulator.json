@@ -7,10 +7,10 @@
   ],
   "key": {
     "W": {
-      "item": "minecraft:glass"
+      "tag": "forge:glass/colorless"
     },
     "n": {
-      "item": "minecraft:iron_nugget"
+      "tag": "forge:nuggets/iron"
     }
   },
   "result": {

@@ -22,7 +22,7 @@
       "item": "renewables:control_board"
     },
     "c": {
-      "item": "minecraft:copper_ingot"
+      "tag": "forge:ingots/copper"
     }
   },
   "result": {

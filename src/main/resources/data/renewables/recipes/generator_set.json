@@ -16,7 +16,7 @@
       "item": "renewables:magnetic_core"
     },
     "l": {
-      "item": "minecraft:iron_block"
+      "tag": "forge:storage_blocks/iron"
     }
   },
   "result": {
