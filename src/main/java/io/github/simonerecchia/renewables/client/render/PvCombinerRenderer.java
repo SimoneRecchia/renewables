@@ -32,7 +32,7 @@ public class PvCombinerRenderer extends MachineRenderer {
 	/** Where each handle has got to, so throwing the switch is a swing rather than a jump. */
 	private static final Map<BlockPos, Float> HANDLE_ANGLE = new HashMap<>();
 
-	/** Degrees the handle turns to open the switch, and how fast it gets there per frame. */
+	/** Degrees the handle turns to open the switch, and how fast it gets there per frame at 60 frames a second. */
 	private static final float OPEN_DEGREES = 90.0f;
 	private static final float HANDLE_STEP = 9.0f;
 
@@ -76,8 +76,9 @@ public class PvCombinerRenderer extends MachineRenderer {
 		float current = HANDLE_ANGLE.getOrDefault(pos, target);
 		if (Minecraft.getInstance().isPaused()) return current;
 
-		float next = Math.abs(target - current) <= HANDLE_STEP ? target
-				: current + Math.signum(target - current) * HANDLE_STEP;
+		float step = HANDLE_STEP * frameScale();
+		float next = Math.abs(target - current) <= step ? target
+				: current + Math.signum(target - current) * step;
 		next = Mth.clamp(next, 0.0f, OPEN_DEGREES);
 		HANDLE_ANGLE.put(pos, next);
 		return next;
