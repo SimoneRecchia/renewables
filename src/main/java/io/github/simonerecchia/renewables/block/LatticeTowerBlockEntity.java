@@ -18,9 +18,9 @@ import net.minecraft.world.phys.Vec3;
 /**
  * A lattice tower's six fittings.  One block entity for all three duties; the spec is read off the block.
  *
- * STUB: owner B (grid-blocks.md section 8).  The anchors are real, because they differ from every other
- * machine: a chain hangs, so a wire is taken from the underside of a suspension or tension tower's fitting and
- * from the far end (smallest z) of a terminal tower's.
+ * Its anchors differ from every other machine's: a chain hangs, so a wire is taken from the underside of a
+ * suspension or tension tower's fitting and from the far end (smallest z) of a terminal tower's, and not from
+ * the top of the porcelain.  Mending the tower's cells is its block's ticker.
  */
 public class LatticeTowerBlockEntity extends MachineBlockEntity {
 	public LatticeTowerBlockEntity(BlockPos pos, BlockState state) {

@@ -46,6 +46,11 @@ MIN_CLAIM = 2.0
 SEAM = 0.1
 # What counts as the same number, once the tables have been rounded for printing.
 EPS = 0.02
+# A part that is not a box is cut a slab at a time: SLAB is how tall one slab is, and FOLLOW is how far the
+# collision may stand off the geometry before a slab gets a box of its own.  A quarter of a pixel is
+# MIN_OWN again: nothing thinner than that is a piece of a machine, so nothing thinner is worth following.
+SLAB = 1.0
+FOLLOW = 0.25
 
 # Which block class draws which model.
 BLOCK_CLASS = {
@@ -106,6 +111,16 @@ SWEPT = {
         'a player fall through the row every afternoon',
     'pv_dual':
         'the frame turns about two axes, so the same holds and in one more direction',
+}
+
+
+# Parts whose collision follows the geometry instead of being the box round it, per model: the shaft of a spun
+# pole is a cone and the brace under each crossarm is a triangle, and one box round either is a wall of air
+# beside it.  Each is cut into SLAB-high slabs, every slab is the box round what the model has in it, and
+# neighbouring slabs that differ by less than FOLLOW are one box.  The rest of the pole is one box a part, as
+# everywhere else.
+SLICED = {
+    'utility_pole': ('shaft', 'arm_lower', 'arm_upper'),
 }
 
 
@@ -225,9 +240,18 @@ RECTANGLES = {
         ('insulator', ('insulator',)),
     ),
     'utility_pole': (
-        # the steps are what a player climbs, and they are within a pixel of the shaft either side of it
-        ('shaft', ('shaft', 'earth', 'plate',
-                   'step_0', 'step_1', 'step_2', 'step_3', 'step_4', 'step_5', 'step_6')),
+        # the shaft is the cone and nothing else: the steps, the earth strap and the number plate each
+        # stand out of it by a pixel or so and are a box of their own, where they are
+        ('shaft', ('shaft',)),
+        ('earth', ('earth',)),
+        ('plate', ('plate',)),
+        ('step_0', ('step_0',)),
+        ('step_1', ('step_1',)),
+        ('step_2', ('step_2',)),
+        ('step_3', ('step_3',)),
+        ('step_4', ('step_4',)),
+        ('step_5', ('step_5',)),
+        ('step_6', ('step_6',)),
         ('arm_lower', ('arm_lower',)),
         ('arm_upper', ('arm_upper',)),
         # the pin goes with the insulator it carries: the spindle is what stands it off the arm
@@ -280,6 +304,82 @@ def bounds(faces):
     return lo, hi
 
 
+def clip(polygon, axis, value, keep_above):
+    """The part of a polygon on one side of a plane (Sutherland-Hodgman, one plane)."""
+    out = []
+    for index, a in enumerate(polygon):
+        b = polygon[(index + 1) % len(polygon)]
+        a_in = a[axis] >= value if keep_above else a[axis] <= value
+        b_in = b[axis] >= value if keep_above else b[axis] <= value
+        if a_in:
+            out.append(a)
+        if a_in != b_in:
+            t = (value - a[axis]) / (b[axis] - a[axis])
+            out.append(tuple(a[n] + t * (b[n] - a[n]) for n in range(3)))
+
+    return out
+
+
+def slabs(faces):
+    """Where the geometry is, a slab at a time: [(low, high)] boxes in blocks, one per SLAB of height.
+
+    Each is the box round what the polygons have inside that slab, so it is as tight as a box can be to the
+    surface there; a polygon that straddles the plane is cut at it, not counted whole.
+    """
+    low, high = bounds(faces)
+    step = SLAB / 16.0
+    first = int(math.floor(low[1] / step + 1e-9))
+    last = int(math.ceil(high[1] / step - 1e-9))
+    out = []
+    for index in range(first, last):
+        points = []
+        for face in faces:
+            cut = clip(face, 1, index * step, True)
+            if cut:
+                cut = clip(cut, 1, (index + 1) * step, False)
+            points.extend(cut)
+
+        if points:
+            out.append(bounds([points]))
+
+    return out
+
+
+def following(faces):
+    """The boxes a part is cut into, bottom to top: neighbouring slabs that stand within FOLLOW are one box."""
+    tolerance = FOLLOW / 16.0
+    boxes = []
+    run = []
+    for low, high in slabs(faces):
+        if run and not fits(run + [(low, high)], tolerance):
+            boxes.append(outline(run))
+            run = []
+
+        run.append((low, high))
+
+    if run:
+        boxes.append(outline(run))
+
+    return boxes
+
+
+def fits(slab_boxes, tolerance):
+    """Whether these slabs are close enough in plan to be one box: no side stands off the others by more than the tolerance."""
+    for side in (0, 1):
+        for axis in (0, 2):
+            values = [box[side][axis] for box in slab_boxes]
+            if max(values) - min(values) > tolerance:
+                return False
+
+    return True
+
+
+def outline(slab_boxes):
+    """The box round a run of slabs."""
+    return (tuple(min(box[0][axis] for box in slab_boxes) for axis in range(3)),
+            tuple(max(box[1][axis] for box in slab_boxes) for axis in range(3)))
+
+
 def body(groups, model):
     """The object's parts as one box each, in pixels from the block's own corner.
 
@@ -303,9 +403,11 @@ def body(groups, model):
 
     kept = []
     for name, members in plan:
-        lo, hi = bounds([face for g in members for face in still[g]])
-        kept.append((name, tuple(16.0 * v for v in (lo[0] + 0.5, lo[1], lo[2] + 0.5)),
-                     tuple(16.0 * v for v in (hi[0] + 0.5, hi[1], hi[2] + 0.5))))
+        faces = [face for g in members for face in still[g]]
+        pieces_of = following(faces) if name in SLICED.get(model, ()) else [bounds(faces)]
+        for lo, hi in pieces_of:
+            kept.append((name, tuple(16.0 * v for v in (lo[0] + 0.5, lo[1], lo[2] + 0.5)),
+                         tuple(16.0 * v for v in (hi[0] + 0.5, hi[1], hi[2] + 0.5))))
 
     return kept
 
