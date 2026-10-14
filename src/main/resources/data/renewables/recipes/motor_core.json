@@ -7,10 +7,10 @@
   ],
   "key": {
     "c": {
-      "item": "minecraft:copper_ingot"
+      "tag": "forge:ingots/copper"
     },
     "i": {
-      "item": "minecraft:iron_ingot"
+      "tag": "forge:ingots/iron"
     }
   },
   "result": {

@@ -5,7 +5,8 @@ every item work, does it make sense, is it usable, and does what connects to wha
 plant is put together. The last section is the one that matters most — what is *missing*.
 
 Seventy-six obtainable things. Every one of them has a recipe, an item model, a sprite and a name, and
-`tools/gen_crafting.py` refuses to write a tree where that is not true.
+`tools/gen_crafting.py` refuses to write a tree where that is not true, and each recipe has the advancement
+that puts it in the recipe book when one of its ingredients is picked up.
 
 ## The two power chains, and where they meet
 

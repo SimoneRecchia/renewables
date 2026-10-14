@@ -1,0 +1,74 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_control_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:control_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_generator_set": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:generator_set"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_section"
+            ]
+          }
+        ]
+      }
+    },
+    "has_turbine_blade": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:turbine_blade"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:sw_10"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_control_board",
+      "has_generator_set",
+      "has_steel_section",
+      "has_the_recipe",
+      "has_turbine_blade"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:sw_10"
+    ]
+  },
+  "sends_telemetry_event": false
+}

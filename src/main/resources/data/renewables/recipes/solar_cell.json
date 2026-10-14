@@ -13,7 +13,7 @@
       "item": "renewables:silicon_wafer"
     },
     "r": {
-      "item": "minecraft:redstone"
+      "tag": "forge:dusts/redstone"
     }
   },
   "result": {

@@ -1,0 +1,59 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_dusts_redstone": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:dusts/redstone"
+          }
+        ]
+      }
+    },
+    "has_resin": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:resin"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_plate": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_plate"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:capacitor_bank"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_dusts_redstone",
+      "has_resin",
+      "has_steel_plate",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:capacitor_bank"
+    ]
+  },
+  "sends_telemetry_event": false
+}

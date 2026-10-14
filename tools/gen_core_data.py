@@ -333,27 +333,8 @@ FLAT_ITEMS = [
     ('motor_core', 'minecraft:item/generated', 'motor_core'),
 ]
 
-# One letter, one ingredient, in every recipe below.  The letters that name the mod's own parts mean here what
-# they mean in gen_crafting.py (C the circuit board, U the CPU, I the insulator, M the metal casing, K the
-# motor core, R the screen, B the busbar); the vanilla letters are the same too, and the two new ones - v and
-# W - are letters that file does not use.
-INGREDIENTS = {
-    'i': 'minecraft:iron_ingot',
-    'n': 'minecraft:iron_nugget',
-    'c': 'minecraft:copper_ingot',
-    'r': 'minecraft:redstone',
-    'g': 'minecraft:gold_nugget',
-    'q': 'minecraft:quartz',
-    'y': 'minecraft:glass_pane',
-    'v': 'minecraft:stone',
-    'W': 'minecraft:glass',
-    'C': 'renewables:circuit_board',
-    'U': 'renewables:cpu',
-    'I': 'renewables:insulator',
-    'M': 'renewables:metal_casing',
-    'B': 'renewables:busbar',
-}
-
+# The letters are gen_crafting.ITEMS, the one table of ingredient letters in the mod: C the circuit board, U the
+# CPU, I the insulator, M the metal casing, B the busbar, v stone, W glass, and the vanilla stock by tag.
 # (result, count, pattern).  The first five are the foundation everything else stands on, made from vanilla
 # materials only; the machines after them are the ones the parts tree does not cover.
 CORE_RECIPES = [
@@ -451,34 +432,25 @@ def lang():
     return len(table)
 
 
-def item_models():
-    for name, parent, sprite in FLAT_ITEMS:
-        write(os.path.join(ITEM_MODELS, name + '.json'),
-              {'parent': parent, 'textures': {'layer0': 'renewables:item/' + sprite}})
-
-    return len(FLAT_ITEMS)
-
-
-def recipes():
+def planned():
+    """{path: data} for the item models, the recipes and the recipes' advancements this file owns."""
+    out = {os.path.join(ITEM_MODELS, name + '.json'): {'parent': parent, 'textures': {'layer0': 'renewables:item/' + sprite}}
+           for name, parent, sprite in FLAT_ITEMS}
+    _, blocks = gen_crafting.registered()
     for result, count, pattern in CORE_RECIPES:
-        letters = {c for row in pattern for c in row if c != ' '}
-        unknown = sorted(c for c in letters if c not in INGREDIENTS)
-        if unknown:
-            raise SystemExit('gen_core_data: no ingredient for %s in %s' % (', '.join(unknown), result))
-
-        recipe = {'type': SHAPED, 'pattern': pattern,
-                  'key': {c: {'item': INGREDIENTS[c]} for c in sorted(letters)},
-                  'result': {'item': 'renewables:' + result}}
-        if count > 1:
-            recipe['result']['count'] = count
-
-        write(os.path.join(RECIPES, result + '.json'), recipe)
-
-    return len(CORE_RECIPES)
+        recipe = gen_crafting.shaped(result, count, pattern)
+        out[os.path.join(RECIPES, result + '.json')] = recipe
+        out[gen_crafting.advancement_path(result, blocks)] = gen_crafting.advancement(result, recipe)
+    return out
 
 
 def main():
-    print('%d language keys, %d item models, %d recipes' % (lang(), item_models(), recipes()))
+    keys = lang()
+    files = planned()
+    for path, data in files.items():
+        write(path, data)
+    print('%d language keys, %d item models, %d recipes with their advancements'
+          % (keys, len(FLAT_ITEMS), len(CORE_RECIPES)))
 
 
 if __name__ == '__main__':

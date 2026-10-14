@@ -10,7 +10,7 @@
       "item": "renewables:steel_plate"
     },
     "n": {
-      "item": "minecraft:iron_nugget"
+      "tag": "forge:nuggets/iron"
     }
   },
   "result": {

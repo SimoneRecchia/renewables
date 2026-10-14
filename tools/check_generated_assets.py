@@ -241,6 +241,34 @@ def panels(measured):
     return problems
 
 
+def data_files():
+    """Recipes, recipe advancements, item models and block tags: which generator writes each, and what is on disk.
+
+    gen_crafting and gen_core_data say what they write through planned(); the two cable generators write one
+    item model each, named by NAME.
+    """
+    import gen_core_data
+    import gen_crafting
+    claimed = {}
+    for name, module in (('gen_crafting.py', gen_crafting), ('gen_core_data.py', gen_core_data)):
+        for path in module.planned():
+            claimed.setdefault(path, []).append(name)
+    for module_name in ('gen_cable_models', 'gen_trunk_models'):
+        module = imported(module_name)
+        if module is not None:
+            claimed.setdefault(os.path.join(ASSETS, 'models', 'item', module.NAME + '.json'), []).append(module_name + '.py')
+
+    resources = os.path.join('src', 'main', 'resources')
+    folders = [os.path.join(resources, 'data', 'renewables', 'recipes'),
+               os.path.join(resources, 'data', 'renewables', 'advancements'),
+               os.path.join(resources, 'data', 'minecraft', 'tags'),
+               os.path.join(ASSETS, 'models', 'item')]
+    on_disk = sorted(os.path.join(root, name) for folder in folders for root, _, names in os.walk(folder)
+                     for name in names if name.endswith('.json'))
+    claimed = {path: tools for path, tools in claimed.items() if path.startswith(tuple(folders))}
+    return claimed, on_disk
+
+
 def language_writers():
     """The generators that write the language file.  Two of them wrote it, each its own copy of ninety keys."""
     return sorted(name for name in os.listdir(TOOLS) if name.startswith('gen_') and name.endswith('.py')
@@ -255,6 +283,16 @@ def main():
     if len(writers) != 1:
         problems.append('lang/en_us.json is written by %s - it must have exactly one writer'
                         % (' and '.join(writers) or 'nothing'))
+
+    data, data_on_disk = data_files()
+    for path, tools in sorted(data.items()):
+        if len(tools) > 1:
+            problems.append('%s is written by %s - whichever runs last wins' % (path, ' and '.join(tools)))
+        elif path not in data_on_disk:
+            problems.append('%s is claimed by %s but is not on disk' % (path, tools[0]))
+    for path in data_on_disk:
+        if path not in data:
+            problems.append('%s is on disk but no generator writes it' % path)
 
     for path, tools in sorted(claimed.items()):
         if len(tools) > 1:

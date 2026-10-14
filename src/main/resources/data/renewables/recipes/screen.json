@@ -10,13 +10,13 @@
       "item": "renewables:circuit_board"
     },
     "n": {
-      "item": "minecraft:iron_nugget"
+      "tag": "forge:nuggets/iron"
     },
     "r": {
-      "item": "minecraft:redstone"
+      "tag": "forge:dusts/redstone"
     },
     "y": {
-      "item": "minecraft:glass_pane"
+      "tag": "forge:glass_panes/colorless"
     }
   },
   "result": {

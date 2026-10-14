@@ -1,0 +1,87 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_control_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:control_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_mc4_connector": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:mc4_connector"
+            ]
+          }
+        ]
+      }
+    },
+    "has_pv_laminate": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:pv_laminate"
+            ]
+          }
+        ]
+      }
+    },
+    "has_slew_drive": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:slew_drive"
+            ]
+          }
+        ]
+      }
+    },
+    "has_torque_tube": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:torque_tube"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:pv_track_700"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_control_board",
+      "has_mc4_connector",
+      "has_pv_laminate",
+      "has_slew_drive",
+      "has_the_recipe",
+      "has_torque_tube"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:pv_track_700"
+    ]
+  },
+  "sends_telemetry_event": false
+}

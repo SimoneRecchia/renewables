@@ -9,10 +9,10 @@
       "item": "renewables:busbar"
     },
     "a": {
-      "item": "minecraft:sand"
+      "tag": "forge:sand"
     },
     "y": {
-      "item": "minecraft:glass_pane"
+      "tag": "forge:glass_panes/colorless"
     }
   },
   "result": {

@@ -1,0 +1,113 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_bearing": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:bearing"
+            ]
+          }
+        ]
+      }
+    },
+    "has_control_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:control_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_enclosure": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:enclosure"
+            ]
+          }
+        ]
+      }
+    },
+    "has_gearbox": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:gearbox"
+            ]
+          }
+        ]
+      }
+    },
+    "has_generator_set": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:generator_set"
+            ]
+          }
+        ]
+      }
+    },
+    "has_long_blade": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:long_blade"
+            ]
+          }
+        ]
+      }
+    },
+    "has_slew_drive": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:slew_drive"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:c80_20"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_bearing",
+      "has_control_board",
+      "has_enclosure",
+      "has_gearbox",
+      "has_generator_set",
+      "has_long_blade",
+      "has_slew_drive",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:c80_20"
+    ]
+  },
+  "sends_telemetry_event": false
+}
