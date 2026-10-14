@@ -89,8 +89,8 @@ def bushing(mesh, index, centre, height, diameter, sheds=4):
     The mod's own ``pin_insulator`` is a *pin* insulator and is the wrong object here - a bushing is a
     tall body with sheds down it and a terminal on top, and it is what a player clicks a wire onto.
     """
-    # A group per bushing, because ObjDefinitions names one per fitting and a wire hangs from that
-    # group's own centre: all six in one group is a bounding box through the middle of the machine.
+    # A group per bushing, because ModelDefinitions names one per fitting and a wire hangs from that
+    # group's own box: all six in one group is a bounding box through the middle of the machine.
     porcelain = mesh.faces('bushing_%d' % index, 'porcelain')
     steel = mesh.faces('flange_%d' % index, 'steel')
     cx, cy, cz = centre

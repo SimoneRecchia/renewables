@@ -7,9 +7,10 @@ Authored about the block's centre facing north, in the envelope the inherited mo
 0.55, z plus and minus 1.16, and 2.8 tall - because every cabin in every existing world has its collision
 cells and its wire anchors hung off those figures.
 
-The two fittings are ``insulator_input`` and ``insulator_output`` in that order, which ObjDefinitions names
-and a wire is stored against the *index* of.  The names carry the direction as well: InsulatorPartHelper
-reads "input" and "output" out of them to decide which end of the machine a fitting is.
+The two fittings are ``insulator_input`` and ``insulator_output`` in that order, which ModelDefinitions names
+and a span is stored against the *index* of.  The names carry the direction as well:
+ElectricCabinBlockEntity.powerType reads "input" and "output" out of them to decide which end of the machine a
+fitting is.
 """
 
 import math
