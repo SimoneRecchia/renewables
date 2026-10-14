@@ -235,6 +235,9 @@ not an `instanceof` chain in eight files:
 | `takesConductor(spec, index)` | which voltage class may be strung to this fitting. Without it the three conductors are interchangeable and a 400 kV quad bundle goes on a garden kiosk |
 | `fittingType()` | the string a saved span holds, from `FittingTypes`. **Never change one**: every span in every existing world has it |
 | `passesThrough()` | whether power crosses this fitting rather than stopping at it. A switch has no role of its own - it takes the role of the line it is in - so it is on nobody's `feeds` list, and for as long as that was the only rule **nothing in the mod could send power to a switch at all**: a switch in a line silently blocked it, and `busOf`, the refusal to open under load and the trip all read a power that never arrived |
+| `closed()` | for a switch, whether its contacts join its two buses; what it reads is then the power crossing them, which is what the interlock and the trip judge |
+| `laidConductor()`, `laidNeighbours()` | a ground-laid run's conductor and the lengths it is joined to, by its own shape: `LevelGrid` strings a block of that conductor between every two, so a run carries power end to end |
+| `maxSpanBlocks()` | the longest span the machine holds - a tower's ruling span; `SpanPlanner` takes the shortest of both ends and the conductor |
 
 Twice an `instanceof` chain over machine types has silently dropped the machines added after it was written:
 a conductor could not be clicked onto a tower, and a span was saved and then drawn nowhere. **If you are writing `instanceof` over more than two block entities in the

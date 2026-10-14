@@ -497,7 +497,7 @@ altro agente).
 12. **Domanda dei power box.** Ora la potenza va ai box e si divide fra loro in parti uguali, perché un box non dice
     quanto vuole. Il modello fisico completo è che ogni box chieda quanto i suoi consumatori e i blocchi vicini
     accettano (più lo spazio nel buffer), e che quello che nessuno chiede resti al generatore (curtailment). Lo vuoi?
-    Tocca `PowerBoxBlockEntity` e il bug del buffer (A4 della revisione), che è di un altro ramo.
+    Tocca `PowerBoxBlockEntity`; il bug del buffer (A4 della revisione) è corretto a parte (`KioskEnergy`).
 13. **FT-430** ora è 4 stringhe da 11 (prima 2 da 22, che superavano i 1000 V a freddo): usa il doppio degli
     ingressi di stringa di un inverter. Va bene così, o preferisci 2 × 18 = 36 moduli?
 
