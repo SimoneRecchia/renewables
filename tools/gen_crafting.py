@@ -191,7 +191,7 @@ RECIPES = [
     # ---------------------------------------------------------------- the transmission towers
     # Steel sections, plate gussets and the insulator strings the phases hang from.  The duty is what
     # costs: a suspension tower is only holding weight, a tension tower is braced for the difference
-    # between two pulls, and a terminal tower takes all of it and is stayed back.
+    # between two pulls, and a terminal tower takes all of it from one side.
     ('lattice_suspension', 1, SHAPED, ['SIS', 'SPS', 'S S']),
     ('lattice_tension', 1, SHAPED, ['SIS', 'SPS', 'SPS']),
     ('lattice_terminal', 1, SHAPED, ['SIS', 'PPP', 'SPS']),
@@ -350,15 +350,15 @@ BLOCK_NAMES = {
                       'Steps 33 kV up to 400 kV. The transmission line starts here.'),
     'lattice_suspension': ('Suspension Tower', 'Holds a 400 kV line up. Nine towers in ten are one.'),
     'lattice_tension': ('Tension Tower', 'Takes the difference between the pulls either side of it.'),
-    'lattice_terminal': ('Terminal Tower', 'Takes the whole pull of a line, and is stayed back for it.'),
+    'lattice_terminal': ('Terminal Tower', 'Takes the whole pull of a line from one side, on the widest foot.'),
     'mv_disconnector': ('Disconnector',
-                        'Makes a gap in a 24 kV line that you can see. Will not open under load: open the '
+                        'Makes a gap in a 33 kV line that you can see. Will not open under load: open the '
                         'breaker first.'),
     'plant_controller': ('Plant Controller',
                         'Holds every turbine and inverter within 64 blocks to one setpoint, shared out by '
                         'rating. A comparator on it reads how loaded the plant is.'),
     'mv_breaker': ('Circuit Breaker',
-                   'Breaks a 24 kV line under load, and trips itself above 26 MW. Its contacts are in a '
+                   'Breaks a 33 kV line under load, and trips itself above 36 MW. Its contacts are in a '
                    'vacuum, so all it shows is a flag.'),
 }
 

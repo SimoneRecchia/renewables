@@ -79,6 +79,8 @@ CLAMP = ((1.30, 1.55),      # the compression body, over the conductor
          (0.55, 1.05),      # the neck
          (1.40, 0.90))      # the palm the next fitting bolts to
 CLAMP_START = 8.2
+# How far the conductor goes into the compression body, in sixteenths.
+CLAMP_BITE = 0.6
 # And the parallel-groove clamp that joins a third leg, because a bare conductor is not spliced by hand.
 TEE_HALF = 1.9
 
@@ -143,9 +145,9 @@ class Solid:
 class Barrel:
     """A round fitting on the conductor's own axis: a compression clamp's body."""
 
-    def __init__(self, group, material, centre, axis, radius, low, high, cap=True):
+    def __init__(self, group, material, centre, axis, radius, low, high, cap=True, ends=(1,)):
         self.group, self.material, self.centre, self.axis = group, material, centre, axis
-        self.radius, self.low, self.high, self.cap = radius, low, high, cap
+        self.radius, self.low, self.high, self.cap, self.ends = radius, low, high, cap, ends
 
     def draw(self, mesh):
         faces = mesh.faces(self.group, self.material)
@@ -156,7 +158,7 @@ class Barrel:
         base['xyz'.index(self.axis)] = (self.low + self.high) / 2.0
         cylinder(mesh, faces, at(*base), self.axis, out(self.radius), out((self.high - self.low) / 2.0),
                  sides=FITTING, uv_scale=1.0, caps=faces if self.cap else None,
-                 cap_ends=(1,) if self.cap else ())
+                 cap_ends=self.ends if self.cap else ())
 
     def boxes(self):
         index = 'xyz'.index(self.axis)
@@ -302,13 +304,16 @@ def piece_end(spec):
             cx = 8.0 + math.copysign(gap * 0.5, dx)
             cy = clamp_radius + (gap if y > radius + 1e-6 else 0.0)
 
+        # the conductor runs on into the body it is pressed into, so it ends inside the clamp and not at its mouth
         parts.append(Wire([(8.0 + dx, y, HUB_LO), (8.0 + dx, y, CLAMP_START - 3.4),
-                           (cx, cy, CLAMP_START - 1.2), (cx, cy, CLAMP_START)], radius))
+                           (cx, cy, CLAMP_START - 1.2), (cx, cy, CLAMP_START + CLAMP_BITE)], radius))
         cursor = CLAMP_START
-        for length, body in CLAMP:
+        for index, (length, body) in enumerate(CLAMP):
+            # a closed body: the mouth the conductor enters is capped round it, and each step down carries the
+            # wider side's disc, so there is no open tube to see into and nothing hangs round the conductor
             parts.append(Barrel('clamp', 'fitting', (cx, cy, 0.0), 'z',
                                 max(body, radius + 0.10), cursor, cursor + length,
-                                cap=length == CLAMP[-1][0]))
+                                ends=(-1, 1) if index == 0 else (1,)))
             cursor += length
     if subs > 1:
         parts += spacer(spec, HUB_LO + 1.2)
@@ -322,7 +327,8 @@ def piece_loose(spec):
     for dx, y in lanes(radius, subs, spacing):
         parts.append(Wire([(8.0 + dx, y, 3.0), (8.0 + dx, y, 13.0)], radius))
     if subs > 1:
-        parts += spacer(spec, 5.0) + spacer(spec, 11.0)
+        # a spacer near each cut end: the upper pair of a quad lying down is held up by nothing else
+        parts += spacer(spec, 3.6) + spacer(spec, 12.4)
     return parts
 
 
@@ -352,6 +358,13 @@ def clamp_block(spec, connected):
             middle[0 if axis == 'z' else 2] = 8.0 + dx
             parts.append(Barrel('clamp', 'fitting', tuple(middle), axis, radius + 0.24, low, high,
                                 cap=False))
+            # the leg's conductor, from where its arm leaves off into the clamp's groove: the arm stops at the
+            # hub's edge, and without this a tee's legs stopped short of the clamp that joins them
+            index = 2 if axis == 'z' else 0
+            start, end = list(middle), list(middle)
+            start[index] = HUB_LO if near else HUB_HI
+            end[index] = 8.0 - TEE_HALF + CLAMP_BITE if near else 8.0 + TEE_HALF - CLAMP_BITE
+            parts.append(Wire([tuple(start), tuple(end)], radius))
     return parts
 
 
