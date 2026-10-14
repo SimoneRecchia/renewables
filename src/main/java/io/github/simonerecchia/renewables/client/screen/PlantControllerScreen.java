@@ -108,7 +108,8 @@ public class PlantControllerScreen extends PlantScreen<PlantControllerBlockEntit
 		double target = capacity <= 0.0 ? 1.0 : controller.getTargetKw() / capacity;
 
 		label(graphics, Component.translatable("screen.renewables.plant_controller.output"), OUTPUT_Y);
-		value(graphics, fmt("%s of %s", power(controller.getOutputKw()), power(capacity)), OUTPUT_Y);
+		value(graphics, Component.translatable("screen.renewables.plant_controller.output_of",
+				power(controller.getOutputKw()), power(capacity)).getString(), OUTPUT_Y);
 
 		fillBar(graphics, LOAD_BAR_Y, barSpan, GHOST);
 		fillBar(graphics, LOAD_BAR_Y, barWidth(Math.min(1.0, loading)),

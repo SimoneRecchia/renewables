@@ -80,6 +80,12 @@ final class ClientSpan {
 		Vec3 end = WireAnchors.anchorOf(level, wire.endInsulatorId(), wire.endBlockPos());
 		if (end == null) return false;
 
+		// each end on the side facing the other: the same point but at a tension tower, which has a dead-end each side
+		Vec3 startToward = WireAnchors.anchorOf(level, wire.startInsulatorId(), wire.startBlockPos(), end);
+		Vec3 endToward = WireAnchors.anchorOf(level, wire.endInsulatorId(), wire.endBlockPos(), start);
+		if (startToward != null) start = startToward;
+		if (endToward != null) end = endToward;
+
 		return place(start.x, start.y, start.z, end.x, end.y, end.z);
 	}
 

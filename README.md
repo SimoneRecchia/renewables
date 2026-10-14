@@ -62,6 +62,10 @@ medium-voltage line and are thrown with an empty hand or by redstone. Coming bac
 second substation transformer and a medium-voltage **run** laid on the ground, because a tower and a pole share
 no conductor.
 
+A transformer passes whatever it is asked to and loses its core and copper losses doing it; past its rating it
+heats, as IEC 60076-7 says it does, and its winding and oil thermometers - or, far past it, its overcurrent relay -
+take it off the line. An empty hand on the tank reads its hot spot, and resets a tripped one once it has cooled.
+
 The **Power Wrench** reads all of it: right-click a machine, or point at one up to 16 blocks away, and its panel
 opens.
 

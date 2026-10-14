@@ -7,10 +7,14 @@ import io.github.simonerecchia.renewables.grid.InsulatorHost;
 import io.github.simonerecchia.renewables.model.ModelDefinition;
 import io.github.simonerecchia.renewables.model.ModelDefinitions;
 
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -21,12 +25,25 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  *
  * Only insulators are candidates - aiming at a pole's shaft selects nothing, rather than starting a connection that
  * could never finish - and where two lie on the ray the one nearer the eye wins ({@link PartPicker#pointedFitting}
- * does the ray; this turns its answer into an id, an index and a point).
+ * does the ray; this turns its answer into an id, an index and a point).  A machine with fittings and no model
+ * definition, a ground-laid run, is aimed at by a box round each anchor instead ({@link #bareFitting}).
  */
 @OnlyIn(Dist.CLIENT)
 public final class FittingSelector {
 	/** How far from the player, per axis, a click in the air looks for a machine: the reach of a lattice tower. */
 	public static final int AIR_REACH = 16;
+
+	/**
+	 * Half the side of the box a fitting with no model group is aimed at, round its anchor: four pixels, which holds
+	 * a run's dead-end clamp in any of its four turns, a splayed bundle's four included (gen_conductor_models CLAMP).
+	 */
+	static final double BARE_FITTING_HALF = 4.0 / 16.0;
+	/** Longer than the diagonal of the air click's cube, so the segment stands in for the picker's endless ray. */
+	private static final double BARE_RAY_LENGTH = 64.0;
+	/** What a fitting with no model group is called, for {@code InsulatorHost.powerType}. */
+	private static final String BARE_PART_PREFIX = "fitting_";
+
+	private static final Neighbourhood NEARBY = new Neighbourhood();
 
 	private FittingSelector() {
 	}
@@ -48,11 +65,12 @@ public final class FittingSelector {
 		BlockEntity entity = level.getBlockEntity(hostPos);
 		if (!(entity instanceof InsulatorHost host)) return null;
 
+		ModelDefinition definition = ModelDefinitions.of(level.getBlockState(hostPos).getBlock());
+		// a ground-laid run is drawn from block models: no OBJ group for the picker, only the anchor it says
+		if (definition == null) return bareFitting(hostPos, host, eye, look);
+
 		String part = PartPicker.pointedFitting(level, hostPos, eye, look);
 		if (part == null) return null;
-
-		ModelDefinition definition = ModelDefinitions.of(level.getBlockState(hostPos).getBlock());
-		if (definition == null) return null;
 
 		int index = definition.insulators().indexOf(part);
 		if (index < 0) return null;
@@ -74,6 +92,39 @@ public final class FittingSelector {
 	}
 
 	/**
+	 * The fitting of a machine with no model groups - a run's dead-end clamp - aimed at like an insulator: the ray has
+	 * to pass through a box of {@link #BARE_FITTING_HALF} round the fitting's anchor, the nearest entry winning.  The
+	 * anchor is both the point and where the wire ends, since there is no porcelain to take the middle of.
+	 */
+	@Nullable
+	static Selection bareFitting(BlockPos hostPos, InsulatorHost host, Vec3 eye, Vec3 look) {
+		int[] ids = host.getInsulatorIds();
+		Vec3 far = eye.add(look.normalize().scale(BARE_RAY_LENGTH));
+
+		Selection best = null;
+		double bestDistance = Double.MAX_VALUE;
+		for (int index = 0; index < ids.length; index++) {
+			Vec3 anchor = host.getWirePosition(index);
+			if (anchor == null) continue;
+
+			// cut at the block's floor: the ray goes on through the ground, and nothing is drawn under it
+			AABB box = new AABB(anchor.x - BARE_FITTING_HALF, Math.max(anchor.y - BARE_FITTING_HALF, hostPos.getY()),
+					anchor.z - BARE_FITTING_HALF, anchor.x + BARE_FITTING_HALF, anchor.y + BARE_FITTING_HALF,
+					anchor.z + BARE_FITTING_HALF);
+			Vec3 entry = box.clip(eye, far).orElse(null);
+			if (entry == null) continue;
+
+			double distance = entry.distanceToSqr(eye);
+			if (distance < bestDistance) {
+				bestDistance = distance;
+				best = new Selection(hostPos.immutable(), host, index, ids[index], BARE_PART_PREFIX + index, anchor, anchor);
+			}
+		}
+
+		return best;
+	}
+
+	/**
 	 * For a click in the air, which reaches past the block range: the insulator, among all the machines within
 	 * {@link #AIR_REACH} blocks of {@code around} on each axis, whose point is nearest the eye.
 	 *
@@ -85,15 +136,7 @@ public final class FittingSelector {
 		Selection best = null;
 		double bestDistance = Double.MAX_VALUE;
 
-		for (BlockEntity entity : ClientBlockEntities.hosts()) {
-			BlockPos pos = entity.getBlockPos();
-			if (Math.abs(pos.getX() - around.getX()) > AIR_REACH || Math.abs(pos.getY() - around.getY()) > AIR_REACH
-					|| Math.abs(pos.getZ() - around.getZ()) > AIR_REACH) {
-				continue;
-			}
-
-			if (entity.getLevel() != level) continue;
-
+		for (BlockPos pos : NEARBY.around(level, around)) {
 			Selection candidate = select(level, pos, eye, look);
 			if (candidate == null) continue;
 
@@ -105,5 +148,54 @@ public final class FittingSelector {
 		}
 
 		return best;
+	}
+
+	/** A new world: the cached neighbourhood belongs to the last one. */
+	public static void forget() {
+		NEARBY.forget();
+	}
+
+	/**
+	 * The machines with fittings within {@link #AIR_REACH} of a block, worked out once per tick.
+	 *
+	 * The preview asks every frame while a connection is pending and the crosshair is on nothing, and walking every
+	 * tracked machine of the level each time was a list of all of them per frame.  Machines load, move and go on
+	 * ticks, so a tick's answer holds for that tick's frames; {@link #select} reads the block entity again anyway.
+	 */
+	private static final class Neighbourhood {
+		private final List<BlockPos> positions = new ArrayList<>();
+		private WeakReference<Level> level = new WeakReference<>(null);
+		private long gameTime = Long.MIN_VALUE;
+		@Nullable
+		private BlockPos around;
+
+		List<BlockPos> around(Level level, BlockPos around) {
+			if (level != this.level.get() || level.getGameTime() != gameTime || !around.equals(this.around)) {
+				positions.clear();
+				for (BlockEntity entity : ClientBlockEntities.hosts()) {
+					BlockPos pos = entity.getBlockPos();
+					if (entity.getLevel() != level || Math.abs(pos.getX() - around.getX()) > AIR_REACH
+							|| Math.abs(pos.getY() - around.getY()) > AIR_REACH
+							|| Math.abs(pos.getZ() - around.getZ()) > AIR_REACH) {
+						continue;
+					}
+
+					positions.add(pos.immutable());
+				}
+
+				this.level = new WeakReference<>(level);
+				this.gameTime = level.getGameTime();
+				this.around = around.immutable();
+			}
+
+			return positions;
+		}
+
+		void forget() {
+			positions.clear();
+			level = new WeakReference<>(null);
+			gameTime = Long.MIN_VALUE;
+			around = null;
+		}
 	}
 }

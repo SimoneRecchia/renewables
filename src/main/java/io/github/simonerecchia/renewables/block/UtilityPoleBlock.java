@@ -1,6 +1,7 @@
 package io.github.simonerecchia.renewables.block;
 
 import io.github.simonerecchia.renewables.item.ClientHooks;
+import io.github.simonerecchia.renewables.item.Tools;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 
 import java.util.List;
@@ -127,13 +128,15 @@ public class UtilityPoleBlock extends MachineBlock {
 	 * An empty hand opens the arms' configuration; the screen is the client's, and the server does nothing
 	 * about it until the screen sends its numbers back.
 	 *
-	 * Anything in the hand passes the click on to the item: a reel strings a wire, a block is built against it,
-	 * the wrench reads it.  A shell forwards its clicks here, so the same holds on any cell of the pole.
+	 * Anything in the hand, or a tool of the mod in the other one, passes the click on to the item: a reel strings a
+	 * wire, a block is built against it, the wrench reads it.  A shell forwards its clicks here, so the same holds on
+	 * any cell of the pole.
 	 */
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
-		if (!level.isClientSide) return InteractionResult.PASS;
+		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
+		// moving the arms moves the wires: a change to the world, which adventure and spectator may not make
+		if (!level.isClientSide || !player.mayBuild()) return InteractionResult.PASS;
 
 		ClientHooks.openPoleConfiguration(pos);
 		return InteractionResult.SUCCESS;

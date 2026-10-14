@@ -192,7 +192,8 @@ public class PvInverterScreen extends PlantScreen<PvInverterBlockEntity> {
 		double scale = spec.maxAmbientC();
 
 		label(graphics, Component.translatable("screen.renewables.pv_inverter.cabinet"), 112);
-		value(graphics, fmt("%.0f °C  /  air %.0f °C", inverter.cabinetTempC(), inverter.ambientTempC()), 112);
+		value(graphics, Component.translatable("screen.renewables.pv_inverter.temperatures",
+				fmt("%.0f", inverter.cabinetTempC()), fmt("%.0f", inverter.ambientTempC())).getString(), 112);
 
 		int onset = barWidth(spec.derateOnsetC() / scale);
 		zone(graphics, TEMP_BAR_Y, 0, onset, 0xFF2F6E3A);

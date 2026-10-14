@@ -172,7 +172,9 @@ final class RenderContext { MeshModel model(); ResourceLocation texture(); int p
 abstract class MachineRenderer {                                // possiede i buffer GPU: una cache per tipo di block entity
     interface Draw<T extends BlockEntity> { void draw(T machine, RenderContext context, PoseStack poseStack); }
     protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent e, Class<T> type, double maxDistanceSq,
-            Function<BlockState, Direction> facing, Direction authored [, Draw<T> draw [, Predicate<T> filter]]);
+            Function<BlockState, Direction> facing, Direction authored [, Draw<T> draw [, Predicate<T> filter
+            [, BiFunction<T, MeshModel, AABB> bounds]]]);           // fuori dal frustum non si disegna
+    public static boolean inRange(BlockEntity machine, Vec3 camera); // i fili non pendono da ciò che non si disegna
     protected static void renderGrouped(RenderContext context, Map<String, Matrix4f> poses);
     protected static void renderGrouped(RenderContext context, PoseStack stack, Predicate<String> visible);
     public static void releaseAll();                            // ricarica risorse, logout, cambio livello
@@ -289,7 +291,9 @@ final class PartPicker {
     static @Nullable Vec3 partCenter(Level level, BlockPos pos, String part);                              // op. 3
     static @Nullable Vec3 nearestHit(Level level, BlockPos pos, Vec3 origin, Vec3 direction);              // op. 4: punto d'ingresso
 }
-// Se la block entity in pos implementa ExtraPose, il picker la applica (stessa trasformazione del disegno).
+// Se la block entity in pos implementa ExtraPose, il picker la applica (stessa trasformazione del disegno), e poi
+// la posa di ogni gruppo che il suo renderer ha registrato in RP.client.model.GroupPoses (scala dell'inverter, turbina
+// alla sua scala col fusto stirato, torre nuda solo fusto): si punta ciò che è disegnato.
 // Facing e authored si ricavano dal blockstate e da ModelDefinitions.
 
 // RP.client.wire.ClientWires (C) espone per le campate: all(), pending(), ecc.; InsulatorIndex.find(id) -> InsulatorHost.

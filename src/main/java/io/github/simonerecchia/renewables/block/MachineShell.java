@@ -8,6 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -138,12 +139,12 @@ public interface MachineShell {
 		return null;
 	}
 
-	/** Whether a cell already standing here is this machine's to overwrite. */
+	/** Whether a cell already standing here is this machine's to overwrite: its own, or an orphan's. */
 	private static boolean mine(Level level, BlockPos pos, BlockPos target, BlockState there) {
 		if (!(there.getBlock() instanceof MachineShellBlock)) return false;
 
 		BlockPos owner = hostOf(level, target);
-		return owner == null || owner.equals(pos);
+		return owner != null ? owner.equals(pos) : orphan(level, target);
 	}
 
 	/**
@@ -182,22 +183,64 @@ public interface MachineShell {
 		place(level, pos, state);
 	}
 
-	/** The machine a cell belongs to, or null if it is not a cell or its machine has gone. */
+	/**
+	 * The machine a cell belongs to, or null if it is not a cell, its machine has gone, or its machine is in a chunk
+	 * that is not loaded - which is not asked, because asking a server level for a block in such a chunk loads it.
+	 */
 	static BlockPos hostOf(BlockGetter level, BlockPos pos) {
 		BlockState state = level.getBlockState(pos);
 		if (!(state.getBlock() instanceof MachineShellBlock)) return null;
 
 		BlockPos host = MachineShellBlock.pointsAt(pos, state);
+		if (!loaded(level, host)) return null;
+
 		BlockState hostState = level.getBlockState(host);
 		if (!(hostState.getBlock() instanceof MachineShell machine)) return null;
 
 		return claims(machine, hostState, host, pos) ? host : null;
 	}
 
-	/** Where a click on this block was really aimed. */
+	/**
+	 * Whether the cell at {@code pos} is an orphan: a cell whose machine's chunk is loaded and which no machine there
+	 * claims.  A cell whose machine cannot be asked yet is not one.
+	 */
+	static boolean orphan(BlockGetter level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		if (!(state.getBlock() instanceof MachineShellBlock)) return false;
+
+		return loaded(level, MachineShellBlock.pointsAt(pos, state)) && hostOf(level, pos) == null;
+	}
+
+	/** Whether a position can be read without loading anything: a getter that is not a level holds only what it has. */
+	static boolean loaded(BlockGetter level, BlockPos pos) {
+		return !(level instanceof LevelReader reader) || reader.hasChunkAt(pos);
+	}
+
+	/**
+	 * Where a click on this block was really aimed: the machine a cell is part of, the machine a carrier holds up, or
+	 * the block itself.
+	 */
 	static BlockPos hostOr(BlockGetter level, BlockPos pos) {
 		BlockPos host = hostOf(level, pos);
-		return host == null ? pos : host;
+		if (host != null) return host;
+
+		if (level.getBlockState(pos).getBlock() instanceof Carrier carrier) {
+			BlockPos carried = carrier.carriedMachine(level, pos);
+			if (carried != null) return carried;
+		}
+
+		return pos;
+	}
+
+	/**
+	 * A block that is part of a machine without being one of its cells: a turbine's tower, which is a pile of blocks of
+	 * its own and carries the machine's fitting at its foot.  A click on it - a reel on the porcelain at the foot - is a
+	 * click on the machine it carries.
+	 */
+	interface Carrier {
+		/** The machine this block holds up, or null when it holds up none. */
+		@Nullable
+		BlockPos carriedMachine(BlockGetter level, BlockPos pos);
 	}
 
 	/** Whether a machine at {@code host} says the cell at {@code pos} is one of its own. */

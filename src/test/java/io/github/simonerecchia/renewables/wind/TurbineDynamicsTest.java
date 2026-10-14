@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.simonerecchia.renewables.api.WorldConditions;
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
 import io.github.simonerecchia.renewables.catalog.TurbineCatalog;
+import io.github.simonerecchia.renewables.weather.Atmosphere;
 import io.github.simonerecchia.renewables.wind.TurbineDynamics.YawStep;
 
 import org.junit.jupiter.api.Test;
@@ -404,5 +405,69 @@ class TurbineDynamicsTest {
 		double rpm = C130.rotorRpmAt(9.0);
 		assertTrue(C130.powerWhileRunningKw(9.0, 1.225) < C130.torqueCeilingKw(rpm));
 		assertEquals(0.0, TurbineDynamics.producedKw(true, 4000.0, 4000.0, 12.6, C130), 0.0);
+	}
+
+	/**
+	 * The review's flapping latch: in a forest (TI 0.25) the gust trip is at a mean of 30 / 1.75 = 17.14 m/s, and with the
+	 * release on the mean alone (22) a mean of 17.14 +- 0.05 opened and shut the latch 13 times in 400 ticks.  The release
+	 * wants the gust under 1.2 x 22 as well, a mean of 15.1: the latch trips once and holds.
+	 */
+	@Test
+	void aForestGustOnTheTripLevelNoLongerStopsAndStartsTheMachine() {
+		double ti = 0.25;
+		boolean latched = false;
+		int changes = 0;
+		for (int tick = 0; tick < 400; tick++) {
+			double mean = 17.14 + 0.05 * Math.sin(tick * 0.7);
+			boolean next = TurbineDynamics.updateCutOut(latched, mean, Atmosphere.gustFrom(mean, ti), C130);
+			if (next != latched) changes++;
+			latched = next;
+		}
+
+		assertEquals(1, changes);
+	}
+
+	// ---- the blades, under curtailment ----
+
+	/** The review's case: a C130 at 9 m/s held to 1000 of the 2642 kW the wind offers reported its blades flat. */
+	@Test
+	void aCurtailedMachinePitchesItsBlades() {
+		double offered = C130.powerWhileRunningKw(9.0, RHO);
+		double pitch = TurbineDynamics.collectivePitch(false, 9.0, offered, 1000.0, C130);
+		assertTrue(pitch > 5.0 && pitch < 25.0, "pitch " + pitch);
+		// held to more than it is offered is not held at all
+		assertEquals(0.0, TurbineDynamics.collectivePitch(false, 9.0, offered, 4000.0, C130), 1e-9);
+		// held to nothing, it is feathered, and idles
+		assertEquals(TurbineDynamics.FEATHERED_PITCH, TurbineDynamics.collectivePitch(false, 9.0, offered, 0.0, C130), 1e-9);
+		// the harder it is held, the further it pitches
+		assertTrue(TurbineDynamics.collectivePitch(false, 9.0, offered, 500.0, C130) > pitch);
+	}
+
+	/** Curtailment and regulation shed by the same rule: the curve's pitch at a wind over rated is the pitch that keeps (rated / v)^3. */
+	@Test
+	void curtailmentAndRegulationAgreeOnWhatAPitchSheds() {
+		double rated = C130.ratedSpeed();
+		for (double v = rated + 0.25; v < C130.stormOnsetSpeed(); v += 0.5) {
+			assertEquals(TurbineDynamics.collectivePitch(false, v, C130), TurbineDynamics.sheddingPitch(Math.pow(rated / v, 3), C130), 1e-9, "at " + v);
+			// curtailed in the regulating range, it pitches further than the curve alone
+			double offered = C130.powerWhileRunningKw(v, RHO);
+			assertTrue(TurbineDynamics.collectivePitch(false, v, offered, offered * 0.5, C130) > TurbineDynamics.collectivePitch(false, v, C130));
+		}
+
+		// and a machine that is not held follows the curve exactly, braked included
+		for (double v = 0.0; v <= 30.0; v += 0.5) {
+			double offered = C130.powerWhileRunningKw(v, RHO);
+			assertEquals(TurbineDynamics.collectivePitch(false, v, C130), TurbineDynamics.collectivePitch(false, v, offered, C130.ratedPowerKw(), C130), 1e-12);
+			assertEquals(90.0, TurbineDynamics.collectivePitch(true, v, offered, 0.0, C130), 1e-12);
+		}
+	}
+
+	/** A rotor partly behind blocks takes the open share of what the wind offers; one no air reaches takes nothing. */
+	@Test
+	void aRotorTakesOnlyTheShareOfTheWindThatReachesIt() {
+		double open = TurbineDynamics.uncappedKw(false, 10.0, RHO, C130);
+		assertEquals(open, TurbineDynamics.uncappedKw(false, 10.0, RHO, 1.0, C130), 1e-9);
+		assertEquals(open * 0.4, TurbineDynamics.uncappedKw(false, 10.0, RHO, 0.4, C130), 1e-9);
+		assertEquals(0.0, TurbineDynamics.uncappedKw(false, 10.0, RHO, 0.0, C130), 0.0);
 	}
 }

@@ -1,6 +1,7 @@
 package io.github.simonerecchia.renewables.client.screen;
 
 import io.github.simonerecchia.renewables.api.Nameplate;
+import io.github.simonerecchia.renewables.block.FePool;
 import io.github.simonerecchia.renewables.block.PowerBoxBlockEntity;
 import io.github.simonerecchia.renewables.block.UtilityPoleBlockEntity;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
@@ -28,9 +29,6 @@ public class PowerInfoScreen extends Screen {
 	private static final int TITLE_COLOUR = 0xFFFFFF;
 	private static final int LINE_GAP = 2;
 	private static final int TITLE_GAP = 8;
-
-	/** The most a power box hands one neighbour in a tick. */
-	private static final int KIOSK_TRANSFER_FE_PER_TICK = 2_000;
 
 	private final BlockPos target;
 
@@ -93,7 +91,10 @@ public class PowerInfoScreen extends Screen {
 		}
 
 		if (machine instanceof PowerBoxBlockEntity kiosk) {
-			lines.add(Component.translatable("tooltip.renewables.power.fe", kiosk.energyStored(), KIOSK_TRANSFER_FE_PER_TICK));
+			// what is stored against what it can hold, and what left in the last tick: the second figure used to be the
+			// most it pushes one neighbour, printed as if it were a rate after a quantity
+			lines.add(Component.translatable("tooltip.renewables.power.fe", kiosk.energyBuffer(), FePool.CAPACITY));
+			lines.add(Component.translatable("tooltip.renewables.power.fe_out", kiosk.energyOut()));
 		}
 
 		if (machine instanceof UtilityPoleBlockEntity pole) {
