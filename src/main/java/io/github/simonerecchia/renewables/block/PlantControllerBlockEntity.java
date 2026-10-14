@@ -129,7 +129,11 @@ public class PlantControllerBlockEntity extends BlockEntity {
 
 	/** Shares the plant setpoint out in proportion to nameplate, which is what a real controller does. */
 	private void dispatch(ServerLevel serverLevel) {
-		if (mode == Mode.OFF) return;
+		// however the mode got to OFF - the panel, a computer, a data command - nothing stays held
+		if (mode == Mode.OFF) {
+			release();
+			return;
+		}
 
 		double target = mode == Mode.REDSTONE
 				? capacityKw * serverLevel.getBestNeighborSignal(worldPosition) / 15.0
