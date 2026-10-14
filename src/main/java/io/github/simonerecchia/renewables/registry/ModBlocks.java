@@ -152,9 +152,15 @@ public final class ModBlocks {
 	private ModBlocks() {
 	}
 
-	/** The shared shape of a machine: hard to break without the right tool, and not a full cube. */
+	/**
+	 * The shared shape of a machine: hard to break without the right tool, and not a full cube - but solid to a
+	 * fluid.  Vanilla calls a block solid only when its collision box is nearly a cube (and never when the shape is
+	 * dynamic), and a block that is not solid is one water flows into and a bucket replaces: kiosks, switches,
+	 * towers and every cell of a big machine were washed away like torches, and lava took them without a drop.
+	 */
 	private static BlockBehaviour.Properties machine(float hardness, float resistance) {
-		return BlockBehaviour.Properties.of().strength(hardness, resistance).requiresCorrectToolForDrops().noOcclusion();
+		return BlockBehaviour.Properties.of().strength(hardness, resistance).requiresCorrectToolForDrops().noOcclusion()
+				.forceSolidOn();
 	}
 
 	private static BlockBehaviour.Properties glass(float hardness, float resistance) {

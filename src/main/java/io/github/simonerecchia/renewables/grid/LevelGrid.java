@@ -6,6 +6,7 @@ import io.github.simonerecchia.renewables.catalog.ConductorCatalog;
 import io.github.simonerecchia.renewables.net.Net;
 import io.github.simonerecchia.renewables.net.packet.PowerUpdatePayload;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.DoubleUnaryOperator;
+import java.util.function.LongFunction;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +31,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * calculations is only what has to survive them - which positions were powered (so a machine that drops out is told
  * zero), what the clients were last sent (so that a steady reading is not repeated every tick) and the disturbance a
  * turbine is in the middle of.
+ *
+ * Lengths of ground-laid conductor that touch are one conductor: the runs joined to a run a span reaches are in the
+ * graph too, a block of that conductor between each two ({@link #joinRuns}).
  *
  * Chunks are never loaded from here.  A span with an end in a chunk that is not loaded is left alone and left out of
  * the graph until the chunk returns; a span whose end is in a loaded chunk but is no longer a machine of the kind it
@@ -56,7 +61,7 @@ final class LevelGrid {
 	}
 
 	/** What one block position holds, read once per calculation. */
-	private record Slot(boolean loaded, @Nullable InsulatorHost host, int[] ids) {
+	record Slot(boolean loaded, @Nullable InsulatorHost host, int[] ids) {
 		static final Slot UNLOADED = new Slot(false, null, new int[0]);
 	}
 
@@ -151,18 +156,22 @@ final class LevelGrid {
 			edges.add(new GridSolver.Edge(span.startInsulatorId(), span.endInsulatorId(), ohms, volts, forward, backward));
 		}
 
+		joinRuns(key -> slots.computeIfAbsent(key, k -> read(level, BlockPos.of(k))), nodes, hosts, firstNode, edges);
+
 		// what a machine burns carrying power across itself (a transformer's no-load and load losses), and where the
 		// power ends: the machines that draw it
 		Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
 		Set<Long> loads = new HashSet<>();
+		Map<Long, Boolean> switches = new HashMap<>();
 		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
 			InsulatorHost host = entry.getValue();
 			if (host.losesInPassing()) passages.put(entry.getKey(), host::throughLossKw);
 			if (host.isLoad()) loads.add(entry.getKey());
+			if (host.passesThrough()) switches.put(entry.getKey(), host.closed());
 		}
 
 		List<GridSolver.Source> sources = sources(level, hosts, firstNode);
-		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads);
+		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads, switches);
 		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(nodes.values(), readings);
 
 		deliver(level, hosts, byPosition);
@@ -176,6 +185,56 @@ final class LevelGrid {
 		nodes.put(id, new GridSolver.Node(id, key, end.host().busOf(end.index())));
 		hosts.putIfAbsent(key, end.host());
 		firstNode.putIfAbsent(key, id);
+	}
+
+	/**
+	 * Adds the lengths of ground-laid conductor joined to the runs already in the graph, and a block of conductor
+	 * between every two that touch, so that power laid along a run gets from the span at one end to the span at the
+	 * other.  Who joins whom is each run's own shape ({@link InsulatorHost#laidNeighbours}), which it took when it was
+	 * laid, so nothing is searched for: each run of a connected stretch is read once a calculation, as a span's end
+	 * is.  A run in a chunk that is not loaded is left out, and the stretch beyond it with it.
+	 */
+	static void joinRuns(LongFunction<Slot> slotAt, Map<Integer, GridSolver.Node> nodes,
+			Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode, List<GridSolver.Edge> edges) {
+		ArrayDeque<Long> queue = new ArrayDeque<>();
+		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
+			if (entry.getValue().laidConductor() != null) queue.add(entry.getKey());
+		}
+
+		Set<Long> seen = new HashSet<>(queue);
+		while (!queue.isEmpty()) {
+			long at = queue.poll();
+			InsulatorHost run = hosts.get(at);
+			ConductorSpec conductor = run.laidConductor();
+			int id = firstNode.get(at);
+			BlockPos here = BlockPos.of(at);
+
+			for (BlockPos next : run.laidNeighbours()) {
+				long key = next.asLong();
+				Slot slot = slotAt.apply(key);
+				InsulatorHost other = slot.host();
+				if (other == null || other.laidConductor() == null || !other.laidConductor().id().equals(conductor.id())) continue;
+				if (!other.laidNeighbours().contains(here) || slot.ids().length == 0 || slot.ids()[0] <= 0) continue;
+
+				int otherId = slot.ids()[0];
+				if (!nodes.containsKey(otherId)) {
+					nodes.put(otherId, new GridSolver.Node(otherId, key, other.busOf(0)));
+					hosts.putIfAbsent(key, other);
+					firstNode.putIfAbsent(key, otherId);
+				}
+
+				// each pair once, from its lower end
+				if (at < key) {
+					boolean forward = FlowRules.allows(run.feeds(other), other.passesThrough(),
+							FittingTypes.POWER_BIDIRECTIONAL, FittingTypes.POWER_BIDIRECTIONAL, false);
+					boolean backward = FlowRules.allows(other.feeds(run), run.passesThrough(),
+							FittingTypes.POWER_BIDIRECTIONAL, FittingTypes.POWER_BIDIRECTIONAL, false);
+					edges.add(new GridSolver.Edge(id, otherId, conductor.resistanceOhms(1.0), conductor.nominalVolts(), forward, backward));
+				}
+
+				if (seen.add(key)) queue.add(key);
+			}
+		}
 	}
 
 	/** Every machine in the graph that is putting power on the network, with the disturbance it is carrying. */
