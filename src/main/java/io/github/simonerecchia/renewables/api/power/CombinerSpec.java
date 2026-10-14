@@ -26,8 +26,8 @@ public record CombinerSpec(
 		/** What the monitoring and the auxiliaries draw, watts. */
 		double selfConsumptionW
 ) {
-	/** Fuse rating a string needs, as a multiple of its short-circuit current. */
-	public static final double FUSE_MARGIN = 1.4;
+	/** Fuse rating a string needs, as a multiple of its short-circuit current: IEC 62548 asks for In > 1.5 Isc STC. */
+	public static final double FUSE_MARGIN = 1.5;
 
 	public CombinerSpec {
 		if (fusedInputs < 1) throw new IllegalArgumentException(id + ": a combiner box combines something");
@@ -41,7 +41,7 @@ public record CombinerSpec(
 		NONE,
 		/** The string's cold open-circuit voltage is above what the box is insulated for. */
 		INSULATION,
-		/** No fuse fitted here can protect a string that makes this much current. */
+		/** No fuse fitted here, or none the module allows, can protect a string that makes this much current. */
 		FUSE,
 		/** Every way is used. */
 		WAYS,
@@ -52,7 +52,9 @@ public record CombinerSpec(
 	/** Whether one more array's strings will go in, and if not, which limit stopped them. */
 	public Refusal accepts(PvArraySpec array, int stringsUsed, double currentUsed, double currentCeiling) {
 		if (!insulationFits(array.stringOpenCircuitVoltage(PvArraySpec.COLDEST_DESIGN_CELL_C))) return Refusal.INSULATION;
-		if (!fuseFits(array.module().isc())) return Refusal.FUSE;
+		// the fuse has to fit the holder and stay within what the module itself may be protected by
+		double isc = array.module().isc();
+		if (!fuseFits(isc) || FUSE_MARGIN * isc > array.module().seriesFuseA()) return Refusal.FUSE;
 		if (stringsUsed + array.strings() > fusedInputs) return Refusal.WAYS;
 
 		double amps = array.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE) * array.strings();

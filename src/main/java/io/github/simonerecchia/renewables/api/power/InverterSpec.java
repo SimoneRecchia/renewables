@@ -31,6 +31,8 @@ public record InverterSpec(
 		/** Voltage at which the machine wakes up and starts looking for a maximum power point. */
 		double startupVolts,
 		double peakEfficiency,
+		/** European weighted efficiency as the datasheet prints it, which fixes how flat the curve is. */
+		double ratedEuropeanEfficiency,
 		/** Where on the load curve the peak sits, as a fraction of nameplate. */
 		double peakLoadFraction,
 		/** What the machine draws overnight, in watts. */
@@ -45,13 +47,12 @@ public record InverterSpec(
 		double maxAmbientC,
 		Cooling cooling
 ) {
-	/**
-	 * The load points and weights of the European efficiency, from the DIN/EN convention.
-	  *
-	 * A desert plant would be better judged by the CEC weighting, which puts more of it at full load.
-	 */
+	/** The load points and weights of the European efficiency (EN 50530). */
 	private static final double[] EURO_LOADS = {0.05, 0.10, 0.20, 0.30, 0.50, 1.00};
 	private static final double[] EURO_WEIGHTS = {0.03, 0.06, 0.13, 0.10, 0.48, 0.20};
+	/** And of the CEC weighted efficiency, which puts more of it near full load, as a sunnier climate does. */
+	private static final double[] CEC_LOADS = {0.10, 0.20, 0.30, 0.50, 0.75, 1.00};
+	private static final double[] CEC_WEIGHTS = {0.04, 0.05, 0.12, 0.21, 0.53, 0.05};
 
 	public enum Cooling {
 		/** No moving parts. */
@@ -83,6 +84,9 @@ public record InverterSpec(
 		if (mpptMaxVolts <= mpptMinVolts) throw new IllegalArgumentException(id + ": invalid MPPT window");
 		if (maxDcVolts < mpptMaxVolts) throw new IllegalArgumentException(id + ": the MPPT window has to fit inside the input rating");
 		if (peakEfficiency <= 0.0 || peakEfficiency >= 1.0) throw new IllegalArgumentException(id + ": efficiency is a fraction under one");
+		if (ratedEuropeanEfficiency <= 0.0 || ratedEuropeanEfficiency > peakEfficiency) {
+			throw new IllegalArgumentException(id + ": a weighted efficiency cannot beat the peak");
+		}
 		if (peakLoadFraction <= 0.0 || peakLoadFraction > 1.0) throw new IllegalArgumentException(id + ": the peak sits somewhere on the load curve");
 		if (minPowerFactor <= 0.0 || minPowerFactor > 1.0) throw new IllegalArgumentException(id + ": power factor is a fraction");
 		if (maxAmbientC <= derateOnsetC) throw new IllegalArgumentException(id + ": derating needs a band to happen over");
@@ -90,38 +94,84 @@ public record InverterSpec(
 
 	// ---- the efficiency curve ----
 
-	/** Half the total loss at the peak, as a fraction of nameplate. */
-	private double lossScale() {
-		return (1.0 / peakEfficiency - 1.0) / 2.0;
+	/**
+	 * The loss model of Schmidt and Sauer, in fractions of nameplate at a load fraction L:
+	 * {@code p0 + p1 L + p2 L^2} - what runs whatever passes (control, fans, the bridge's magnetising), what goes with
+	 * the current (switching, diode drops) and what goes with its square (conduction).
+	 *
+	 * The datasheet fixes all three: the peak sits where {@code p0 = p2 L^2}, its height fixes {@code p1 + 2 p2 L}, and
+	 * the European efficiency fixes how the rest is shared between the linear and the square term.  Found by bisection
+	 * on p2, between a flat curve (p2 = 0, which has the peak's efficiency everywhere) and one with no linear term,
+	 * the lowest European figure a curve with this peak can have.
+	 *
+	 * @return {p0, p1, p2}
+	 */
+	public double[] lossCoefficients() {
+		double total = 1.0 / peakEfficiency - 1.0;
+		double low = 0.0;
+		double high = total / (2.0 * peakLoadFraction);
+		if (weighted(EURO_LOADS, EURO_WEIGHTS, coefficients(high)) >= ratedEuropeanEfficiency) return coefficients(high);
+
+		for (int i = 0; i < 60; i++) {
+			double middle = (low + high) / 2.0;
+			if (weighted(EURO_LOADS, EURO_WEIGHTS, coefficients(middle)) > ratedEuropeanEfficiency) {
+				low = middle;
+			} else {
+				high = middle;
+			}
+		}
+
+		return coefficients((low + high) / 2.0);
+	}
+
+	/** The three coefficients for a given square term, holding the peak where and as high as the datasheet has it. */
+	private double[] coefficients(double p2) {
+		double total = 1.0 / peakEfficiency - 1.0;
+		return new double[] {p2 * peakLoadFraction * peakLoadFraction, Math.max(0.0, total - 2.0 * p2 * peakLoadFraction), p2};
+	}
+
+	private static double efficiency(double load, double[] p) {
+		if (load <= 0.0) return 0.0;
+
+		return load / (load + p[0] + p[1] * load + p[2] * load * load);
+	}
+
+	private static double weighted(double[] loads, double[] weights, double[] p) {
+		double total = 0.0;
+		for (int i = 0; i < loads.length; i++) {
+			total += weights[i] * efficiency(loads[i], p);
+		}
+
+		return total;
 	}
 
 	/** Fixed loss, as a fraction of nameplate: everything that runs whether power is passing or not. */
 	public double noLoadLossFraction() {
-		return lossScale() * peakLoadFraction;
+		return lossCoefficients()[0];
 	}
 
-	/** Resistive loss coefficient: this times the square of the load fraction is the conduction loss. */
-	public double resistiveLossFraction() {
-		return lossScale() / peakLoadFraction;
+	/** All the losses at a load fraction, as a fraction of nameplate. */
+	public double lossFractionAt(double loadFraction) {
+		double load = Math.max(0.0, Math.min(loadFraction, 1.0));
+		double[] p = lossCoefficients();
+		return p[0] + p[1] * load + p[2] * load * load;
 	}
 
 	/** Efficiency at a fraction of nameplate output. */
 	public double efficiencyAt(double loadFraction) {
 		if (loadFraction <= 0.0) return 0.0;
 
-		double load = Math.min(loadFraction, 1.0);
-		double losses = noLoadLossFraction() + resistiveLossFraction() * load * load;
-		return load / (load + losses);
+		return efficiency(Math.min(loadFraction, 1.0), lossCoefficients());
 	}
 
-	/** European efficiency: the curve above, averaged at the six standard load points. */
+	/** European efficiency: the curve above, averaged at the six EN 50530 load points.  The datasheet's, by construction. */
 	public double europeanEfficiency() {
-		double total = 0.0;
-		for (int i = 0; i < EURO_LOADS.length; i++) {
-			total += EURO_WEIGHTS[i] * efficiencyAt(EURO_LOADS[i]);
-		}
+		return weighted(EURO_LOADS, EURO_WEIGHTS, lossCoefficients());
+	}
 
-		return total;
+	/** CEC weighted efficiency of the same curve. */
+	public double cecEfficiency() {
+		return weighted(CEC_LOADS, CEC_WEIGHTS, lossCoefficients());
 	}
 
 	// ---- what comes out ----
@@ -147,8 +197,12 @@ public record InverterSpec(
 		return unclippedAcKw(dcKw) > Math.min(acPowerKw, Math.max(0.0, thermalLimitKw)) + 1.0e-6;
 	}
 
-	/** Fraction of nameplate the machine will still pass at the top of its ambient range. */
-	private static final double DERATED_FRACTION_AT_LIMIT = 0.5;
+	/**
+	 * Fraction of nameplate the machine will still pass at the top of its ambient range.  Real machines lose 0.7 to
+	 * 1.8 % a kelvin past their onset: an SG110CX 110 kVA at 45 °C and 100 at 50, an SG350HX 352 at 30 and 295 at
+	 * 50, a Sunny Central 2500 at 35 and 2250 at 50, which a straight line to three quarters at 60 °C meets.
+	 */
+	private static final double DERATED_FRACTION_AT_LIMIT = 0.75;
 
 	/** The output ceiling at a given ambient temperature, in kW. */
 	public double thermalLimitKw(double ambientC) {
@@ -166,16 +220,13 @@ public record InverterSpec(
 
 	/** Cabinet temperature at a given ambient and load. */
 	public double cabinetTemperature(double ambientC, double loadFraction) {
-		double load = Mth.clamp(loadFraction, 0.0, 1.0);
-		double lossFraction = noLoadLossFraction() + resistiveLossFraction() * load * load;
 		double riseAtFullLoad = switch (cooling) {
 			case NATURAL -> 45.0;
 			case FAN -> 30.0;
 			case FORCED_AIR -> 25.0;
 		};
 
-		double fullLoadLoss = noLoadLossFraction() + resistiveLossFraction();
-		return ambientC + riseAtFullLoad * lossFraction / Math.max(1.0e-9, fullLoadLoss);
+		return ambientC + riseAtFullLoad * lossFractionAt(loadFraction) / Math.max(1.0e-9, lossFractionAt(1.0));
 	}
 
 	/** Nominal DC-to-AC ratio the machine is sold at: what an array this inverter is meant for looks like. */
@@ -211,6 +262,11 @@ public record InverterSpec(
 	public double apparentKva(double activeKw, double powerFactor) {
 		double pf = Mth.clamp(Math.abs(powerFactor), minPowerFactor, 1.0);
 		return Math.min(apparentPowerKva, Math.max(0.0, activeKw) / pf);
+	}
+
+	/** The most active power the machine can deliver at a power factor: its apparent-power rating times it, kW. */
+	public double activePowerCeilingKw(double powerFactor) {
+		return apparentPowerKva * Mth.clamp(Math.abs(powerFactor), minPowerFactor, 1.0);
 	}
 
 	/** Reactive power that a given active output at a given power factor implies, kvar. */

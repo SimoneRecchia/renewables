@@ -191,7 +191,9 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		stringsOutOfWindow = availableDcKw > 0.0 && highestStringVoltage > 0.0 && !trackable;
 		boolean awake = allowed && trackable && availableDcKw > 0.0;
 
-		double ceiling = Math.min(spec.thermalLimitKw(ambientTempC), Math.max(0.0, activePowerLimitKw));
+		// the bridge is rated in kVA: at a power factor under one the reactive part takes its share of the current
+		double ceiling = Math.min(Math.min(spec.thermalLimitKw(ambientTempC), Math.max(0.0, activePowerLimitKw)),
+				spec.activePowerCeilingKw(powerFactorSetpoint));
 		derating = spec.derating(ambientTempC);
 
 		if (!awake) {
@@ -257,7 +259,9 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 			int strings = wanted.strings();
 			double current = wanted.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE) * strings;
 
-			// three limits off the same datasheet, and any of them can be the one that bites
+			// four limits off the same datasheet, and any of them can be the one that bites; the first is the one
+			// that would wreck the input stage, a string whose cold-morning open-circuit voltage is over its rating
+			if (wanted.stringOpenCircuitVoltage(PvArraySpec.COLDEST_DESIGN_CELL_C) > spec.maxDcVolts()) continue;
 			if (stringsConnected + strings > stringInputs(spec)) continue;
 			if (currentConnected + current > currentCeiling) continue;
 			if (dcConnected + wanted.dcPowerKw() > spec.maxDcPowerKw()) continue;

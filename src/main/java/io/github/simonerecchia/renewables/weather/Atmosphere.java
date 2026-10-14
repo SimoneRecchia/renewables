@@ -90,6 +90,10 @@ public final class Atmosphere {
 
 	/**
 	 * Wind above the boundary layer, as a vector in blocks-per-nothing - it is metres per second, laid out on the world's x and z axes.
+	 *
+	 * The world is taken to lie at 45° north ({@link #CORIOLIS} is positive), so the geostrophic wind keeps the low on
+	 * its left (Buys Ballot): with x east and z south, u = (1/ρf) ∂p/∂z and w = -(1/ρf) ∂p/∂x.  It used to have the
+	 * signs of the southern hemisphere, with the lows on the right.
 	 */
 	public static Flow geostrophicWind(long seed, double blockX, double blockZ, long dayTime) {
 		double step = GRADIENT_STEP_BLOCKS;
@@ -104,7 +108,7 @@ public final class Atmosphere {
 		double gradientZ = (south - north) / (2.0 * step) * scale;
 
 		double heading = Math.toRadians(prevailingDirection(seed));
-		return new Flow(-gradientZ + Math.cos(heading) * PREVAILING_MS, gradientX + Math.sin(heading) * PREVAILING_MS);
+		return new Flow(gradientZ + Math.cos(heading) * PREVAILING_MS, -gradientX + Math.sin(heading) * PREVAILING_MS);
 	}
 
 	/** A horizontal wind on the world's axes. */
@@ -144,7 +148,10 @@ public final class Atmosphere {
 		return Math.min(atBlend * profile, windAloft * JET_CEILING);
 	}
 
-	/** Degrees the surface wind backs across the isobars towards the low. */
+	/**
+	 * Degrees the surface wind backs across the isobars towards the low.  Backing is anticlockwise seen from above,
+	 * which on this compass (0 east, 90 south) is a smaller heading, so the turn is subtracted.
+	 */
 	public static double frictionTurn(double roughness, double stability) {
 		double rough = Math.max(0.0, Math.log(roughness / SMOOTHEST_ROUGHNESS)) / ROUGHNESS_SPAN;
 		return 8.0 + 20.0 * rough + 10.0 * Math.max(0.0, stability);
@@ -308,13 +315,20 @@ public final class Atmosphere {
 		return beamNormalClear(sinElevation, pressureHpa) * sinElevation + diffuseHorizontalClear(sinElevation, pressureHpa);
 	}
 
-	/** Fraction of the sky covered by cloud */
+	/**
+	 * Fraction of the sky covered by cloud.
+	 *
+	 * The cumulus field drifts with the steering flow the weather systems ride on - the mid-level wind, which is what
+	 * moves a cumulus, not the gusty wind at the ground.  It is constant, so the distance drifted is simply speed
+	 * times time; the surface wind times the whole game clock, which this used to be, jumped the field kilometres at
+	 * every change of the wind once the clock had run for a few hours.
+	 */
 	public static double cloudCover(long seed, double blockX, double blockZ, long dayTime, long gameTime, double downfall,
-			double windSpeed, float windDirection, boolean raining, boolean thundering) {
+			boolean raining, boolean thundering) {
 		double lift = LIFT_AT_MEAN_PRESSURE - (pressureAt(seed, blockX, blockZ, dayTime) - WorldConditions.SEA_LEVEL_PRESSURE) / PRESSURE_TO_LIFT;
 
-		double drift = windSpeed * gameTime / 20.0 / WorldConditions.METRES_PER_BLOCK;
-		double heading = Math.toRadians(windDirection);
+		double drift = STEERING_MS * gameTime / 20.0 / WorldConditions.METRES_PER_BLOCK;
+		double heading = Math.toRadians(prevailingDirection(seed));
 		double cx = (blockX - Math.cos(heading) * drift) / CUMULUS_BLOCKS;
 		double cz = (blockZ - Math.sin(heading) * drift) / CUMULUS_BLOCKS;
 		lift += CUMULUS_AMPLITUDE * WeatherNoise.sample(seed ^ 0xC10DL, cx, cz, dayTime / CUMULUS_TICKS) / CLOUD_NOISE_SD;
