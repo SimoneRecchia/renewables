@@ -16,7 +16,8 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  * the references are weak, so a machine that is simply forgotten cannot be kept alive by this map.  An entry
  * whose block entity has since been removed is discarded when it is read.
  *
- * STUB: owner C may extend (this working version is what the machines call today).
+ * Cleared with the world, in {@code RenewablesClient.forgetWorld}.  Not cleared when the span list is replaced: the
+ * machines are still loaded then, and nothing would register them again.
  */
 @OnlyIn(Dist.CLIENT)
 public final class InsulatorIndex {
