@@ -83,7 +83,8 @@ dependencies {
     compileOnly "mekanism:Mekanism:${mekanism_version}:api"
     compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
 
-    // The solver, the id pool and the client's wire maths are plain Java so that they are tested without starting Minecraft.
+    // The solver, the id pool, the client's wire maths and the other state machines are plain Java, kept out of the
+    // Minecraft classes so that they are tested without starting a game.
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -92,15 +93,6 @@ dependencies {
     runtimeOnly fg.deobf("mekanism:Mekanism:${mekanism_version}")
     runtimeOnly fg.deobf("mekanism:Mekanism:${mekanism_version}:generators")
     runtimeOnly fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-forge:${cctweaked_version}")
-
-    // Pure-Java tests: the maths and state machines that are kept out of the Minecraft classes so they can run without a game.
-    testImplementation platform('org.junit:junit-bom:5.10.2')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-tasks.named('test', Test).configure {
-    useJUnitPlatform()
 }
 
 tasks.named('processResources', ProcessResources).configure {
