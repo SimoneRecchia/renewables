@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.SupportType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -183,13 +184,26 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 
 	// ---- standing up ----
 
-	/** A segment stands on another segment, or on anything that has a solid shape to stand on. */
+	/**
+	 * A segment stands on another segment, or is founded on a block whose top can carry it in the middle - and never on a
+	 * machine of this mod.  Any collision at all used to do, so a tower stood on another turbine's nacelle, counted its
+	 * own pile only, and ran a second rotor through the first one's, its foot fourteen blocks up in the wind.
+	 */
 	@Override
 	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
 		BlockPos below = pos.below();
 		BlockState support = level.getBlockState(below);
+		if (support.getBlock() instanceof TurbineTowerBlock) return true;
 
-		return support.getBlock() instanceof TurbineTowerBlock || !support.getCollisionShape(level, below).isEmpty();
+		return isFoundation(level, below, support);
+	}
+
+	/** Whether a block can take the foot of a tower: a top face that carries a load in its middle, and not a machine. */
+	public static boolean isFoundation(LevelReader level, BlockPos pos, BlockState support) {
+		Block block = support.getBlock();
+		if (block instanceof MachineBlock || block instanceof MachineShellBlock || block instanceof TurbineTowerBlock) return false;
+
+		return support.isFaceSturdy(level, pos, Direction.UP, SupportType.CENTER);
 	}
 
 	/**
