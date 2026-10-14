@@ -20,7 +20,7 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@v7
       - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
+        uses: gradle/actions/wrapper-validation@v6
       - name: setup jdk
         uses: actions/setup-java@v6
         with:
@@ -29,7 +29,7 @@ jobs:
       # caches the forge userdev artifacts and the decompiled minecraft sources,
       # which otherwise get rebuilt from scratch on every run
       - name: setup gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: make gradle wrapper executable
