@@ -33,7 +33,7 @@ public class PvArrayRenderer extends MachineRenderer {
 	 * Where the azimuth drive has actually got to, per block, so the half turn at noon is a sweep rather than a jump.
 	 */
 	private static final Map<BlockPos, Float> AZIMUTH_CACHE = new HashMap<>();
-	/** Degrees the azimuth drive turns per frame. */
+	/** Degrees the azimuth drive turns per frame at 60 frames a second (see {@link #frameScale()}). */
 	private static final float AZIMUTH_STEP = 2.0f;
 
 	@SubscribeEvent
@@ -183,7 +183,8 @@ public class PvArrayRenderer extends MachineRenderer {
 		if (Minecraft.getInstance().isPaused()) return current;
 
 		float delta = Mth.wrapDegrees(target - current);
-		float next = Math.abs(delta) <= AZIMUTH_STEP ? target : Mth.wrapDegrees(current + Math.signum(delta) * AZIMUTH_STEP);
+		float step = AZIMUTH_STEP * frameScale();
+		float next = Math.abs(delta) <= step ? target : Mth.wrapDegrees(current + Math.signum(delta) * step);
 		AZIMUTH_CACHE.put(pos, next);
 		return next;
 	}
