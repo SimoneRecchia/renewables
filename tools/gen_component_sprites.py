@@ -299,51 +299,8 @@ def cab():
     return c
 
 
-def outlined(c, points, colour):
-    """A thick stroke with a dark edge: every pixel of the stroke inks its neighbours first."""
-    cells = set()
-    for (x0, y0, x1, y1) in points:
-        scratch = Canvas(16, 16)
-        line(scratch, x0, y0, x1, y1, (1, 1, 1, 255))
-        for y in range(16):
-            for x in range(16):
-                if scratch.get(x, y)[3]:
-                    cells.add((x, y))
-    for x, y in cells:
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                if (x + dx, y + dy) not in cells:
-                    c.set(x + dx, y + dy, INK)
-    for x, y in cells:
-        c.set(x, y, colour)
-
-
-def wind_turbine():
-    """A turbine as a player sees it from a distance: three blades, the hub, and a slim tapering tower."""
-    c = Canvas(16, 16)
-    tower = ((176, 182, 190, 255), (216, 220, 226, 255), (244, 246, 248, 255))
-    for y in range(8, 15):
-        half = 0 if y < 12 else 1
-        c.rect(7 - half - 1, y, 9 + half + 1, y + 1, INK)
-    for y in range(8, 15):
-        half = 0 if y < 12 else 1
-        c.rect(7 - half, y, 9 + half, y + 1, tower[1])
-        c.set(7 - half, y, tower[2])
-        c.set(8 + half, y, tower[0])
-    c.rect(4, 14, 12, 16, INK)
-    c.rect(5, 14, 11, 15, (108, 104, 96, 255))
-    blade = (240, 244, 248, 255)
-    outlined(c, [(8, 3, 8, 0)], blade)
-    outlined(c, [(7, 5, 2, 8)], blade)
-    outlined(c, [(9, 5, 14, 8)], blade)
-    c.rect(6, 3, 10, 7, INK)
-    c.rect(7, 4, 9, 6, tower[1])
-    c.set(7, 4, tower[2])
-    c.set(8, 5, (90, 156, 214, 255))
-    return c
-
-
-SPRITES = {
+# Read by check_generated_assets like every other *_TEXTURES table, so a second writer of one of these fails it.
+ITEM_TEXTURES = {
     'cpu': cpu,
     'circuit_board': circuit_board,
     'insulator': insulator,
@@ -353,12 +310,11 @@ SPRITES = {
     'power_box': power_box,
     'utility_pole': utility_pole,
     'cab': cab,
-    'wind_turbine': wind_turbine,
 }
 
 
 def main():
-    for name, draw in SPRITES.items():
+    for name, draw in ITEM_TEXTURES.items():
         draw().write(os.path.join(OUT, name + '.png'))
         print('item/%s.png' % name)
 
