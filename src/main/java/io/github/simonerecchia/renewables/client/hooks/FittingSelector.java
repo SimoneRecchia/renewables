@@ -11,6 +11,7 @@ import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -21,12 +22,23 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  *
  * Only insulators are candidates - aiming at a pole's shaft selects nothing, rather than starting a connection that
  * could never finish - and where two lie on the ray the one nearer the eye wins ({@link PartPicker#pointedFitting}
- * does the ray; this turns its answer into an id, an index and a point).
+ * does the ray; this turns its answer into an id, an index and a point).  A machine with fittings and no model
+ * definition, a ground-laid run, is aimed at by a box round each anchor instead ({@link #bareFitting}).
  */
 @OnlyIn(Dist.CLIENT)
 public final class FittingSelector {
 	/** How far from the player, per axis, a click in the air looks for a machine: the reach of a lattice tower. */
 	public static final int AIR_REACH = 16;
+
+	/**
+	 * Half the side of the box a fitting with no model group is aimed at, round its anchor: four pixels, which holds
+	 * a run's dead-end clamp in any of its four turns, a splayed bundle's four included (gen_conductor_models CLAMP).
+	 */
+	static final double BARE_FITTING_HALF = 4.0 / 16.0;
+	/** Longer than the diagonal of the air click's cube, so the segment stands in for the picker's endless ray. */
+	private static final double BARE_RAY_LENGTH = 64.0;
+	/** What a fitting with no model group is called, for {@code InsulatorHost.powerType}. */
+	private static final String BARE_PART_PREFIX = "fitting_";
 
 	private FittingSelector() {
 	}
@@ -48,11 +60,12 @@ public final class FittingSelector {
 		BlockEntity entity = level.getBlockEntity(hostPos);
 		if (!(entity instanceof InsulatorHost host)) return null;
 
+		ModelDefinition definition = ModelDefinitions.of(level.getBlockState(hostPos).getBlock());
+		// a ground-laid run is drawn from block models: no OBJ group for the picker, only the anchor it says
+		if (definition == null) return bareFitting(hostPos, host, eye, look);
+
 		String part = PartPicker.pointedFitting(level, hostPos, eye, look);
 		if (part == null) return null;
-
-		ModelDefinition definition = ModelDefinitions.of(level.getBlockState(hostPos).getBlock());
-		if (definition == null) return null;
 
 		int index = definition.insulators().indexOf(part);
 		if (index < 0) return null;
@@ -71,6 +84,39 @@ public final class FittingSelector {
 
 		if (point == null) point = Vec3.atCenterOf(hostPos);
 		return new Selection(hostPos.immutable(), host, index, id, part, point, anchor);
+	}
+
+	/**
+	 * The fitting of a machine with no model groups - a run's dead-end clamp - aimed at like an insulator: the ray has
+	 * to pass through a box of {@link #BARE_FITTING_HALF} round the fitting's anchor, the nearest entry winning.  The
+	 * anchor is both the point and where the wire ends, since there is no porcelain to take the middle of.
+	 */
+	@Nullable
+	static Selection bareFitting(BlockPos hostPos, InsulatorHost host, Vec3 eye, Vec3 look) {
+		int[] ids = host.getInsulatorIds();
+		Vec3 far = eye.add(look.normalize().scale(BARE_RAY_LENGTH));
+
+		Selection best = null;
+		double bestDistance = Double.MAX_VALUE;
+		for (int index = 0; index < ids.length; index++) {
+			Vec3 anchor = host.getWirePosition(index);
+			if (anchor == null) continue;
+
+			// cut at the block's floor: the ray goes on through the ground, and nothing is drawn under it
+			AABB box = new AABB(anchor.x - BARE_FITTING_HALF, Math.max(anchor.y - BARE_FITTING_HALF, hostPos.getY()),
+					anchor.z - BARE_FITTING_HALF, anchor.x + BARE_FITTING_HALF, anchor.y + BARE_FITTING_HALF,
+					anchor.z + BARE_FITTING_HALF);
+			Vec3 entry = box.clip(eye, far).orElse(null);
+			if (entry == null) continue;
+
+			double distance = entry.distanceToSqr(eye);
+			if (distance < bestDistance) {
+				bestDistance = distance;
+				best = new Selection(hostPos.immutable(), host, index, ids[index], BARE_PART_PREFIX + index, anchor, anchor);
+			}
+		}
+
+		return best;
 	}
 
 	/**
