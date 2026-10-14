@@ -163,6 +163,7 @@ its block's constant.
 | `check_hitboxes.py` | every machine collides with exactly the shape it draws, to a hundredth of a pixel, and prints the tables the blocks declare |
 | `check_model_textures.py` | no coplanar faces that both show, no geometry inside other geometry, no bordered picture sub-sampled, no picture on all six faces of a box, and texel density measured along each face's own u and v |
 | `check_pv_clearance.py` | no moving part can pass through a fixed one at any angle |
+| `check_connectivity.py` | nothing floats, no member of a frame ends in the air, nothing is drawn twice or buried - see below |
 | `check_gui_fits.py` | no two lines of a panel overlap, and no line is behind a widget |
 | `preview_models.py` | draws the geometry from three angles, for the half no rule can decide |
 
@@ -176,6 +177,118 @@ All four pass with nothing outstanding. Two of them learned something in this pa
 * the coplanar check knows which parts are never drawn together - a tracked row's cable run and its
   end plugs are the case, since the renderer draws one or the other and never both,
   one per glow state, and the renderer draws exactly one of them.
+
+## Nothing floats: `check_connectivity.py`
+
+"Aste che non sono collegate a niente": a lattice member stopping in mid air, a disc hanging round a rod it never
+touches. None of the checkers above could see it, because none of them asks what holds a part up. This one does.
+
+```bash
+python3 tools/check_connectivity.py                    # every machine, and every state of every run
+python3 tools/check_connectivity.py lattice_tension    # one
+```
+
+**How it measures.** A *body* is a run of faces joined by shared vertices - one primitive, usually. Two bodies are in
+contact when their surfaces come within a sixty-fourth of a block (a quarter of a pixel) or one is inside the other.
+That is decided exactly, triangle against triangle - vertex to face, edge to edge, edge through face - with a
+bounding-volume tree per body so only triangles that can touch are ever compared; "inside" is the generalised winding
+number of a closed body. Pure Python, eleven seconds for the whole mod. What it reports, each a failure:
+
+| finding | meaning |
+|---|---|
+| `FLOATING` | a body in touch with nothing that reaches the ground (or the wall, or a block's edge) |
+| `DETACHED` | a body on the ground that is not part of the machine: a second object beside it |
+| `DANGLING` | an end of a bar (four times longer than wide: a member, a brace, a rod, a cable) resting on nothing |
+| `DOUBLE` | two bars along one line for most of their length: one member drawn twice |
+| `BURIED` | a body wholly inside another, which nobody can ever see |
+| `PIVOT` | a `pivot_*` marker on nothing: the hinge a part turns about is in mid air |
+
+A model is checked in **every state its renderer draws** (the 32 harness states of a row, a switch's two flags, a kiosk
+on a wall without its plinth, the inverter with and without its DC section and cables) and in **every pose that moves
+one part against another** (the turbine posed by `group_matrix` for all six machines at their shortest and tallest
+tower, the inverter at each of its three cabinet scales, with the cable entries unscaled). A run's pieces are never
+judged alone: each distinct state of its multipart blockstate is composed the way the game composes it, because an
+arm's inner end is only supported once the hub is drawn with it. What is free by nature is declared in the tool with
+its reason - a blade tip, a lightning finial, a whip antenna, a cable arriving from the next block - and nothing else.
+
+### What it found, model by model
+
+| model | fault | what was done |
+|---|---|---|
+| **lattice towers** (all three) | every porcelain disc floated: an open cone round a rod it never touched; crossarm ties and struts ended at the middle of a body face, where there is no member; the upper arm's ties ended in the air beside the peak; the number plate hung in the middle of a face; the terminal tower's "stays" were rigid struts to a pad, which no lattice tower has | redrawn from a real tower (below) |
+| **tension/terminal towers** | the jumper's ends stopped short of the clamps | redrawn: quad jumper into terminal blocks under the dead-end clamps |
+| **ground conductor runs** | a dead end's compression clamps were open tubes floating round the conductor's end; a tee's and a cross's legs stopped 0.8 px short of the clamp joining them; an offcut's upper sub-conductors overhung their spacers | clamp bodies closed, the conductor runs into them; the hub carries each leg into its groove; spacers near the cut ends |
+| **circuit breaker** | the bushings' sheds were open bands round their stalks, not touching them | closed discs the stalk passes through (also the epoxy column's sheds) |
+| **disconnector** | the torque shaft ran 0.12 past the last hinge with nothing to carry it | ends inside the first hinge boss (and not flush with it: that plane flickered) |
+| **dual-axis tracker** | the slew drive and everything it carries stood on air 2 mm above the column, open underneath | a head flange on the column, the slew collar closed; `pivot_azimuth` now inside it |
+| **machine transformer** | the oil-level dial and the drain valve stood 2 cm off the tank | each on a boss welded to the wall |
+| **substation transformer** | every radiator bank stood off the tank on pipes drawn *along* the wall; two banks sat on the tank's stiffeners | headers go straight into the tank through a flanged valve; banks between the stiffeners; panels thinned (below) |
+| **plant control cabinet** | a DIN rail and five modules drawn inside a closed steel cabinet | removed: nothing could ever see them |
+| **utility pole** | the braces ended in the hollow of the channel, bolted to nothing; each arm ran half a block past its outer insulator | braces up to the channel's web; arms end a hand past the insulator |
+| **wind turbine** | the spinner stopped 0.02 short of the main-bearing housing: the rotor hung in front of the nacelle on nothing; on every machine but the C130 the insulator post stood on the ground on its own | a main-shaft flange (`motor_shaft`) from the housing into the hub; a cable trough (`insulator_duct`) from the post to the tower - see docs/turbine-model.md |
+
+Two checkers learned from it. `check_model_textures` caught the disconnector shaft cut flush with its boss, and
+`check_pv_clearance` that the tracker's first head flange was wider than the modules allow at full tilt.
+
+### The towers, drawn from a real one
+
+The three duties are a **2 x 380 kV Donaumast** - the most common German 380 kV tower - with the figures a real one
+has, scaled once (`gen_tower_models.SCALE`, 54 m to 11.5 blocks: a block is 4.7 m of tower).
+
+| | figure | source |
+|---|---|---|
+| height to the earth wire | 54 m | "Die übliche Höhe des weithin verbreiteten Donaumastes beträgt etwa 54 m" - [netzausbau.de, Freileitungen](https://plus.netzausbau.de/N2000/DE/Technik/Freileitungen/freileitungen-node.html) |
+| lower crossarm across its tips | 32 m (phases at ±16 m and ±8 m) | "bei einem Donaumast sind es etwa 32 m" - same page |
+| arrangement | two phases a side on the lower arm, one on the upper, one earth wire at the peak | [Amprion, Freileitung](https://www.amprion.net/%C3%9Cbertragungsnetz/Technologie/Freileitung/) |
+| conductor | quad bundle, 4 x 565-AL1/72-ST1A, at 420 kV highest operating voltage | [TenneT datasheet, 380-kV Adlkofen-Matzenhof, Musterberechnung Donaumast](https://www.regierung.niederbayern.bayern.de/mam/service/planfeststellungsverfahren/beschluesse/20240813_adlkofen_matzenhof/u_16_01_2__16.1.2_musterberechnung_donaumast_2_x_380_kv_bei_100__nennlast.pdf) |
+| lower crossarm at 34 m | 15 m ground clearance (same datasheet) + about 14 m of sag on a 400 m span + a 4.4 m string | the datasheet's minimum clearance; Amprion's 300-500 m spans |
+| upper crossarm 10.5 m above the lower, phase at ±11 m | between the two lower phases, above the 2.8 m phase-earth clearance of EN 50341-1 for 420 kV | EN 50341-1, clearances D_el / D_pp |
+| suspension string | I-string, 22 x U160BS (146 mm pitch, 280 mm disc): 3.2 m of porcelain, 4.4 m arm to bundle | IEC 60305 for the units; IEC TS 60815-2 for the count: 420 kV x 20 mm/kV (medium pollution) / 380 mm a unit = 22 |
+| tension string | double string, 2 x 23 x U210B (170 mm, 300 mm) a side, grading ring, four compression dead-ends | IEC 60305; a 380 kV double tension string is "DA 380 kV, 7.30 m" in TenneT's own plans |
+| bundle at the tower | four clamps on a square yoke frame at ConductorCatalog's own spacing, so a span lands in them | ConductorCatalog (the same 0.075 the wire is drawn with, 0.35 m at the tower's scale - a real quad is 0.40-0.45 m) |
+| foot | 9.6 m square (suspension), 12.4 m (tension), 14.4 m (terminal), each leg on a concrete pier | a tension and a terminal tower take a longitudinal pull a suspension tower never sees, so they are wider and cross-braced; no lattice transmission tower is guyed, so the terminal tower's stays are gone |
+
+**Every member runs from node to node.** The legs and the arm chords are rolled angles (two flanges, heel outwards);
+the bracing lies on a gusset plate inside the leg's flange, an arm's lacing on its chords' flanges; plan crosses keep
+the section square at the arm levels; a suspension string hangs from a plate bolted under the transverse at its
+station, a tension string from a strain plate under the chord's node. A suspension tower is single-braced, a tension or
+terminal tower cross-braced in every panel. The peak carries the earth wire's clamp (suspension) or two strain clamps
+(tension; one on a terminal tower).
+
+**What a span lands on changed with it.** `LatticeTowerBlockEntity` lands a bundle in the middle of the phase's clamp
+group (`clamp_N_fitting` in `fittings.json`): under a suspension string, between a tension tower's two dead-ends, at
+the outer end of a terminal tower's. It was the underside of the porcelain, which with a real string is half a metre
+of hardware above the conductor. Anchors in the model's frame (`gen_tower_models.py --anchors`):
+
+| phase | suspension | tension | terminal |
+|---|---|---|---|
+| 1 / 4 (lower outer) | ∓3.407, 6.310, 0 | ∓3.407, 7.165, 0 | ∓3.407, 7.163, -1.175 |
+| 2 / 3 (lower inner) | ∓1.704, 6.310, 0 | ∓1.704, 7.165, 0 | ∓1.704, 7.163, -1.418 |
+| 5 / 6 (upper) | ∓2.343, 8.546, 0 | ∓2.343, 9.401, 0 | ∓2.343, 9.399, -1.175 |
+
+A tension tower's two dead-ends are one fitting, so both of its spans end at the middle of the arm; ending each on its
+own side needs the anchor to know which way its span leaves, which is the wire code's to decide.
+
+**What it costs.** 10 029 faces (suspension), 30 819 (tension: 552 porcelain units in 24 strings), 14 889 (terminal),
+against the turbine's 11 942. The collision tables are one a duty now: a terminal tower's foot is half again as wide
+as a suspension tower's, so they share no cell.
+
+### The other realism fixes
+
+* **Substation transformer radiators**: panel radiators to EN 50216-6 / DIN 42559 are 520 mm panels of 1-1.2 mm sheet at
+  a 45-50 mm pitch on two headers, each header into the tank through a valve ([Akgün radiator data](https://akgunradiator.com.tr/en/?p=1938)).
+  The panels were drawn 6 cm thick at a 7 cm pitch - a solid block; they are 2 cm thick now, so the air gap shows.
+* **Utility pole**: a crossarm ends a hand past its outer insulator; half a block of bare channel past it carried nothing.
+* **Control cabinet**: the louvre lets air over a DIN rail behind a shut steel door, so the rail is not drawn.
+
+### Curved surfaces shade curved
+
+`modellib.Mesh.smooth` gives every face one normal per corner - the faces round that vertex that bend less than 40°
+(`modellib.CREASE`) - and every machine generator runs it. The mod's loader reads a normal per corner and lights each
+vertex with it (`client/model/ModelBuilder`, `MachineRenderer.GroupBuffer`), so the turbine's blades, spinner and tower,
+the pole's shaft, a torque tube, a disc of porcelain shade round instead of as strips; a hexagon (60°), a box's edge, a
+cap on a cylinder and a blade's trailing edge keep their crease. Geometry is untouched: every OBJ's vertices and faces
+are byte for byte what they were, only `vn` changed. `render_blocks.py` now lights per corner too, so the renders show it.
 
 ## Rendering with the game itself
 

@@ -5,10 +5,10 @@
     python3 tools/check_hitboxes.py --java       # prints the cells PlantControllerBlock declares
 
 A floor-standing IP54 enclosure on a plinth, one door on a piano hinge with a swing handle, and on that
-door the only things an operator ever touches: an HMI panel, three lamps and a mushroom stop.  Behind the
-louvre under it is the DIN rail every plant has - an industrial Ethernet switch, two serial gateways, the
-controller itself and its 24 V supply - and on the roof the radio antenna and the fibre gland plate that
-bring the rest of the plant to it.
+door the only things an operator ever touches: an HMI panel, three lamps and a mushroom stop.  The louvre under
+them lets air over the DIN rail inside - which is not drawn: a shut steel door hides it, and a rail of modules
+inside a closed box was geometry nobody could see (check_connectivity calls it BURIED).  On the roof, the radio
+antenna, and underneath, the gland plate the fibre comes in by.
 
 WIDTH / DEPTH / TOP are the figures everything follows from: 800 x 400 x 2000 mm over a 100 mm plinth,
 which is a standard enclosure, so the cabinet is two blocks tall and the antenna reaches into the second.
@@ -101,21 +101,9 @@ def cabinet():
     box(mesh, mesh.faces('door', 'steel'), (HALF_WIDTH - 0.115, door_hi - 0.66, face - 0.030),
         (HALF_WIDTH - 0.055, door_hi - 0.50, face), uv_scale=0.3)
 
-    # ---- the louvre: the lower third of the door is the air path over the DIN rail behind it
+    # ---- the louvre: the lower third of the door is the air path over the DIN rail behind it, which is not drawn
     vent = mesh.faces('door', 'vent')
     box(mesh, vent, (-0.26, door_lo + 0.06, face - 0.006), (0.26, door_lo + 0.34, face), uv_scale=1.0)
-
-    # ---- the DIN rail, seen through the louvre: the switch, two gateways, the controller and its supply
-    rail = mesh.faces('rail', 'steel')
-    box(mesh, rail, (-0.30, door_lo + 0.19, -HALF_DEPTH + 0.06),
-        (0.30, door_lo + 0.21, -HALF_DEPTH + 0.075), uv_scale=0.2)
-    kit = mesh.faces('rail', 'instrument')
-    # widths as the real modules are: a managed Ethernet switch is wider than a two-port serial gateway
-    cursor = -0.28
-    for width in (0.11, 0.055, 0.055, 0.13, 0.075):
-        box(mesh, kit, (cursor, door_lo + 0.13, -HALF_DEPTH + 0.055),
-            (cursor + width, door_lo + 0.27, -HALF_DEPTH + 0.115), uv_scale=0.5)
-        cursor += width + 0.008
 
     # ---- the gland plate under the cabinet: where the fibre and the metering leads come in
     glands = mesh.faces('glands', 'gland')
