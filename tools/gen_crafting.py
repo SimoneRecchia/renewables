@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recipes, part item models and the language file.
+"""Recipes, part item models, blockstates, loot tables and mineable tags, and the language keys of the parts.
 
     python3 tools/gen_crafting.py
 
@@ -15,10 +15,9 @@ DATA = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'recipes')
 ITEM_MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models', 'item')
 BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'blockstates')
 LOOT = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'loot_tables', 'blocks')
-LANG = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'lang', 'en_us.json')
 TAGS = os.path.join('src', 'main', 'resources', 'data', 'minecraft', 'tags', 'blocks')
-CATALOGUE = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'catalog',
-                         'PartCatalog.java')
+JAVA = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables')
+CATALOGUE = os.path.join(JAVA, 'catalog', 'PartCatalog.java')
 
 SHAPED = 'minecraft:crafting_shaped'
 
@@ -223,6 +222,58 @@ def parts():
     return found
 
 
+def java_source():
+    """Every Java file of the mod, concatenated: what a key or an id has to be found in."""
+    text = []
+    for root, _, names in sorted(os.walk(JAVA)):
+        text += [open(os.path.join(root, name)).read() for name in sorted(names) if name.endswith('.java')]
+    return '\n'.join(text)
+
+
+def catalogue_ids(catalogue):
+    """The spec ids a catalogue registers, in the order it writes them."""
+    source = open(os.path.join(JAVA, 'catalog', catalogue + '.java')).read()
+    return re.findall(r'new Part\("([a-z0-9_]+)"' if catalogue == 'PartCatalog' else r'\bid\("([a-z0-9_]+)"\)', source)
+
+
+# A family loop in a register: `for (Spec spec : Catalog.all()) { ... }`, closed at the static block's indent.
+FAMILY = re.compile(r'for \((?:\w+\.)?\w+ \w+ : (\w+)\.all\(\)\) \{(.*?)\n\t\t\}', re.S)
+
+
+def register_ids(register, kind):
+    """{id: whether its item shows tooltip.renewables.<id>} for every entry ModItems or ModBlocks registers.
+
+    Read out of the register rather than listed here, so an item added in Java is one this file checks.  A literal
+    registration, the block()/plain() helpers (which always show the tooltip), and one entry per spec in each
+    family loop - less the spec a loop skips with `continue` because a single above registered it by name (the C130,
+    which is wind_turbine).
+    """
+    source = open(os.path.join(JAVA, 'registry', register + '.java')).read()
+    out = {name: False for name in re.findall(r'%s\.register\("([a-z0-9_]+)"' % kind, source)}
+    out.update({name: True for name in re.findall(r'\b(?:block|plain)\("([a-z0-9_]+)"', source)})
+    for catalogue, body in FAMILY.findall(source):
+        catalogue_source = open(os.path.join(JAVA, 'catalog', catalogue + '.java')).read()
+        skipped = set()
+        for constant in re.findall(r'spec == %s\.(\w+)\)' % catalogue, body):
+            skipped |= set(re.findall(r'\b%s = \w+\.register\(new \w+\(\s*id\("([a-z0-9_]+)"' % constant,
+                                      catalogue_source))
+
+        suffix = re.search(r'getPath\(\) \+ "([a-z0-9_]+)"', body)
+        made = re.findall(r'new (\w+)\(', body)
+        shows = 'tooltip.renewables.' in body or 'plain(' in body or any(
+            '"tooltip.renewables." + spec.id()' in open(path).read()
+            for path in (os.path.join(JAVA, 'item', cls + '.java') for cls in made) if os.path.exists(path))
+        for spec_id in catalogue_ids(catalogue):
+            if spec_id not in skipped:
+                out[spec_id + (suffix.group(1) if suffix else '')] = shows
+    return out
+
+
+def registered():
+    """(items, blocks): every registry id the mod has, items mapped to whether they show their own tooltip."""
+    return register_ids('ModItems', 'ITEMS'), set(register_ids('ModBlocks', 'BLOCKS'))
+
+
 def key_for(pattern):
     """The key map for a pattern: every letter in it, resolved through ITEMS."""
     letters = {c for row in pattern for c in row if c != ' '}
@@ -337,13 +388,14 @@ MACHINES = {
     'mv_breaker': ('metal_particle', 'mv_breaker'),
 }
 
-# The names and tooltips for what is not a part: a block is named here rather than by hand.
+# The names and tooltips for what is not a part: a block is named here rather than by hand.  None is a block
+# with no item, so no tooltip ever shows; gen_core_data refuses a grey line nothing reads.
 BLOCK_NAMES = {
     # A run of conductor has a name even though nothing ever shows it: a block with no name key reads as
     # its own registry id in an advancement, in a death message, and in the F3 screen.
-    'abc_conductor_run': ('Bundle Run', 'Aerial bundled cable, laid along the ground.'),
-    'mv_conductor_run': ('Medium-Voltage Run', 'Bare all-aluminium-alloy conductor, laid along the ground.'),
-    'hv_conductor_run': ('Transmission Run', 'A quad ACSR bundle on spacers, laid along the ground.'),
+    'abc_conductor_run': ('Bundle Run', None),
+    'mv_conductor_run': ('Medium-Voltage Run', None),
+    'hv_conductor_run': ('Transmission Run', None),
     'tx_machine': ('Machine Transformer',
                    'Steps a machine\u2019s 800 V up to 33 kV. Every generator on a plant needs one.'),
     'tx_substation': ('Substation Transformer',
@@ -398,6 +450,18 @@ RUN_DROPS = {
     'dc_string_cable': 'dc_string_cable',
     'dc_trunk_cable': 'dc_trunk_cable',
 }
+
+
+def lang_entries():
+    """The (key, text) pairs this file owns.  gen_core_data writes them: the language file has one writer."""
+    out = []
+    for part_id, _, name, tooltip in parts():
+        out += [('item.renewables.' + part_id, name), ('tooltip.renewables.' + part_id, tooltip)]
+    for block_id, (name, tooltip) in BLOCK_NAMES.items():
+        out.append(('block.renewables.' + block_id, name))
+        if tooltip is not None:
+            out.append(('tooltip.renewables.' + block_id, tooltip))
+    return out + list(MESSAGES.items())
 
 
 def drops():
@@ -464,17 +528,6 @@ def main():
         write(os.path.join(ITEM_MODELS, part_id + '.json'),
               {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'renewables:item/' + part_id}})
 
-    # the names and the tooltips, merged rather than rewritten: the file has two hundred keys already
-    lang = json.load(open(LANG))
-    for part_id, _, name, tooltip in catalogue:
-        lang['item.renewables.' + part_id] = name
-        lang['tooltip.renewables.' + part_id] = tooltip
-    for block_id, (name, tooltip) in BLOCK_NAMES.items():
-        lang['block.renewables.' + block_id] = name
-        lang['tooltip.renewables.' + block_id] = tooltip
-    lang.update(MESSAGES)
-    write(LANG, lang)
-
     # and the recipes
     ingots = 0
     for result, count, kind, pattern in RECIPES:
@@ -496,7 +549,6 @@ def main():
     print('%d parts, %d bench recipes, 2 furnace recipes, %d machine blockstates, %d loot tables, '
           '%d pickaxe-mineable' % (len(catalogue), ingots, machines, drops, mineable))
     print('%d recipe files on disk, hand-written ones included' % len(written_recipes()))
-    print('lang now has %d keys' % len(lang))
     problems = check(catalogue)
     print('the tree is consistent' if problems == 0 else '%d problem(s) in the tree' % problems)
 
