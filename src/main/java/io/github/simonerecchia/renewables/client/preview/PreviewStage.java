@@ -1,5 +1,6 @@
 package io.github.simonerecchia.renewables.client.preview;
 
+import io.github.simonerecchia.renewables.api.Nameplate;
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
 import io.github.simonerecchia.renewables.catalog.TurbineCatalog;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
@@ -18,6 +19,7 @@ import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -34,7 +36,7 @@ public final class PreviewStage {
 	private static final int FLOOR = 10;
 
 	/** The views, and why these ones. */
-	private record View(String name, float yaw, float pitch, double distance, double height) {
+	record View(String name, float yaw, float pitch, double distance, double height) {
 	}
 
 	private static final List<View> VIEWS = List.of(
@@ -47,6 +49,8 @@ public final class PreviewStage {
 	/** What is left to do */
 	private static final Deque<Runnable> STEPS = new ArrayDeque<>();
 	private static boolean armed = System.getProperty("renewables.preview") != null;
+	/** Whether a run has hidden the GUI and not shown it again yet. */
+	private static boolean hidGui;
 
 	private PreviewStage() {
 	}
@@ -87,6 +91,19 @@ public final class PreviewStage {
 		if (!STEPS.isEmpty()) STEPS.poll().run();
 	}
 
+	/**
+	 * Leaving the world drops what is left of a run: the steps are commands for this world - a fill with air, a game
+	 * mode, a game rule - and the next world with cheats on would otherwise run them.
+	 */
+	@SubscribeEvent
+	public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
+		STEPS.clear();
+		if (hidGui) {
+			Minecraft.getInstance().options.hideGui = false;
+			hidGui = false;
+		}
+	}
+
 	/** Which machines a property value names. */
 	private static List<String> subjects(String wanted) {
 		if (!"all".equalsIgnoreCase(wanted)) {
@@ -109,7 +126,7 @@ public final class PreviewStage {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null) return;
 
-		say("preview: %d machine(s), %d views each".formatted(blocks.size(), VIEWS.size()));
+		say(command("preview: %d machine(s), %d views each", blocks.size(), VIEWS.size()));
 		STEPS.add(() -> {
 			// one light, one sky, every time - a render that changes with the weather is not a comparison
 			run("gamerule doDaylightCycle false");
@@ -117,6 +134,7 @@ public final class PreviewStage {
 			run("weather clear");
 			run("gamemode creative");
 			Minecraft.getInstance().options.hideGui = true;
+			hidGui = true;
 		});
 
 		for (String block : blocks) {
@@ -136,6 +154,7 @@ public final class PreviewStage {
 
 		STEPS.add(() -> {
 			Minecraft.getInstance().options.hideGui = false;
+			hidGui = false;
 			say("preview: done, in run/screenshots");
 		});
 	}
@@ -145,20 +164,20 @@ public final class PreviewStage {
 		int x = STAGE_X;
 		int y = STAGE_Y;
 		int z = STAGE_Z;
-		run("fill %d %d %d %d %d %d air".formatted(x - FLOOR, y, z - FLOOR, x + FLOOR, y + 24, z + FLOOR));
-		run("fill %d %d %d %d %d %d minecraft:smooth_stone".formatted(x - FLOOR, y - 1, z - FLOOR, x + FLOOR, y - 1, z + FLOOR));
+		run(command("fill %d %d %d %d %d %d air", x - FLOOR, y, z - FLOOR, x + FLOOR, y + 24, z + FLOOR));
+		run(command("fill %d %d %d %d %d %d minecraft:smooth_stone", x - FLOOR, y - 1, z - FLOOR, x + FLOOR, y - 1, z + FLOOR));
 
 		if (needsTower(block)) {
 			// a machine that needs a tower gets one
-			run("fill %d %d %d %d %d %d renewables:turbine_tower".formatted(x, y, z, x, y + 5, z));
-			run("setblock %d %d %d %s".formatted(x, y + 6, z, block));
+			run(command("fill %d %d %d %d %d %d renewables:turbine_tower", x, y, z, x, y + 5, z));
+			run(command("setblock %d %d %d %s", x, y + 6, z, block));
 		} else {
-			run("setblock %d %d %d %s".formatted(x, y, z, block));
+			run(command("setblock %d %d %d %s", x, y, z, block));
 			if (pair) {
 				// the row behind, and a run of cable in front: the two questions that are about the join
-				run("setblock %d %d %d %s".formatted(x, y, z - 1, block));
-				run("setblock %d %d %d renewables:dc_string_cable".formatted(x, y, z + 1));
-				run("setblock %d %d %d renewables:dc_string_cable".formatted(x, y, z + 2));
+				run(command("setblock %d %d %d %s", x, y, z - 1, block));
+				run(command("setblock %d %d %d renewables:dc_string_cable", x, y, z + 1));
+				run(command("setblock %d %d %d renewables:dc_string_cable", x, y, z + 2));
 			}
 		}
 	}
@@ -174,15 +193,28 @@ public final class PreviewStage {
 	}
 
 	private static void look(View view) {
+		run(teleport(view));
+	}
+
+	/** The command that puts the camera at a view. */
+	static String teleport(View view) {
 		double radians = Math.toRadians(view.yaw());
 		double x = STAGE_X + 0.5 + Math.sin(radians) * view.distance();
 		double z = STAGE_Z + 0.5 - Math.cos(radians) * view.distance();
-		run("tp @s %.2f %.2f %.2f %.1f %.1f".formatted(x, STAGE_Y + view.height(), z, view.yaw(), view.pitch()));
+		return command("tp @s %.2f %.2f %.2f %.1f %.1f", x, STAGE_Y + view.height(), z, view.yaw(), view.pitch());
+	}
+
+	/**
+	 * A command, at the root locale: formatted at the system's, a decimal comma ("tp @s 512,50 ...") is a command the
+	 * server refuses, and every view was shot from wherever the camera already was.
+	 */
+	static String command(String pattern, Object... values) {
+		return Nameplate.fmt(pattern, values);
 	}
 
 	private static void shoot(String block, View view) {
 		Minecraft mc = Minecraft.getInstance();
-		String name = "preview_%s_%s.png".formatted(block.replace(':', '_'), view.name());
+		String name = command("preview_%s_%s.png", block.replace(':', '_'), view.name());
 		// the game directory, not the screenshots directory: grab appends "screenshots" itself
 		Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), message -> {
 		});

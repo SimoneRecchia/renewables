@@ -1,5 +1,6 @@
 package io.github.simonerecchia.renewables.client.screen;
 
+import io.github.simonerecchia.renewables.api.Nameplate;
 import io.github.simonerecchia.renewables.block.UtilityPoleBlockEntity;
 import io.github.simonerecchia.renewables.net.Net;
 import io.github.simonerecchia.renewables.net.packet.PoleConfigPayload;
@@ -18,19 +19,28 @@ import net.minecraft.world.level.Level;
  * Where a utility pole's arms are set: an offset on each axis, a yaw and a pitch, five text fields and Done/Cancel
  * (docs/spec/grid-blocks.md section 3.6, client-net.md section 7.2).
  *
- * The fields start at what the pole has now.  A field that does not hold a number keeps the last good value (and is
- * shown in red); Done sends all five - clamped to what the server accepts, so the pole ends up where the fields
- * say - and closes; Cancel and Escape close without sending.  The angles are typed in degrees and sent in radians.
- * The game is not paused.
+ * The fields start at what the pole has now, each with the range the server takes beside it.  A field that does not
+ * hold a number keeps the last good value (and is shown in red); one that holds a number outside the range is shown
+ * in amber, because what is sent is the limit, not what is typed.  Done sends all five - clamped to what the server
+ * accepts, so the pole ends up where the fields say - and closes; Cancel and Escape close without sending.  The angles
+ * are typed in degrees and sent in radians.  The game is not paused.
  */
 public class UtilityPoleConfigScreen extends Screen {
 	private static final int FIELD_WIDTH = 60;
 	private static final int FIELD_HEIGHT = 20;
 	private static final int ROW_STEP = 24;
 	private static final int BUTTON_WIDTH = 80;
+	/** From the title's baseline to the first row of fields. */
+	private static final int TITLE_GAP = 20;
 	private static final int LABEL_COLOUR = 0xFFFFFF;
+	private static final int RANGE_COLOUR = 0xA0A0A0;
 	private static final int TEXT_COLOUR = 0xE0E0E0;
 	private static final int INVALID_COLOUR = 0xFF5555;
+	/** A number, but not one the server takes: what goes is the limit. */
+	private static final int CLAMPED_COLOUR = 0xFFB040;
+
+	private static final String[] LEFT_KEYS = {"offset_x", "offset_y", "offset_z"};
+	private static final String[] RIGHT_KEYS = {"yaw", "pitch"};
 
 	private final BlockPos pole;
 
@@ -68,11 +78,12 @@ public class UtilityPoleConfigScreen extends Screen {
 
 	@Override
 	protected void init() {
-		int centre = width / 2;
 		int top = height / 2 - 40;
-		// wide enough apart that the right column's labels, which sit to the left of its fields, clear the left column
-		int left = centre - 120;
-		int right = centre + 40;
+		// centred on the real width from the real text, so a label never starts off the left edge of a narrow GUI
+		PoleConfigText.Layout layout = PoleConfigText.layout(width, FIELD_WIDTH, widest(LEFT_KEYS),
+				font.width(offsetRange()), widest(RIGHT_KEYS), font.width(degreesRange(PoleConfigPayload.MAX_YAW)));
+		int left = layout.leftField();
+		int right = layout.rightField();
 
 		xField = field(left, top, PoleConfigText.offset(offsetX), "offset_x",
 				text -> offsetX = read(xField, text, offsetX, PoleConfigPayload.MAX_OFFSET));
@@ -87,10 +98,21 @@ public class UtilityPoleConfigScreen extends Screen {
 		setInitialFocus(xField);
 
 		int buttons = top + 3 * ROW_STEP + 8;
+		int centre = width / 2;
 		addRenderableWidget(Button.builder(Component.translatable("gui.done"), button -> done())
-				.bounds(left, buttons, BUTTON_WIDTH, 20).build());
+				.bounds(centre - BUTTON_WIDTH - 4, buttons, BUTTON_WIDTH, 20).build());
 		addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), button -> onClose())
-				.bounds(right, buttons, BUTTON_WIDTH, 20).build());
+				.bounds(centre + 4, buttons, BUTTON_WIDTH, 20).build());
+	}
+
+	/** The longest of a column's labels. */
+	private int widest(String[] keys) {
+		int widest = 0;
+		for (String key : keys) {
+			widest = Math.max(widest, font.width(Component.translatable("screen.renewables.utility_pole_config." + key)));
+		}
+
+		return widest;
 	}
 
 	/** A text field with its label to the left, holding {@code initial}, calling {@code changed} as it is edited. */
@@ -105,18 +127,31 @@ public class UtilityPoleConfigScreen extends Screen {
 		return box;
 	}
 
-	/** Reads an offset field: a number is kept (limited to the range the server takes), anything else leaves the last value. */
+	/**
+	 * Reads an offset field: a number is kept, limited to the range the server takes (amber when it had to be), and
+	 * anything else leaves the last value.
+	 */
 	private static float read(EditBox box, String text, float previous, float limit) {
 		Float parsed = PoleConfigText.parse(text);
-		box.setTextColor(parsed == null ? INVALID_COLOUR : TEXT_COLOUR);
-		return parsed == null ? previous : PoleConfigText.clamp(parsed, limit);
+		if (parsed == null) {
+			box.setTextColor(INVALID_COLOUR);
+			return previous;
+		}
+
+		box.setTextColor(PoleConfigText.within(parsed, limit) ? TEXT_COLOUR : CLAMPED_COLOUR);
+		return PoleConfigText.clamp(parsed, limit);
 	}
 
 	/** The same for an angle typed in degrees and kept in radians. */
 	private static float readDegrees(EditBox box, String text, float previous, float limitRadians) {
 		Float parsed = PoleConfigText.parse(text);
-		box.setTextColor(parsed == null ? INVALID_COLOUR : TEXT_COLOUR);
-		return parsed == null ? previous : PoleConfigText.clamp((float) Math.toRadians(parsed), limitRadians);
+		if (parsed == null) {
+			box.setTextColor(INVALID_COLOUR);
+			return previous;
+		}
+
+		box.setTextColor(PoleConfigText.withinDegrees(parsed, limitRadians) ? TEXT_COLOUR : CLAMPED_COLOUR);
+		return PoleConfigText.clamp((float) Math.toRadians(parsed), limitRadians);
 	}
 
 	private void done() {
@@ -135,16 +170,29 @@ public class UtilityPoleConfigScreen extends Screen {
 		renderBackground(graphics);
 		super.render(graphics, mouseX, mouseY, partialTick);
 
-		label(graphics, xField, "offset_x");
-		label(graphics, yField, "offset_y");
-		label(graphics, zField, "offset_z");
-		label(graphics, yawField, "yaw");
-		label(graphics, pitchField, "pitch");
+		graphics.drawCenteredString(font, title, width / 2, xField.getY() - TITLE_GAP, LABEL_COLOUR);
+
+		label(graphics, xField, "offset_x", offsetRange());
+		label(graphics, yField, "offset_y", offsetRange());
+		label(graphics, zField, "offset_z", offsetRange());
+		label(graphics, yawField, "yaw", degreesRange(PoleConfigPayload.MAX_YAW));
+		label(graphics, pitchField, "pitch", degreesRange(PoleConfigPayload.MAX_PITCH));
 	}
 
-	/** The name of a field, to its left and level with its text. */
-	private void label(GuiGraphics graphics, EditBox box, String key) {
+	/** The name of a field, to its left and level with its text, and the range it takes to its right. */
+	private void label(GuiGraphics graphics, EditBox box, String key, Component range) {
 		Component text = Component.translatable("screen.renewables.utility_pole_config." + key);
-		graphics.drawString(font, text, box.getX() - 4 - font.width(text), box.getY() + (FIELD_HEIGHT - font.lineHeight) / 2, LABEL_COLOUR);
+		int y = box.getY() + (FIELD_HEIGHT - font.lineHeight) / 2;
+		graphics.drawString(font, text, box.getX() - PoleConfigText.LABEL_GAP - font.width(text), y, LABEL_COLOUR);
+		graphics.drawString(font, range, box.getX() + FIELD_WIDTH + PoleConfigText.LABEL_GAP, y, RANGE_COLOUR);
+	}
+
+	private static Component offsetRange() {
+		return Component.translatable("screen.renewables.utility_pole_config.range", Nameplate.figure(PoleConfigPayload.MAX_OFFSET));
+	}
+
+	private static Component degreesRange(float limitRadians) {
+		return Component.translatable("screen.renewables.utility_pole_config.range_degrees",
+				Nameplate.fmt("%.0f", Math.toDegrees(limitRadians)));
 	}
 }
