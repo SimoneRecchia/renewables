@@ -5,12 +5,16 @@ import io.github.simonerecchia.renewables.registry.ModBlocks;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.RandomSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
@@ -19,12 +23,14 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraftforge.common.ForgeHooks;
 
 /**
  * One cell of a machine that is bigger than its block: invisible, carrying that cell's exact collision, and
@@ -45,6 +51,9 @@ public class MachineShellBlock extends Block {
 	public static final IntegerProperty OFFSET_Y = IntegerProperty.create("dy", 0, MachineShell.REACH_UP);
 	/** Offset south of the machine to this cell, plus {@link MachineShell#REACH_SIDE}. */
 	public static final IntegerProperty OFFSET_Z = IntegerProperty.create("dz", 0, 2 * MachineShell.REACH_SIDE);
+
+	/** How long a cell whose machine cannot be asked waits before asking again, in ticks. */
+	private static final int UNKNOWN_RETRY_TICKS = 100;
 
 	public MachineShellBlock(Properties properties) {
 		super(properties);
@@ -76,11 +85,15 @@ public class MachineShellBlock extends Block {
 
 	// ---- shape ----
 
-	/** The cell's own collision, read off the machine's table: it depends on another block, so it is never cached per state. */
+	/**
+	 * The cell's own collision, read off the machine's table: it depends on another block, so it is never cached per
+	 * state.  A cell with no machine to read it off is nothing: it used to be a whole invisible cube, which a cell
+	 * copied by {@code /clone} (no shape update ever removes it) left standing for good.
+	 */
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
 		BlockPos host = MachineShell.hostOf(level, pos);
-		if (host == null) return Shapes.block();
+		if (host == null) return Shapes.empty();
 
 		BlockState hostState = level.getBlockState(host);
 		MachineShell machine = (MachineShell) hostState.getBlock();
@@ -89,7 +102,7 @@ public class MachineShellBlock extends Block {
 			if (!cell.own() && host.offset(cell.at(quarters)).equals(pos)) return cell.shape(quarters);
 		}
 
-		return Shapes.block();
+		return Shapes.empty();
 	}
 
 	@Override
@@ -136,6 +149,30 @@ public class MachineShellBlock extends Block {
 	}
 
 	/**
+	 * Breaking a cell breaks the machine, so it takes what breaking the machine's own block would: protection is
+	 * judged where the cell is, and a tower's cells reach three blocks beyond a claim its centre is inside.  Refused
+	 * here, the cell stays too.
+	 */
+	@Override
+	public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, FluidState fluid) {
+		if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+			BlockPos host = MachineShell.hostOf(level, pos);
+			if (host != null && !mayBreak(serverPlayer, host)) return false;
+		}
+
+		return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
+	}
+
+	/** Spawn protection and the border at the machine, its game mode, and the break event claim mods listen to. */
+	private static boolean mayBreak(ServerPlayer player, BlockPos host) {
+		ServerLevel level = player.serverLevel();
+		GameType mode = player.gameMode.getGameModeForPlayer();
+		if (!level.mayInteract(player, host) || player.blockActionRestricted(level, host, mode)) return false;
+
+		return ForgeHooks.onBlockBreakEvent(level, mode, player, host) != -1;
+	}
+
+	/**
 	 * A player who breaks any cell breaks the machine, with its drop on the machine's own rule: not in creative,
 	 * and only with the tool the <em>machine</em> wants.  That is read off the machine's state and not this
 	 * cell's, so a shell that drifted out of a tool tag would not make a machine drop nothing for a pickaxe
@@ -163,6 +200,7 @@ public class MachineShellBlock extends Block {
 	public float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
 		BlockPos host = MachineShell.hostOf(level, pos);
 		if (host == null) return super.getDestroyProgress(state, player, level, pos);
+		if (level instanceof Level world && !world.mayInteract(player, host)) return 0.0f;
 
 		return level.getBlockState(host).getDestroyProgress(player, level, host);
 	}
@@ -170,8 +208,28 @@ public class MachineShellBlock extends Block {
 	/** A cell whose machine is gone or does not claim it goes too, without a drop. */
 	@Override
 	public BlockState updateShape(BlockState state, Direction direction, BlockState neighbour, LevelAccessor level, BlockPos pos, BlockPos neighbourPos) {
-		if (MachineShell.hostOf(level, pos) == null) return Blocks.AIR.defaultBlockState();
+		if (MachineShell.orphan(level, pos)) return Blocks.AIR.defaultBlockState();
 
 		return super.updateShape(state, direction, neighbour, level, pos, neighbourPos);
+	}
+
+	/**
+	 * A cell put down by anything - a machine, {@code /clone}, {@code /fill}, a structure - looks at its machine a tick
+	 * later, because nothing else may: a copy no neighbour ever updates would otherwise stand for good.
+	 */
+	@Override
+	public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+		super.onPlace(state, level, pos, oldState, movedByPiston);
+		if (!level.isClientSide) level.scheduleTick(pos, this, 1);
+	}
+
+	/** An orphan goes; a cell whose machine's chunk is not loaded asks again later. */
+	@Override
+	public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+		if (MachineShell.orphan(level, pos)) {
+			level.removeBlock(pos, false);
+		} else if (MachineShell.hostOf(level, pos) == null) {
+			level.scheduleTick(pos, this, UNKNOWN_RETRY_TICKS);
+		}
 	}
 }
