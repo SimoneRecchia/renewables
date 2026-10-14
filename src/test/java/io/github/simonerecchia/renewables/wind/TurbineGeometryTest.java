@@ -127,4 +127,57 @@ class TurbineGeometryTest {
 	void scanReachesPastTheTallestPileThatCanBeBuilt() {
 		assertTrue(TurbineGeometry.SCAN_LIMIT > TurbineGeometry.MAX_SEGMENTS);
 	}
+
+	// ---- the rotor ----
+
+	/** The hub is pivot H of docs/turbine-model.md: 0.30 over the nacelle floor and 1.04 ahead of the axis, at the nacelle's scale. */
+	@Test
+	void theHubIsAheadOfTheTowerAtTheNacellesScale() {
+		TurbineSpec c130 = TurbineCatalog.C130_40;
+		double[] south = TurbineGeometry.hubOffset(c130, 0.0);
+		assertEquals(0.0, south[0], 1e-9);
+		assertEquals(0.300, south[1], 1e-9);
+		assertEquals(1.040, south[2], 1e-9);
+		// turned 90 the front of the model points to +x, the way MachineShell turns a cell
+		double[] east = TurbineGeometry.hubOffset(c130, 90.0);
+		assertEquals(1.040, east[0], 1e-9);
+		assertEquals(0.0, east[2], 1e-9);
+
+		TurbineSpec sw10 = TurbineCatalog.SW_10;
+		assertEquals(0.26, TurbineGeometry.hubOffset(sw10, 0.0)[2], 1e-9);
+		assertEquals(1.155, TurbineGeometry.rotorRadius(sw10), 0.001);
+		assertEquals(6.5, TurbineGeometry.rotorRadius(c130), 1e-9);
+	}
+
+	/** About a point a block over the swept disc, all on the disc, spread evenly: a quarter of them inside half the radius. */
+	@Test
+	void theDiscIsCoveredEvenly() {
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			for (double yaw : new double[] {0.0, 37.0, 90.0, 213.0}) {
+				double[] hub = TurbineGeometry.hubOffset(spec, yaw);
+				double radius = TurbineGeometry.rotorRadius(spec);
+				var disc = TurbineGeometry.rotorDisc(spec, yaw);
+				assertTrue(disc.size() >= 12 && disc.size() <= 160, spec.displayName() + " " + disc.size());
+
+				double frontX = Math.sin(Math.toRadians(yaw));
+				double frontZ = Math.cos(Math.toRadians(yaw));
+				int inner = 0;
+				double[] centroid = new double[3];
+				for (double[] p : disc) {
+					double dx = p[0] - hub[0];
+					double dy = p[1] - hub[1];
+					double dz = p[2] - hub[2];
+					assertTrue(Math.sqrt(dx * dx + dy * dy + dz * dz) <= radius + 1e-9, "on the disc");
+					assertEquals(0.0, dx * frontX + dz * frontZ, 1e-9, "in the rotor's plane");
+					if (Math.sqrt(dx * dx + dy * dy + dz * dz) < radius / 2.0) inner++;
+					for (int i = 0; i < 3; i++) centroid[i] += p[i] / disc.size();
+				}
+
+				assertEquals(0.25, inner / (double) disc.size(), 0.08, spec.displayName());
+				for (int i = 0; i < 3; i++) assertEquals(hub[i], centroid[i], radius * 0.08, spec.displayName() + " centroid");
+			}
+		}
+
+		assertEquals(133, TurbineGeometry.rotorDisc(TurbineCatalog.C130_40, 0.0).size());
+	}
 }

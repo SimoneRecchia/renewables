@@ -30,15 +30,16 @@ class TelemetryConsistencyTest {
 		double pitch = TurbineDynamics.collectivePitch(braked, alignedWind, spec.powerWhileRunningKw(alignedWind, 1.225), spec.ratedPowerKw(), spec);
 		return new TurbineTelemetrySimulator.Sample(
 				powerKw, spec.ratedPowerKw(), spec.ratedPowerKw(), false,
-				alignedWind, alignedWind, 90.0, 90.0, 0.1, degreesPerTick, pitch,
+				alignedWind, alignedWind, 90.0, 90.0, 0.1, degreesPerTick, pitch, 1.0,
 				braked, cutOut, parked, false, false, yawing,
 				15.0, 1013.25, false, false, gameTime, 7, 0.0, spec.gearboxRatio());
 	}
 
+	/** Sixty-four signals of a real SCADA, and the rotor's exposure, which a program needs to tell a sheltered machine from a calm. */
 	@Test
-	void sixtyFourSignals() {
-		assertEquals(64, TurbineTelemetry.kinds().size());
-		assertEquals(64, sample(TurbineCatalog.C130_40, false, 10.0).values().size());
+	void sixtyFiveSignals() {
+		assertEquals(65, TurbineTelemetry.kinds().size());
+		assertEquals(65, sample(TurbineCatalog.C130_40, false, 10.0).values().size());
 	}
 
 	@Test
@@ -135,7 +136,7 @@ class TelemetryConsistencyTest {
 		double held = TurbineDynamics.collectivePitch(false, 9.0, C130.powerWhileRunningKw(9.0, 1.225), 1000.0, C130);
 		TurbineTelemetrySimulator.Sample s = sample(C130, 1000.0, false, false, false, 9.0, 2.0, false, 1000L);
 		TurbineTelemetrySimulator.Sample curtailed = new TurbineTelemetrySimulator.Sample(s.activePowerKw(), s.ratedPowerKw(), 1000.0, true,
-				s.windSpeed(), s.alignedWindSpeed(), s.windDirection(), s.nacelleDir(), s.turbulence(), s.rotorDegreesPerTick(), held,
+				s.windSpeed(), s.alignedWindSpeed(), s.windDirection(), s.nacelleDir(), s.turbulence(), s.rotorDegreesPerTick(), held, 1.0,
 				false, false, false, false, false, false, 15.0, 1013.25, false, false, 1000L, 7, 0.0, C130.gearboxRatio());
 		// the snapshot rounds to the hundredth
 		assertEquals(held, new TurbineTelemetrySimulator().sample(curtailed).number(TurbineTelemetry.BLADE_PITCH_ANGLE), 0.006);

@@ -168,6 +168,14 @@ public final class TurbineDynamics {
 		return spec.powerWhileRunningKw(Math.max(0.0, alignedWind), airDensity);
 	}
 
+	/**
+	 * The same for a rotor only {@code exposure} of whose disc is in open air ({@code RotorClearance}): the share of
+	 * the swept area behind a block makes nothing, and a rotor no air reaches makes nothing at all.
+	 */
+	public static double uncappedKw(boolean braked, double alignedWind, double airDensity, double exposure, TurbineSpec spec) {
+		return uncappedKw(braked, alignedWind, airDensity, spec) * clamp01(exposure);
+	}
+
 	/** What the machine produces: the offer, held to the curtailment setpoint, and nothing at all under the brake. */
 	public static double producedKw(boolean braked, double uncappedKw, double limitKw) {
 		if (braked) return 0.0;
