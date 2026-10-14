@@ -57,15 +57,15 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 			Map.entry(0b0100, Block.box(6.45, 0.00, 4.55, 9.55, 3.10, 12.08)),
 			Map.entry(0b0101, Block.box(7.12, 0.00, 4.60, 8.88, 1.76, 11.40)),
 			Map.entry(0b0110, Block.box(7.12, 0.00, 7.12, 12.28, 1.76, 12.28)),
-			Map.entry(0b0111, Block.box(6.10, 0.00, 5.40, 10.60, 2.36, 10.60)),
+			Map.entry(0b0111, Block.box(6.10, 0.00, 4.60, 11.40, 2.36, 11.40)),
 			Map.entry(0b1000, Block.box(3.92, 0.00, 6.45, 11.45, 3.10, 9.55)),
 			Map.entry(0b1001, Block.box(3.72, 0.00, 3.72, 8.88, 1.76, 8.88)),
 			Map.entry(0b1010, Block.box(4.60, 0.00, 7.12, 11.40, 1.76, 8.88)),
-			Map.entry(0b1011, Block.box(5.40, 0.00, 5.40, 10.60, 2.36, 9.90)),
+			Map.entry(0b1011, Block.box(4.60, 0.00, 4.60, 11.40, 2.36, 9.90)),
 			Map.entry(0b1100, Block.box(3.72, 0.00, 7.12, 8.88, 1.76, 12.28)),
-			Map.entry(0b1101, Block.box(5.40, 0.00, 5.40, 9.90, 2.36, 10.60)),
-			Map.entry(0b1110, Block.box(5.40, 0.00, 6.10, 10.60, 2.36, 10.60)),
-			Map.entry(0b1111, Block.box(5.40, 0.00, 5.40, 10.60, 2.36, 10.60)));
+			Map.entry(0b1101, Block.box(4.60, 0.00, 4.60, 9.90, 2.36, 11.40)),
+			Map.entry(0b1110, Block.box(4.60, 0.00, 6.10, 11.40, 2.36, 11.40)),
+			Map.entry(0b1111, Block.box(4.60, 0.00, 4.60, 11.40, 2.36, 11.40)));
 
 	private static final Map<Direction, VoxelShape> ABC_ARMS = Map.of(
 			Direction.NORTH, Block.box(7.12, 0.00, 0.00, 8.88, 1.76, 4.60),
@@ -75,25 +75,25 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 
 	private static final Map<Integer, VoxelShape> MV_HUBS = Map.ofEntries(
 			Map.entry(0b0000, Block.box(7.49, 0.00, 3.00, 8.51, 1.02, 13.00)),
-			Map.entry(0b0001, Shapes.or(Block.box(7.49, 0.00, 4.29, 8.51, 2.06, 8.20),
+			Map.entry(0b0001, Shapes.or(Block.box(7.49, 0.00, 4.29, 8.51, 2.06, 8.80),
 					Block.box(6.45, 0.00, 8.20, 9.55, 3.10, 11.45))),
-			Map.entry(0b0010, Shapes.or(Block.box(7.80, 0.00, 7.49, 11.71, 2.06, 8.51),
+			Map.entry(0b0010, Shapes.or(Block.box(7.20, 0.00, 7.49, 11.71, 2.06, 8.51),
 					Block.box(4.55, 0.00, 6.45, 7.80, 3.10, 9.55))),
 			Map.entry(0b0011, Block.box(7.49, 0.00, 4.09, 11.91, 1.02, 8.51)),
-			Map.entry(0b0100, Shapes.or(Block.box(7.49, 0.00, 7.80, 8.51, 2.06, 11.71),
+			Map.entry(0b0100, Shapes.or(Block.box(7.49, 0.00, 7.20, 8.51, 2.06, 11.71),
 					Block.box(6.45, 0.00, 4.55, 9.55, 3.10, 7.80))),
 			Map.entry(0b0101, Block.box(7.49, 0.00, 4.60, 8.51, 1.02, 11.40)),
 			Map.entry(0b0110, Block.box(7.49, 0.00, 7.49, 11.91, 1.02, 11.91)),
-			Map.entry(0b0111, Block.box(6.10, 0.00, 5.40, 10.60, 1.62, 10.60)),
-			Map.entry(0b1000, Shapes.or(Block.box(4.29, 0.00, 7.49, 8.20, 2.06, 8.51),
+			Map.entry(0b0111, Block.box(6.10, 0.00, 4.60, 11.40, 1.62, 11.40)),
+			Map.entry(0b1000, Shapes.or(Block.box(4.29, 0.00, 7.49, 8.80, 2.06, 8.51),
 					Block.box(8.20, 0.00, 6.45, 11.45, 3.10, 9.55))),
 			Map.entry(0b1001, Block.box(4.09, 0.00, 4.09, 8.51, 1.02, 8.51)),
 			Map.entry(0b1010, Block.box(4.60, 0.00, 7.49, 11.40, 1.02, 8.51)),
-			Map.entry(0b1011, Block.box(5.40, 0.00, 5.40, 10.60, 1.62, 9.90)),
+			Map.entry(0b1011, Block.box(4.60, 0.00, 4.60, 11.40, 1.62, 9.90)),
 			Map.entry(0b1100, Block.box(4.09, 0.00, 7.49, 8.51, 1.02, 11.91)),
-			Map.entry(0b1101, Block.box(5.40, 0.00, 5.40, 9.90, 1.62, 10.60)),
-			Map.entry(0b1110, Block.box(5.40, 0.00, 6.10, 10.60, 1.62, 10.60)),
-			Map.entry(0b1111, Block.box(5.40, 0.00, 5.40, 10.60, 1.62, 10.60)));
+			Map.entry(0b1101, Block.box(4.60, 0.00, 4.60, 9.90, 1.62, 11.40)),
+			Map.entry(0b1110, Block.box(4.60, 0.00, 6.10, 11.40, 1.62, 11.40)),
+			Map.entry(0b1111, Block.box(4.60, 0.00, 4.60, 11.40, 1.62, 11.40)));
 
 	private static final Map<Direction, VoxelShape> MV_ARMS = Map.of(
 			Direction.NORTH, Block.box(7.49, 0.00, 0.00, 8.51, 1.02, 4.60),
@@ -109,15 +109,15 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 			Map.entry(0b0100, Block.box(4.74, 0.00, 4.55, 11.25, 6.51, 11.62)),
 			Map.entry(0b0101, Block.box(6.98, 0.00, 4.60, 9.02, 2.03, 11.40)),
 			Map.entry(0b0110, Block.box(6.98, 0.00, 6.98, 11.82, 2.03, 11.82)),
-			Map.entry(0b0111, Block.box(6.10, 0.00, 5.40, 10.60, 2.63, 10.60)),
+			Map.entry(0b0111, Block.box(6.10, 0.00, 4.60, 11.40, 2.63, 11.40)),
 			Map.entry(0b1000, Block.box(4.38, 0.00, 4.74, 11.45, 6.51, 11.25)),
 			Map.entry(0b1001, Block.box(4.18, 0.00, 4.18, 9.02, 2.03, 9.02)),
 			Map.entry(0b1010, Block.box(4.60, 0.00, 6.98, 11.40, 2.03, 9.02)),
-			Map.entry(0b1011, Block.box(5.40, 0.00, 5.40, 10.60, 2.63, 9.90)),
+			Map.entry(0b1011, Block.box(4.60, 0.00, 4.60, 11.40, 2.63, 9.90)),
 			Map.entry(0b1100, Block.box(4.18, 0.00, 6.98, 9.02, 2.03, 11.82)),
-			Map.entry(0b1101, Block.box(5.40, 0.00, 5.40, 9.90, 2.63, 10.60)),
-			Map.entry(0b1110, Block.box(5.40, 0.00, 6.10, 10.60, 2.63, 10.60)),
-			Map.entry(0b1111, Block.box(5.40, 0.00, 5.40, 10.60, 2.63, 10.60)));
+			Map.entry(0b1101, Block.box(4.60, 0.00, 4.60, 9.90, 2.63, 11.40)),
+			Map.entry(0b1110, Block.box(4.60, 0.00, 6.10, 11.40, 2.63, 11.40)),
+			Map.entry(0b1111, Block.box(4.60, 0.00, 4.60, 11.40, 2.63, 11.40)));
 
 	private static final Map<Direction, VoxelShape> HV_ARMS = Map.of(
 			Direction.NORTH, Block.box(6.98, 0.00, 0.00, 9.02, 2.03, 4.60),

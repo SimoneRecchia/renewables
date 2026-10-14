@@ -168,7 +168,7 @@ RECTANGLES = {
     # 2 px of its own face.  The antenna is its own, because it is 16 mm across on a bracket at one end of a
     # 400 mm roof: swept into the cabinet's box it would be a slab of air over the other end of it.
     'plant_controller': (
-        ('cabinet', ('plinth', 'cabinet', 'door', 'rail', 'glands')),
+        ('cabinet', ('plinth', 'cabinet', 'door', 'glands')),
         ('antenna', ('antenna',)),
     ),
     'met_mast': (
@@ -236,8 +236,10 @@ RECTANGLES = {
         ('tower', ('pole', 'pole_base')),
         ('canopy', ('motor',)),
         ('cooler', ('motor_cooler',)),
-        ('~decoration', ('motor_hatch', 'motor_sensors', 'motor_beacon')),
+        ('~decoration', ('motor_shaft', 'motor_hatch', 'motor_sensors', 'motor_beacon')),
         ('insulator', ('insulator',)),
+        # a trough at grade, a quarter of a pixel tall: nothing to collide with, and declared as such
+        ('~duct', ('insulator_duct',)),
     ),
     'utility_pole': (
         # the shaft is the cone and nothing else: the steps, the earth strap and the number plate each

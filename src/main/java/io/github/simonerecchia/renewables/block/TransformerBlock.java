@@ -1,5 +1,6 @@
 package io.github.simonerecchia.renewables.block;
 
+import io.github.simonerecchia.renewables.api.Nameplate;
 import io.github.simonerecchia.renewables.api.power.TransformerSpec;
 import io.github.simonerecchia.renewables.grid.WireLedger;
 
@@ -144,8 +145,8 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 
 		if (level.isClientSide && level.getBlockEntity(pos) instanceof TransformerBlockEntity transformer) {
 			player.displayClientMessage(Component.translatable("tooltip.renewables.transformer.reading",
-					spec.ratioText(), String.format("%.1f", transformer.getCurrentPower()),
-					String.format("%.1f", spec.lossKw(transformer.getCurrentPower()))), true);
+					spec.ratioText(), Nameplate.fmt("%.1f", transformer.getCurrentPower()),
+					Nameplate.fmt("%.1f", spec.lossKw(transformer.getCurrentPower()))), true);
 		}
 
 		return InteractionResult.sidedSuccess(level.isClientSide);
