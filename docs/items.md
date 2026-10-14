@@ -182,7 +182,7 @@ These came out of writing the table, and none of them is a bug — they are the 
    the line, with a real ratio and real copper losses, would make the voltage figures on the panels mean
    something end to end.
 
-5. **The upstream `solar_panel` and `power_box` predate the catalogue.** They work, and they now sit in
+5. **The first `solar_panel` and `power_box` predate the catalogue.** They work, and they now sit in
    the same crafting tree as everything else, but the power box converts to Forge Energy at a fixed rate
    with no mention of voltage — where every other machine in the mod is careful about it.
 

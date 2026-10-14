@@ -17,7 +17,7 @@ BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', '
 LOOT = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'loot_tables', 'blocks')
 LANG = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'lang', 'en_us.json')
 TAGS = os.path.join('src', 'main', 'resources', 'data', 'minecraft', 'tags', 'blocks')
-CATALOGUE = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'main', 'registry',
+CATALOGUE = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'catalog',
                          'PartCatalog.java')
 
 SHAPED = 'minecraft:crafting_shaped'
@@ -431,10 +431,13 @@ def tool_tags():
     with, and its loot table never fires. Seven of them were in that state - three towers, two transformers
     and both switches - because the tag was written by hand and the machines were added after it.
     """
-    mineable = sorted('renewables:' + name for name in MACHINES if name != 'machine_shell')
+    # The shell is in both tags.  Every machine that fills cells is iron-tier, and a cell that breaks as the
+    # machine does has to be as quick to break and as particular about its tool, or breaking the cell by hand
+    # would be a way round the pickaxe the machine asks for.
+    mineable = sorted('renewables:' + name for name in MACHINES)
     write(os.path.join(TAGS, 'mineable', 'pickaxe.json'), {'replace': False, 'values': mineable})
     write(os.path.join(TAGS, 'needs_iron_tool.json'),
-          {'replace': False, 'values': sorted('renewables:' + name for name in NEEDS_IRON)})
+          {'replace': False, 'values': sorted('renewables:' + name for name in NEEDS_IRON + ('machine_shell',))})
     return len(mineable)
 
 

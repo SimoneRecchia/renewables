@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "MMM",
+    "CUC",
+    "MIM"
+  ],
+  "key": {
+    "C": {
+      "item": "renewables:circuit_board"
+    },
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "M": {
+      "item": "renewables:metal_casing"
+    },
+    "U": {
+      "item": "renewables:cpu"
+    }
+  },
+  "result": {
+    "item": "renewables:power_box"
+  }
+}

@@ -23,7 +23,7 @@ from check_row_cabling import read_groups, voxels                               
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models')
 RENDERER = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'client', 'render',
-                        'block', 'SwitchgearRenderer.java')
+                        'SwitchgearRenderer.java')
 
 # Which models have something that travels.  A breaker's contacts are inside a sealed bottle, so it has
 # nothing here at all - which is the difference between the two objects.

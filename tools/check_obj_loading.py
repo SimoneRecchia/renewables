@@ -12,7 +12,7 @@ so the game drew the junction box's lid and dropped its five walls, and drew one
 pair.  Nothing else could see it: check_hitboxes, check_winding and render_blocks all append faces to a
 flat list, so every tool here read the twelve faces the game had reduced to one.
 
-**A fitting named after nothing.**  ObjDefinitions names each machine's fittings by group, and a wire is hung
+**A fitting named after nothing.**  ModelDefinitions names each machine's fittings by group, and a wire is hung
 on one by pointing at it - so a name no model draws is a terminal that has no hover box and no anchor.  The
 wind turbine's said ``insulator_Plastic`` for as long as it has existed: the inherited model's object is
 ``insulator`` and its material ``insulator_porcelain``, and the mod's loader keys a group as object + "_" +
@@ -60,16 +60,16 @@ def split_materials(path):
 
 
 def fitting_names(java):
-    """Every group name ObjDefinitions names a fitting by, as a literal.
+    """Every group name ModelDefinitions names a fitting by, as a literal.
 
     The names built in a loop - "bushing_" + i + "_porcelain" - are covered by their own family's literals
     elsewhere in the same file, so the literals are what is worth checking and what went wrong.
     """
-    source = open(os.path.join(java, 'io', 'github', 'simonerecchia', 'renewables', 'main', 'registry',
-                               'ObjDefinitions.java')).read()
+    source = open(os.path.join(java, 'io', 'github', 'simonerecchia', 'renewables', 'model',
+                               'ModelDefinitions.java')).read()
     # followed by a comma or a close bracket, so the prefix of a "bushing_" + i + "_porcelain" is not one
     return sorted({name for name in re.findall(r'"([a-z][a-z0-9_]*)"\s*[,)]', source)
-                   if name.startswith(('insulator', 'bushing'))})
+                   if name.startswith(('insulator', 'bushing')) and not name.endswith('_')})
 
 
 def group_keys(objs):
@@ -109,7 +109,7 @@ def main():
     drawn = group_keys(objs)
     for name in fitting_names(java):
         if name not in drawn:
-            print('NO GROUP  ObjDefinitions names the fitting "%s", which no model draws -> that terminal has '
+            print('NO GROUP  ModelDefinitions names the fitting "%s", which no model draws -> that terminal has '
                   'no hover box and no wire can be hung on it.' % name)
             problems += 1
 
@@ -128,7 +128,7 @@ def main():
             problems += 1
 
     # An OBJ nothing names is dead weight the next regeneration will not clean up.  A machine's OBJ is
-    # named in Java by ObjDefinitions, either as a whole path (electric_cab/cab.obj, which is not named
+    # named in Java by ModelDefinitions, either as a whole path (electric_cab/cab.obj, which is not named
     # after its directory) or built as "models/" + modelName() + "/" + modelName() + ".obj" - so accept
     # the directory name as a string literal too, which is all the Java ever holds for those.
     sources = ''.join(open(os.path.join(root, name)).read()
@@ -141,7 +141,10 @@ def main():
             continue
         if os.path.basename(path) == directory + '.obj' and '"%s"' % directory in sources:
             continue
-        print('ORPHAN    %s is named by no block model and by no ObjDefinitions entry.'
+        # ModelDefinitions writes a model as "folder/file" and puts "models/" and ".obj" round it
+        if '"%s/%s"' % (directory, os.path.splitext(os.path.basename(path))[0]) in sources:
+            continue
+        print('ORPHAN    %s is named by no block model and by no ModelDefinitions entry.'
               % os.path.relpath(path, ASSETS))
         problems += 1
 

@@ -28,7 +28,7 @@ import objlib                                                                   
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models')
 RENDERER = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'client', 'render',
-                        'block', 'PvArrayRenderer.java')
+                        'PvArrayRenderer.java')
 
 # A hundred and twenty-eighth of a block, which is an eighth of a pixel: fine enough that two cables 0.1 px
 # apart are not called a collision, coarse enough to rasterise every state of four models.

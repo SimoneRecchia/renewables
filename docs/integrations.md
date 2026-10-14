@@ -15,8 +15,7 @@ a `ModList` check.
 
 The **Power Box** has always exposed `ForgeCapabilities.ENERGY` and pushed Forge Energy
 to its neighbours. Mekanism's own `ForgeEnergyCompat` converts Forge Energy both ways, so
-a Universal Cable against a Power Box has always carried power. That part is upstream's,
-not this fork's.
+a Universal Cable against a Power Box has always carried power. That part needed no change.
 
 The gap was the **turbine**: it had no energy buffer and no capability on any face. It
 existed only inside the wire graph.
