@@ -60,9 +60,13 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 	/** The insulator's box at the foot of a tower that carries a turbine, turned with the machine's four facings. */
 	private static final MachineShell.Cell INSULATOR = new MachineShell.Cell(0, 0, 0, box(TurbineGeometry.INSULATOR_BOX));
 
-	/** The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state. */
+	/**
+	 * The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state.
+	 * Solid as far as fluids go: a dynamic shape is never counted solid, and water spread into a tower stood in the sea and
+	 * washed its foot away, and the rest of it with it.
+	 */
 	public TurbineTowerBlock(Properties properties) {
-		super(properties.dynamicShape());
+		super(properties.dynamicShape().forceSolidOn());
 	}
 
 	private static VoxelShape box(double[] b) {

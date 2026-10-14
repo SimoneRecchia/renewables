@@ -40,9 +40,12 @@ public class WindTurbineBlock extends MachineBlock {
 	/** The nacelle as collision and as selection at each step of yaw: the hull and the cooler, turned and cut to the block. */
 	private final VoxelShape[] shapes = new VoxelShape[SHAPE_STEPS];
 
-	/** The shape follows the nacelle's yaw, which is the block entity's, so it is asked for every time rather than kept per state. */
+	/**
+	 * The shape follows the nacelle's yaw, which is the block entity's, so it is asked for every time rather than kept per
+	 * state; and like the tower it is solid as far as fluids go, so the sea does not wash a nacelle off its tower.
+	 */
 	public WindTurbineBlock(Properties properties, TurbineSpec spec) {
-		super(properties.dynamicShape());
+		super(properties.dynamicShape().forceSolidOn());
 		this.spec = spec;
 	}
 
