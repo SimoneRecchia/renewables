@@ -47,7 +47,7 @@ public class PvInverterRenderer extends MachineRenderer {
 	private static void render(PvInverterBlockEntity inverter, RenderContext context, PoseStack poseStack, Matrix4f projection) {
 		MeshModel model = context.model();
 		InverterSpec spec = inverter.spec();
-		float scale = (float) renderScale(spec);
+		float scale = (float) spec.renderScale();
 		float fanAngle = advanceFan(inverter.getBlockPos(), inverter.cabinetTempC(), spec.cooling());
 
 		Direction facing = inverter.getBlockState().getValue(PvInverterBlock.FACING);
@@ -81,14 +81,6 @@ public class PvInverterRenderer extends MachineRenderer {
 		}
 
 		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), inverter.getBlockPos(), BUFFER_CACHE);
-	}
-
-	/** How large to draw a machine, from its nameplate. */
-	private static double renderScale(InverterSpec spec) {
-		if (spec.acPowerKw() >= 1000.0) return 1.0;
-		if (spec.acPowerKw() <= 30.0) return 0.62;
-
-		return 0.92;
 	}
 
 	/** Turns the fan on by the cabinet temperature, and keeps the angle between frames. */
