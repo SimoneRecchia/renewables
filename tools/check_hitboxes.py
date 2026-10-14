@@ -236,8 +236,10 @@ RECTANGLES = {
         ('tower', ('pole', 'pole_base')),
         ('canopy', ('motor',)),
         ('cooler', ('motor_cooler',)),
-        ('~decoration', ('motor_hatch', 'motor_sensors', 'motor_beacon')),
+        ('~decoration', ('motor_shaft', 'motor_hatch', 'motor_sensors', 'motor_beacon')),
         ('insulator', ('insulator',)),
+        # a trough at grade, a quarter of a pixel tall: nothing to collide with, and declared as such
+        ('~duct', ('insulator_duct',)),
     ),
     'utility_pole': (
         # the shaft is the cone and nothing else: the steps, the earth strap and the number plate each
