@@ -20,9 +20,9 @@ public record TransformerSpec(
 		/** Volts in and volts out, which is what makes it the machine it is. */
 		double primaryVolts,
 		double secondaryVolts,
-		/** Full-load loss as a fraction: a transformer is the most efficient machine on a plant. */
-		double lossFraction,
-		/** No-load loss in kW, which it burns whether anything is drawing from it or not. */
+		/** Load loss Pk at rated current and 75 °C, kW: the windings' I²R, which goes with the square of the load. */
+		double loadLossKw,
+		/** No-load loss P0 in kW: the core's, which it burns whether anything is drawing from it or not. */
 		double coreLossKw,
 		/** The model this is drawn as. */
 		String modelName,
@@ -36,9 +36,19 @@ public record TransformerSpec(
 		SUBSTATION
 	}
 
-	/** What a load of {@code kw} costs in losses, which is the core loss plus a share of the load. */
+	/**
+	 * What carrying {@code kw} costs in losses: {@code P0 + Pk (S / Sr)^2}, the core loss plus the windings' at that
+	 * share of the rating.  The grid moves active power at unity power factor, so S is the kW itself.
+	 */
 	public double lossKw(double kw) {
-		return coreLossKw + Math.abs(kw) * lossFraction;
+		double load = Math.abs(kw) / ratingKva;
+		return coreLossKw + loadLossKw * load * load;
+	}
+
+	/** Efficiency at a load, as a fraction: what comes out over what goes in. */
+	public double efficiencyAt(double kw) {
+		double through = Math.abs(kw);
+		return through <= 0.0 ? 0.0 : Math.max(0.0, through - lossKw(through)) / through;
 	}
 
 	/** The ratio, for a tooltip: 0.8/33 reads better than two numbers in volts. */

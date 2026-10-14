@@ -14,7 +14,7 @@ public final class TransformerFlow {
 
 	/**
 	 * What comes out for {@code inKw} going in: the load less the losses (a core loss that is burned whatever is
-	 * drawn, and a share of the load), never below nothing.  The way it flows is kept - a negative reading is power
+	 * drawn, and the windings' loss at that load), never below nothing.  The way it flows is kept - a negative reading is power
 	 * coming the other way and stays negative - and a flow that does not cover the core loss comes out as zero.
 	 */
 	public static double output(TransformerSpec spec, double inKw) {
