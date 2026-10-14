@@ -4,7 +4,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.saveddata.SavedData;
 
 /**
- * The world's record of the largest insulator id ever handed out, kept with the Overworld's data.
+ * The world's record of the insulator ids handed out, kept with the Overworld's data: not the largest so far but
+ * the reservation the counter holds ahead of it ({@link IdPool}), so a restart never comes back below an id in use.
  *
  * It is the whole of the persistence: ids are unique across every dimension, so one counter serves them all.
  */
