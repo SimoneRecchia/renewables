@@ -151,15 +151,18 @@ final class LevelGrid {
 			edges.add(new GridSolver.Edge(span.startInsulatorId(), span.endInsulatorId(), ohms, volts, forward, backward));
 		}
 
-		// what a machine burns carrying power across itself: a transformer's no-load and load losses
+		// what a machine burns carrying power across itself (a transformer's no-load and load losses), and where the
+		// power ends: the machines that draw it
 		Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
+		Set<Long> loads = new HashSet<>();
 		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
 			InsulatorHost host = entry.getValue();
 			if (host.losesInPassing()) passages.put(entry.getKey(), host::throughLossKw);
+			if (host.isLoad()) loads.add(entry.getKey());
 		}
 
 		List<GridSolver.Source> sources = sources(level, hosts, firstNode);
-		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages);
+		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads);
 		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(nodes.values(), readings);
 
 		deliver(level, hosts, byPosition);

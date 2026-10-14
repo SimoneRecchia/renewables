@@ -77,6 +77,14 @@ public interface InsulatorHost {
 	}
 
 	/**
+	 * Whether this machine draws power from the network, rather than passing it on: where the grid's flow ends.  The
+	 * power box, and nothing else; a line with no load at its end carries no current.
+	 */
+	default boolean isLoad() {
+		return false;
+	}
+
+	/**
 	 * Whether this machine burns something carrying power from one of its fittings to another: a transformer, and
 	 * nothing else - every other machine's fittings share a few metres of busbar.
 	 */

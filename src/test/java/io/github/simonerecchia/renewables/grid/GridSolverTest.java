@@ -7,6 +7,7 @@ import io.github.simonerecchia.renewables.api.power.PowerDeliveryEvent;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -15,10 +16,11 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The solver against the rules of grid.md section 8, on small hand-built networks, with the I²R loss of real
- * conductors: every expected figure below is {@code P - k P^2} worked out by hand, k = 1000 R / U^2 per kW.
+ * conductors and the flow going to the loads: every expected figure below is {@code P - k P^2} worked out by hand,
+ * k = 1000 R / U^2 per kW, and every load (a box) draws alike.
  *
  * The machine rules (who may feed whom) are the table of section 8.2a, written out here, so that these tests check
- * the whole decision - machine rule and role rule together - and not just the walk.
+ * the whole decision - machine rule and role rule together - and not just the flow.
  */
 class GridSolverTest {
 	private static final double EPS = 1e-6;
@@ -39,7 +41,7 @@ class GridSolverTest {
 	/** The table of section 8.2a: which machine kind may feed which. */
 	private static final Map<String, Set<String>> FEEDS = Map.of(
 			"turbine", Set.of("cabin", "turbine", "transformer"),
-			// not a real machine: a generator that may feed anything, so a test of the walk is not a test of the table
+			// not a real machine: a generator that may feed anything, so a test of the flow is not a test of the table
 			"source", Set.of("cabin", "source", "pole", "box", "switch", "turbine"),
 			"cabin", Set.of("pole", "tower", "transformer", "ground"),
 			"pole", Set.of("pole", "box", "ground"),
@@ -55,12 +57,17 @@ class GridSolverTest {
 		final List<GridSolver.Node> nodes = new ArrayList<>();
 		final List<GridSolver.Edge> edges = new ArrayList<>();
 		final List<GridSolver.Source> sources = new ArrayList<>();
-		/** Block positions are plain numbers here: x along a line, with y and z both zero. */
+		final Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
+		/** Block positions are plain numbers here: x along a line, z across it, y zero. */
 		final Map<Long, int[]> coordinates = new HashMap<>();
 
 		void machine(long pos, String kind, int x) {
+			machine(pos, kind, x, 0);
+		}
+
+		void machine(long pos, String kind, int x, int z) {
 			kindAt.put(pos, kind);
-			coordinates.put(pos, new int[] {x, 0, 0});
+			coordinates.put(pos, new int[] {x, 0, z});
 		}
 
 		void fitting(int id, long pos, String role) {
@@ -101,10 +108,21 @@ class GridSolverTest {
 			sources.add(new GridSolver.Source(node, kw, PowerDeliveryEvent.NONE));
 		}
 
-		final Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
+		Set<Long> loads() {
+			Set<Long> loads = new HashSet<>();
+			kindAt.forEach((pos, kind) -> {
+				if (kind.equals("box")) loads.add(pos);
+			});
+			return loads;
+		}
 
 		Map<Long, GridSolver.Reading> solve() {
-			return GridSolver.byPosition(nodes, GridSolver.solve(nodes, edges, sources, passages));
+			return GridSolver.byPosition(nodes, GridSolver.solve(nodes, edges, sources, passages, loads()));
+		}
+
+		/** What all the loads together receive. */
+		double delivered(Map<Long, GridSolver.Reading> out) {
+			return loads().stream().mapToDouble(pos -> out.getOrDefault(pos, GridSolver.Reading.NOTHING).powerKw()).sum();
 		}
 	}
 
@@ -158,39 +176,80 @@ class GridSolverTest {
 		assertEquals(0.0, out.get(4L).powerKw(), EPS);
 	}
 
-	// ---- manual test 3 ----
-
+	/** A line with nothing drawing at its end carries no current: the generator reads what it makes, the rest nothing. */
 	@Test
-	void aSecondCableBetweenTheSamePolesLosesLess() {
+	void aLineWithNoLoadCarriesNothing() {
 		World w = baseChain(true);
-		// another cable between other fittings of the pole and the box, 10 blocks like the first
-		w.fitting(32, 3, "bidirectional");
-		w.fitting(41, 4, "bidirectional");
-		w.span(32, 41);
+		w.kindAt.put(4L, "pole");
 
 		Map<Long, GridSolver.Reading> out = w.solve();
+		assertEquals(X, out.get(1L).powerKw(), EPS);
+		assertEquals(0.0, out.get(2L).powerKw(), EPS);
+		assertEquals(0.0, out.get(3L).powerKw(), EPS);
+		assertEquals(0.0, out.get(4L).powerKw(), EPS);
+	}
 
-		// two equal spans in parallel are half the resistance, so half the loss: 0.785 kW where one lost 1.571
-		assertEquals(75.315809, out.get(3L).powerKw(), EPS);
-		assertEquals(74.530526, out.get(4L).powerKw(), EPS);
+	// ---- manual test 3: the phases of one circuit are not cables in parallel ----
+
+	/** Strings {@code count} spans between the pole and the box of the base chain, on fittings of their own. */
+	private static World chainWithSpans(int count) {
+		World w = baseChain(true);
+		for (int i = 1; i < count; i++) {
+			w.fitting(31 + i, 3, "bidirectional");
+			w.fitting(40 + i, 4, "bidirectional");
+			w.span(31 + i, 40 + i);
+		}
+
+		return w;
+	}
+
+	/**
+	 * Three spans between two machines are the three phases of one circuit, and lose what one circuit loses; it takes
+	 * a second circuit, four to six spans, to halve the resistance (0.785 kW where one lost 1.571).
+	 */
+	@Test
+	void threePhasesAreOneCircuitAndASecondCircuitHalvesTheLoss() {
+		assertEquals(73.745243, chainWithSpans(2).solve().get(4L).powerKw(), EPS);
+		assertEquals(73.745243, chainWithSpans(3).solve().get(4L).powerKw(), EPS);
+		assertEquals(74.530526, chainWithSpans(4).solve().get(4L).powerKw(), EPS);
+		assertEquals(74.530526, chainWithSpans(6).solve().get(4L).powerKw(), EPS);
+	}
+
+	@Test
+	void circuitsAreCountedInThrees() {
+		assertEquals(1.0, GridSolver.circuitCoefficient(List.of(1.0)), 1e-12);
+		assertEquals(1.0, GridSolver.circuitCoefficient(List.of(1.0, 1.0, 1.0)), 1e-12);
+		assertEquals(0.5, GridSolver.circuitCoefficient(List.of(1.0, 1.0, 1.0, 1.0, 1.0, 1.0)), 1e-12);
+		assertEquals(0.0, GridSolver.circuitCoefficient(List.of(1.0, 0.0)), 0.0);
 	}
 
 	// ---- manual test 6 ----
 
-	/** T (0) - switch S (5) - cabin C (10): the switch's line side takes the turbine, its load side feeds the cabin. */
+	/**
+	 * T (0) - switch S (5) - cabin C (10) - pole P - box B, the last two beside the cabin: the switch's line side takes
+	 * the turbine, its load side feeds the cabin.
+	 */
 	private static World switched(boolean open) {
 		World w = new World();
 		w.machine(1, "turbine", 0);
 		w.machine(2, "switch", 5);
 		w.machine(3, "cabin", 10);
+		w.machine(4, "box", 10);
+		w.machine(5, "pole", 10);
 
 		w.fitting(10, 1, "output");
 		// line side: bus 0; load side: bus 0 when closed, bus 1 when open
 		w.fitting(20, 2, "bidirectional", 0);
 		w.fitting(21, 2, "bidirectional", open ? 1 : 0);
 		w.fitting(30, 3, "input");
+		w.fitting(31, 3, "output");
+		w.fitting(40, 4, "bidirectional");
+		w.fitting(50, 5, "bidirectional");
+		w.fitting(51, 5, "bidirectional");
 		w.span(10, 20, MV);
 		w.span(21, 30, MV);
+		w.span(31, 50);
+		w.span(51, 40);
 		w.generator(10, X);
 		return w;
 	}
@@ -199,19 +258,58 @@ class GridSolverTest {
 	void aClosedSwitchLetsPowerThrough() {
 		Map<Long, GridSolver.Reading> out = switched(false).solve();
 
-		// two 50 m hops of 33 kV line: 41.6 mW each
+		// two 50 m hops of 33 kV line: 41.6 mW each; the pole and the box stand beside the cabin
 		assertEquals(78.749958, out.get(2L).powerKw(), EPS);
 		assertEquals(78.749917, out.get(3L).powerKw(), EPS);
+		assertEquals(78.749917, out.get(4L).powerKw(), EPS);
 	}
 
 	@Test
-	void anOpenSwitchStopsEverythingBelowItAndLeavesAboveUnchanged() {
+	void anOpenSwitchStopsEverythingAndCarriesNothingItself() {
 		Map<Long, GridSolver.Reading> out = switched(true).solve();
 
+		// with the load side cut off there is no load to draw a current through the line side either
+		assertEquals(0.0, out.get(4L).powerKw(), EPS);
 		assertEquals(0.0, out.get(3L).powerKw(), EPS);
-		// the switch itself reads what is on its supply side
-		assertEquals(78.749958, out.get(2L).powerKw(), EPS);
+		assertEquals(0.0, out.get(2L).powerKw(), EPS);
 		assertEquals(X, out.get(1L).powerKw(), EPS);
+	}
+
+	/** Opening a switch on one branch sends the whole flow down the other, which now has the only load. */
+	@Test
+	void anOpenSwitchSendsThePowerToTheOtherBranch() {
+		for (boolean open : new boolean[] {false, true}) {
+			World w = new World();
+			w.machine(1, "source", 0);
+			w.machine(2, "pole", 0);
+			w.machine(3, "switch", 10);
+			w.machine(4, "box", 20);
+			w.machine(5, "box", 0, 10);
+
+			w.fitting(10, 1, "output");
+			w.fitting(20, 2, "bidirectional");
+			w.fitting(21, 2, "bidirectional");
+			w.fitting(22, 2, "bidirectional");
+			w.fitting(30, 3, "bidirectional", 0);
+			w.fitting(31, 3, "bidirectional", open ? 1 : 0);
+			w.fitting(40, 4, "bidirectional");
+			w.fitting(50, 5, "bidirectional");
+			w.span(10, 20);
+			w.span(21, 30);
+			w.span(31, 40);
+			w.span(22, 50);
+			w.generator(10, 100.0);
+
+			Map<Long, GridSolver.Reading> out = w.solve();
+			if (open) {
+				assertEquals(0.0, out.get(4L).powerKw(), EPS);
+				assertEquals(97.23125, out.get(5L).powerKw(), EPS);
+			} else {
+				assertEquals(49.3078125, out.get(3L).powerKw(), EPS);
+				assertEquals(48.634657, out.get(4L).powerKw(), EPS);
+				assertEquals(49.3078125, out.get(5L).powerKw(), EPS);
+			}
+		}
 	}
 
 	// ---- the rules of 8.4 ----
@@ -221,7 +319,7 @@ class GridSolverTest {
 		World w = new World();
 		w.machine(1, "source", 0);
 		w.machine(2, "pole", 20);
-		w.machine(3, "pole", 40);
+		w.machine(3, "box", 40);
 
 		w.fitting(10, 1, "output");
 		w.fitting(20, 2, "bidirectional");
@@ -239,71 +337,47 @@ class GridSolverTest {
 		assertEquals(89.521298, out.get(3L).powerKw(), EPS);
 	}
 
+	/** Two loads draw alike, so each branch takes half, less its own loss; a branch that leads to no load takes nothing. */
 	@Test
-	void powerSplitsEquallyBetweenTheWaysOnWhateverTheyLeadTo() {
+	void powerGoesToTheLoadsAndADeadBranchTakesNothing() {
 		World w = new World();
 		w.machine(1, "source", 0);
 		w.machine(2, "pole", 0);
-		w.machine(3, "pole", 10);
-		w.machine(4, "pole", 20);
+		w.machine(3, "box", 10);
+		w.machine(4, "box", 20);
+		w.machine(5, "pole", 0, 30);
 
 		w.fitting(10, 1, "output");
-		w.fitting(20, 2, "bidirectional");
-		w.fitting(21, 2, "bidirectional");
-		w.fitting(22, 2, "bidirectional");
+		for (int id : new int[] {20, 21, 22, 23}) w.fitting(id, 2, "bidirectional");
 		w.fitting(30, 3, "bidirectional");
 		w.fitting(40, 4, "bidirectional");
+		w.fitting(50, 5, "bidirectional");
 		w.span(10, 20);
 		w.span(21, 30);
 		w.span(22, 40);
+		w.span(23, 50);
 		w.generator(10, 100.0);
 
 		Map<Long, GridSolver.Reading> out = w.solve();
-		// the first pole is next to the turbine (no loss); each of the two ways takes half, less its own loss:
-		// 50 - 2500 k over 100 m and over 200 m
+		// the first pole is next to the generator (no loss); 50 - 2500 k over 100 m and over 200 m
 		assertEquals(100.0, out.get(2L).powerKw(), EPS);
 		assertEquals(49.3078125, out.get(3L).powerKw(), EPS);
 		assertEquals(48.615625, out.get(4L).powerKw(), EPS);
+		assertEquals(0.0, out.get(5L).powerKw(), EPS);
 	}
 
+	/**
+	 * A diamond, T to A, A to B and C, B and C to D: the load at D is reached both ways, so each takes half, and D
+	 * receives the sum of the two - the power is neither counted twice nor lost where the paths meet.
+	 */
 	@Test
-	void twoCablesToTheSameBusAreOneWayNotTwo() {
+	void aMeshSumsWhereThePathsMeetAndNeverGoesBack() {
 		World w = new World();
 		w.machine(1, "source", 0);
 		w.machine(2, "pole", 0);
 		w.machine(3, "pole", 10);
-		w.machine(4, "pole", 10);
-
-		w.fitting(10, 1, "output");
-		w.fitting(20, 2, "bidirectional");
-		w.fitting(21, 2, "bidirectional");
-		w.fitting(22, 2, "bidirectional");
-		w.fitting(30, 3, "bidirectional");
-		w.fitting(31, 3, "bidirectional");
-		w.fitting(40, 4, "bidirectional");
-		w.span(10, 20);
-		// two cables from machine 2 to machine 3, and one to machine 4
-		w.span(21, 30);
-		w.span(22, 31);
-		w.fitting(23, 2, "bidirectional");
-		w.span(23, 40);
-		w.generator(10, 100.0);
-
-		Map<Long, GridSolver.Reading> out = w.solve();
-		// two ways (machine 3 by two cables, machine 4 by one): half each; the pair of cables is half the resistance
-		assertEquals(49.65390625, out.get(3L).powerKw(), EPS);
-		assertEquals(49.3078125, out.get(4L).powerKw(), EPS);
-	}
-
-	@Test
-	void aMeshDoesNotCountTheSamePowerTwiceAndNeverGoesBack() {
-		// a diamond: T -> A, A -> B, A -> C, B -> D, C -> D
-		World w = new World();
-		w.machine(1, "source", 0);
-		w.machine(2, "pole", 0);
-		w.machine(3, "pole", 10);
-		w.machine(4, "pole", 10);
-		w.machine(5, "pole", 20);
+		w.machine(4, "pole", 0, 10);
+		w.machine(5, "box", 10, 10);
 
 		w.fitting(10, 1, "output");
 		for (int id : new int[] {20, 21, 22}) w.fitting(id, 2, "bidirectional");
@@ -321,10 +395,9 @@ class GridSolverTest {
 		w.generator(10, 100.0);
 
 		Map<Long, GridSolver.Reading> out = w.solve();
-		// D is reached by two equal paths (50, then two 100 m hops); it keeps the larger, not the sum
-		assertEquals(48.634657, out.get(5L).powerKw(), EPS);
 		assertEquals(49.3078125, out.get(3L).powerKw(), EPS);
 		assertEquals(49.3078125, out.get(4L).powerKw(), EPS);
+		assertEquals(2 * 48.634657, out.get(5L).powerKw(), EPS);
 		// nothing is delivered back to the start, though D is wired to both of its neighbours
 		assertEquals(100.0, out.get(2L).powerKw(), EPS);
 	}
@@ -333,24 +406,37 @@ class GridSolverTest {
 	void differentGeneratorsAdd() {
 		World w = new World();
 		w.machine(1, "turbine", 0);
-		w.machine(2, "turbine", 0);
-		w.machine(3, "turbine", 0);
-		w.machine(4, "cabin", 10);
+		w.machine(2, "turbine", 0, 1);
+		w.machine(3, "turbine", 0, 2);
+		w.machine(4, "cabin", 10, 1);
+		w.machine(5, "box", 10, 1);
+		w.machine(6, "pole", 10, 1);
 
 		w.fitting(10, 1, "output");
 		w.fitting(11, 2, "output");
 		w.fitting(12, 3, "output");
 		w.fitting(40, 4, "input");
+		w.fitting(41, 4, "output");
+		w.fitting(50, 5, "bidirectional");
+		w.fitting(60, 6, "bidirectional");
+		w.fitting(61, 6, "bidirectional");
 		w.span(10, 40);
 		w.span(11, 40);
 		w.span(12, 40);
+		w.span(41, 60);
+		w.span(61, 50);
 		w.generator(10, 100.0);
 		w.generator(11, 50.0);
 		w.generator(12, 30.0);
 
-		// each contributes its own power, already worn down by its own cable: no two of them share a span
+		// each contributes its own power, worn down by its own span (the outer two are 100.5 m, sqrt(10^2 + 1)):
+		// no two of them share one
 		Map<Long, GridSolver.Reading> out = w.solve();
-		assertEquals(97.23125 + 49.3078125 + 29.7508125, out.get(4L).powerKw(), EPS);
+		double outer = Math.sqrt(101.0);
+		double k = 1000.0 * 0.443 * outer * 10.0 / 1000.0 / (400.0 * 400.0);
+		double expected = (100.0 - k * 1e4) + (50.0 - 2500.0 * 2.76875e-4) + (30.0 - k * 900.0);
+		assertEquals(expected, out.get(4L).powerKw(), EPS);
+		assertEquals(expected, out.get(5L).powerKw(), EPS);
 	}
 
 	/**
@@ -445,7 +531,7 @@ class GridSolverTest {
 		w.machine(1, "source", 0);
 		w.machine(2, "source", 10);
 		w.machine(3, "pole", 0);
-		w.machine(4, "pole", 10);
+		w.machine(4, "box", 10);
 
 		w.fitting(10, 1, "output");
 		w.fitting(20, 2, "output");
@@ -472,7 +558,7 @@ class GridSolverTest {
 	void aLongRunDeliversNoMoreThanItsTransferLimit() {
 		World w = new World();
 		w.machine(1, "source", 0);
-		w.machine(2, "pole", 500);
+		w.machine(2, "box", 500);
 		w.fitting(10, 1, "output");
 		w.fitting(20, 2, "bidirectional");
 		w.span(10, 20);
@@ -496,31 +582,25 @@ class GridSolverTest {
 		assertTrue(out.get(4L).event().surgeSeverity() < out.get(2L).event().surgeSeverity());
 	}
 
-	@Test
-	void theWalkOfAHugeMeshStopsAtItsLimit() {
-		// a lattice of poles that has far more simple paths than the budget allows: the walk must end and give an answer
+	// ---- conservation ----
+
+	/** A grid of poles, {@code side} by {@code side}, {@code spacing} blocks apart, with the generator by the corner pole. */
+	private static World lattice(int side, int spacing, double kw) {
 		World w = new World();
-		w.machine(1, "source", 0);
+		w.machine(1, "source", 0, 0);
 		w.fitting(1, 1, "output");
 
-		int side = 14;
+		long pos = 10;
 		int next = 100;
 		int[][] ids = new int[side][side];
-		long pos = 10;
 		for (int r = 0; r < side; r++) {
 			for (int c = 0; c < side; c++) {
-				w.machine(pos, "pole", 0);
+				w.machine(pos, "pole", spacing * c, spacing * r);
 				ids[r][c] = next;
-				for (int k = 0; k < 4; k++) w.fitting(next + k, pos, "bidirectional");
-				next += 4;
+				for (int f = 0; f < 5; f++) w.fitting(next + f, pos, "bidirectional");
+				next += 5;
 				pos++;
 			}
-		}
-
-		long[][] position = new long[side][side];
-		pos = 10;
-		for (int r = 0; r < side; r++) {
-			for (int c = 0; c < side; c++) position[r][c] = pos++;
 		}
 
 		w.span(1, ids[0][0]);
@@ -531,9 +611,56 @@ class GridSolverTest {
 			}
 		}
 
-		w.generator(1, 1000.0);
+		w.generator(1, kw);
+		return w;
+	}
+
+	/**
+	 * The mesh the review measured: the DFS this replaced spent its whole budget in the first branch, so on a 5 x 5
+	 * grid the pole at (1, 0) read 1.4 kW against the 405 at (0, 1).  Every bus is now visited once, the two read
+	 * the same, and what the load at the far corner receives plus every span's loss is the generator's output.
+	 */
+	@Test
+	void aMeshIsSolvedWholeAndSymmetrically() {
+		int side = 6;
+		World w = lattice(side, 10, 100.0);
+		w.kindAt.put(10L + side * side - 1, "box");
+
 		Map<Long, GridSolver.Reading> out = w.solve();
-		assertEquals(1000.0, out.get(10L).powerKw(), EPS);
-		assertTrue(out.get(10L + side * side - 1).powerKw() >= 0.0);
+		double right = out.get(11L).powerKw();
+		double down = out.get(10L + side).powerKw();
+		assertEquals(right, down, 1e-9);
+		assertEquals(50.0, right, 1.0);
+
+		double delivered = w.delivered(out);
+		assertTrue(delivered < 100.0 && delivered > 90.0, "delivered " + delivered);
+	}
+
+	/** With every span lossless, the loads together receive exactly what the generators make: nothing made, nothing lost. */
+	@Test
+	void aLosslessNetworkDeliversExactlyWhatIsGenerated() {
+		// every pole on one spot, so every span is of no length; three loads, and a second generator in the middle
+		World mesh = lattice(14, 0, 1000.0);
+		for (long pos : new long[] {10L + 13, 10L + 14 * 13, 10L + 14 * 14 - 1}) mesh.kindAt.put(pos, "box");
+		mesh.machine(2, "source", 0, 0);
+		mesh.fitting(2, 2, "output");
+		mesh.span(2, 100 + 5 * (14 * 7 + 7) + 4);
+		mesh.generator(2, 500.0);
+
+		assertEquals(1500.0, mesh.delivered(mesh.solve()), 1e-9);
+	}
+
+	@Test
+	void whatTheLoadsReceiveNeverExceedsWhatIsGenerated() {
+		World mesh = lattice(8, 10, 300.0);
+		for (long pos : new long[] {10L + 7, 10L + 8 * 7, 10L + 8 * 8 - 1, 10L + 8 * 3 + 4}) mesh.kindAt.put(pos, "box");
+		mesh.machine(2, "source", 40, 40);
+		mesh.fitting(2, 2, "output");
+		mesh.span(2, 100 + 5 * (8 * 4 + 4) + 4);
+		mesh.generator(2, 200.0);
+
+		double delivered = mesh.delivered(mesh.solve());
+		assertTrue(delivered <= 500.0, "delivered " + delivered);
+		assertTrue(delivered > 0.0);
 	}
 }
