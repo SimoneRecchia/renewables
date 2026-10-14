@@ -49,8 +49,10 @@ TOP_RADIUS = 0.155
 LOWER_ARM_Y = 4.72
 UPPER_ARM_Y = 5.67
 ARM_DEPTH = 0.187          # how deep the channel is, top to bottom
-LOWER_ARM_HALF = 2.086     # how far the lower arm reaches from the shaft
-UPPER_ARM_HALF = 1.677
+# How far each arm reaches from the shaft: its outer insulator and a hand past it.  It was half a block past it,
+# a cantilever carrying nothing.
+LOWER_ARM_HALF = 1.71
+UPPER_ARM_HALF = 1.34
 # Where the eight insulators stand, in the order ModelDefinitions names them.
 LOWER_PINS = (-0.79, -1.56, 0.79, 1.56)
 UPPER_PINS = (-0.615, -1.19, 0.615, 1.19)
@@ -77,10 +79,12 @@ def crossarm(mesh, y, half, name):
         for dy in (0.010, ARM_DEPTH - 0.010):
             bolt(mesh, plate, (-0.145, y + dy, z + 0.006), 'x', 0.014, 0.030, uv_scale=0.12)
 
-    # the two braces, from the shaft below the arm out to a third of the way along it
+    # the two braces, from the shaft below the arm up into the channel and onto the underside of its web: ended
+    # level with the channel's legs they stopped in the hollow between them, bolted to nothing
+    web = y + ARM_DEPTH * (1.0 - 0.22)
     for side in (-1, 1):
         strut(mesh, steel, (side * (radius - 0.02), y - 0.44, 0.0),
-              (side * half * 0.52, y + 0.008, 0.0), 0.022, 0.016, uv_scale=0.3)
+              (side * half * 0.52, web + 0.004, 0.0), 0.022, 0.016, uv_scale=0.3)
 
 
 def crossarm_insulator(mesh, index, x, y):
