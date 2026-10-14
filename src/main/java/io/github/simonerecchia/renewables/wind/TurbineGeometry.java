@@ -7,8 +7,8 @@ import java.util.List;
 
 /**
  * The sizes the wind line is built to, as numbers the blocks, the renderer and the tests can share: what part of a
- * block the nacelle fills, how a tower's tube narrows and what shape it makes as collision, and how tall a pile of
- * tower may stand.
+ * block the nacelle fills at any yaw, where the hub is and what disc the blades sweep, how a tower's tube narrows and
+ * what shape it makes as collision, and how tall a pile of tower may stand.
  *
  * The figures are measured off the model ({@code wind_turbine.obj}, see docs/turbine-model.md section 7) and are the
  * ones to remeasure when it is redrawn.  Boxes are plain {@code double[6]} (x0, y0, z0, x1, y1, z1) in blocks from
@@ -40,6 +40,9 @@ public final class TurbineGeometry {
 	/** The golden angle: successive points of a sunflower spiral, which spreads them evenly over a disc. */
 	private static final double GOLDEN_ANGLE = Math.PI * (3.0 - Math.sqrt(5.0));
 
+	/** The nacelle's staircase is cut into this many strips across the cell when it is turned off the block's axes. */
+	private static final int NACELLE_STRIPS = 8;
+
 	/** A pile of tower this tall stands for anybody, and holds up under a walker. */
 	public static final int SAFE_SEGMENTS = 16;
 	/** The tallest a pile can be built before it folds as soon as the block is set. */
@@ -66,6 +69,87 @@ public final class TurbineGeometry {
 	public static List<double[]> nacelleBoxes(TurbineSpec spec) {
 		double scale = spec.nacelleRenderScale();
 		return List.of(cellBox(NACELLE, scale), cellBox(COOLER, scale));
+	}
+
+	/**
+	 * The same hull and cooler with the nacelle turned {@code modelYawDegrees} about the tower's axis, the turn the renderer
+	 * gives it (a point (x, z) of the model goes to (x cos + z sin, z cos - x sin)).  Off the block's axes it is a staircase
+	 * of strips across the cell, each as deep as the turned box is within it, so it always holds what is drawn; on them it
+	 * is the box of {@link #nacelleBoxes(TurbineSpec)}, turned.
+	 */
+	public static List<double[]> nacelleBoxes(TurbineSpec spec, double modelYawDegrees) {
+		double scale = spec.nacelleRenderScale();
+		double angle = Math.toRadians(modelYawDegrees);
+		// exact at the quarter turns, where cos(90) is 6e-17 and not nought
+		double cos = Math.abs(Math.cos(angle)) < 1e-12 ? 0.0 : Math.cos(angle);
+		double sin = Math.abs(Math.sin(angle)) < 1e-12 ? 0.0 : Math.sin(angle);
+		List<double[]> boxes = new ArrayList<>();
+		for (double[] authored : new double[][] {NACELLE, COOLER}) {
+			boxes.addAll(turnedBox(authored, scale, cos, sin));
+		}
+
+		return boxes;
+	}
+
+	/** One authored box turned about the axis and cut to the cell, as strips along x. */
+	private static List<double[]> turnedBox(double[] authored, double scale, double cos, double sin) {
+		double[][] corners = new double[4][];
+		double[] xs = {authored[0] * scale, authored[3] * scale};
+		double[] zs = {authored[2] * scale, authored[5] * scale};
+		int[][] order = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+		for (int i = 0; i < 4; i++) {
+			double x = xs[order[i][0]];
+			double z = zs[order[i][1]];
+			corners[i] = new double[] {x * cos + z * sin, z * cos - x * sin};
+		}
+
+		double y0 = clamp01(authored[1] * scale);
+		double y1 = clamp01(authored[4] * scale);
+		List<double[]> strips = new ArrayList<>();
+		for (int strip = 0; strip < NACELLE_STRIPS; strip++) {
+			double a = -0.5 + strip / (double) NACELLE_STRIPS;
+			double b = a + 1.0 / NACELLE_STRIPS;
+			double[] extent = clippedExtent(corners, a, b);
+			if (extent == null) continue;
+
+			double z0 = Math.max(-0.5, extent[2]);
+			double z1 = Math.min(0.5, extent[3]);
+			if (z1 - z0 < 1e-9 || extent[1] - extent[0] < 1e-9) continue;
+
+			strips.add(new double[] {0.5 + extent[0], y0, 0.5 + z0, 0.5 + extent[1], y1, 0.5 + z1});
+		}
+
+		return strips;
+	}
+
+	/** The x and z extent {x0, x1, z0, z1} of a convex polygon cut to a <= x <= b, or null where it does not reach. */
+	private static double[] clippedExtent(double[][] polygon, double a, double b) {
+		List<double[]> points = new ArrayList<>();
+		int n = polygon.length;
+		for (int i = 0; i < n; i++) {
+			double[] p = polygon[i];
+			double[] q = polygon[(i + 1) % n];
+			if (p[0] >= a && p[0] <= b) points.add(p);
+			// where the edge crosses either side of the strip
+			for (double edge : new double[] {a, b}) {
+				if ((p[0] - edge) * (q[0] - edge) < 0.0) {
+					double t = (edge - p[0]) / (q[0] - p[0]);
+					points.add(new double[] {edge, p[1] + t * (q[1] - p[1])});
+				}
+			}
+		}
+
+		if (points.isEmpty()) return null;
+
+		double[] extent = {Double.MAX_VALUE, -Double.MAX_VALUE, Double.MAX_VALUE, -Double.MAX_VALUE};
+		for (double[] p : points) {
+			extent[0] = Math.min(extent[0], p[0]);
+			extent[1] = Math.max(extent[1], p[0]);
+			extent[2] = Math.min(extent[2], p[1]);
+			extent[3] = Math.max(extent[3], p[1]);
+		}
+
+		return new double[] {Math.max(-0.5, extent[0]), Math.min(0.5, extent[1]), extent[2], extent[3]};
 	}
 
 	// ---- the rotor ----
