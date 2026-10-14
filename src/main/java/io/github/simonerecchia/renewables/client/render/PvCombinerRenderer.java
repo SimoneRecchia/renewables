@@ -28,7 +28,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PvCombinerRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 	/** Where each handle has got to, so throwing the switch is a swing rather than a jump. */
 	private static final Map<BlockPos, Float> HANDLE_ANGLE = new HashMap<>();
 
@@ -39,10 +38,10 @@ public class PvCombinerRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		cleanupAngles(HANDLE_ANGLE, drawAll(event, PvCombinerBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				state -> state.getValue(PvCombinerBlock.FACING), PvCombinerBlock.AUTHORED, BUFFER_CACHE, PvCombinerRenderer::render));
+				state -> state.getValue(PvCombinerBlock.FACING), PvCombinerBlock.AUTHORED, PvCombinerRenderer::render));
 	}
 
-	private static void render(PvCombinerBlockEntity combiner, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(PvCombinerBlockEntity combiner, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		Vec3 spindle = pivot(model, "handle", new Vec3(0.15, 0.50, -0.115));
 		float angle = advanceHandle(combiner.getBlockPos(), combiner.isolated());
@@ -67,7 +66,7 @@ public class PvCombinerRenderer extends MachineRenderer {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), combiner.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(context, poses);
 	}
 
 	/** Walks the handle towards where the switch is, so it swings instead of teleporting. */

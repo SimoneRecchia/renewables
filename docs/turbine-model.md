@@ -1,6 +1,6 @@
 # La turbina eolica: modello, scale, isolatore, hitbox
 
-Modello nuovo, disegnato da zero: nessuna riga, nessun vertice e nessuna texture del modello ereditato.
+Modello disegnato da zero da `tools/gen_turbine_models.py`: ogni riga, ogni vertice e ogni texture viene da un generatore.
 Questo file è il **contratto tra il modello e chi lo usa** (renderer, `fittings.json`, forme dei blocchi). Tutte le
 cifre qui sotto sono misurate dal modello da `tools/gen_turbine_models.py --contract`, `tools/check_turbine.py --table`
 e `tools/gen_turbine_models.py --java`, e i checker le rimisurano a ogni giro: se una cifra si sposta, la costruzione
@@ -54,7 +54,7 @@ Le pale: profilo NACA a quattro cifre su linea media curva (camber 3.5 % al 40 %
 (dove la sezione è un cerchio di diametro uguale alla corda, e si raccorda) a 13 % in punta; asse di passo al 30 %
 della corda; precono 2.5° e pre-flessione di 0.20 in punta in avanti; lato in depressione sottovento. Ventotto
 sezioni per pala, 65 punti per sezione. La radice porta un anello di tenuta (cuscinetto di passo) di raggio 0.19, largo
-0.04, a cavallo della pelle dello spinner. Il passo **non** è disegnato (come nell'originale): le tre pale sono un
+0.04, a cavallo della pelle dello spinner. Il passo **non** è disegnato: le tre pale sono un
 solo oggetto rigido.
 
 Dimensioni complete e angoli per sezione: `BLADE_TABLE` in `tools/gen_turbine_models.py`.
@@ -188,8 +188,7 @@ seleziona; le pale attraversano i blocchi.
 
 ## 8. Texture
 
-Tutte generate da codice con `texlib` (`tools/gen_turbine_textures.py`); nessuna texture del modello ereditato
-(`plastic2.png` non esiste più). L'acciaio verniciato è RAL 7035; ruggine ai giunti di saldatura, sporco leggero,
+Tutte generate da codice con `texlib` (`tools/gen_turbine_textures.py`); nessuna texture disegnata a mano. L'acciaio verniciato è RAL 7035; ruggine ai giunti di saldatura, sporco leggero,
 gocciolature, macchie d'olio, nessun disegno a mano. I due materiali dell'isolatore e il cemento dello zoccolo sono
 texture del progetto scritte da `gen_block_textures.py`, che questo generatore non rivendica.
 
@@ -221,10 +220,9 @@ accessori 1 212, isolatore 444). `ROUND` = 80 lati per fusto, flangia, zoccolo, 
 * `tools/modellib.py`, `Mesh.quad`: toglie gli spigoli ripetuti prima di calcolare l'avvolgimento. Un angolo ripetuto tra
   i **primi due** punti dava area nulla e l'intera faccia veniva scartata: ogni `lathe` che parte dall'asse perdeva il
   disco di partenza (ne mancava uno sotto ogni isolatore a perno, e uno sul fondo dello spinner). Cambia i byte di
-  `met_mast`, `pv_inverter` (36 facce in più), `tx_machine`, `tx_substation` alla prossima rigenerazione; non li ho
-  rigenerati.
+  `met_mast`, `pv_inverter` (36 facce in più), `tx_machine`, `tx_substation`, che sono stati rigenerati.
 * `tools/gen_insulators.py` rimosso: l'isolatore lo disegna `gen_turbine_models.py`.
-* `check_winding.py` (via l'eccezione `INHERITED`), `check_generated_assets.py` (via `block/plastic2.png`), `check_model_textures.py`
+* `check_winding.py`, `check_generated_assets.py`, `check_model_textures.py`
   (la turbina in elenco, legge anche `gen_turbine_textures.py` per le primitive tonde), `check_obj_loading.py`,
   `check_hitboxes.py` (`turbine()`, e salta ciò che legge Java non ancora scritto: vedi `docs/spec/QUESTIONS.md`).
 * `tools/render_blocks.py`: dodici scene `turbine*` che posano il modello con `group_matrix`.

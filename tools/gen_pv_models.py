@@ -811,7 +811,7 @@ def inverter():
                  {side: 'vent', '*': 'cabinet'})
 
     # the wire fitting: on the roof at the east end, clear of both fans and both eyebolts.
-    # clicks this, so ObjDefinitions names the group and WireManager stores wires by its index.
+    # clicks this, so ModelDefinitions names the group and a span stores the fitting by its index.
     steel = mesh.faces('hardware', 'steel')
     box(mesh, steel, (0.356, body_y + 0.002, 0.096), (0.444, body_y + 0.018, 0.184), uv_scale=0.2)
     pin_insulator(mesh, mesh.faces('insulator', 'porcelain'), steel,

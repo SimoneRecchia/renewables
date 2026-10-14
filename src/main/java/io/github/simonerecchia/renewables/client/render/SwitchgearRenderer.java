@@ -9,7 +9,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
 import java.util.Map;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -31,7 +30,6 @@ import io.github.simonerecchia.renewables.block.SwitchgearBlockEntity;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class SwitchgearRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 
 	/** How far a blade swings, in degrees: far enough that the gap reads as a gap from anywhere. */
 	private static final float OPEN_DEGREES = 84.0f;
@@ -39,10 +37,10 @@ public class SwitchgearRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		drawAll(event, SwitchgearBlockEntity.class, MAX_RENDER_DISTANCE_SQ, state -> state.getValue(SwitchgearBlock.FACING),
-				SwitchgearBlock.AUTHORED, BUFFER_CACHE, SwitchgearRenderer::render);
+				SwitchgearBlock.AUTHORED, SwitchgearRenderer::render);
 	}
 
-	private static void render(SwitchgearBlockEntity gear, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(SwitchgearBlockEntity gear, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		boolean open = SwitchgearBlock.open(gear.getBlockState());
 		Vec3 hinge = pivot(model, "blade", new Vec3(0.0, 0.336, 0.155));
@@ -62,7 +60,7 @@ public class SwitchgearRenderer extends MachineRenderer {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), gear.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(context, poses);
 	}
 
 	/** The two flag plates are one plate: whichever the position calls for. */

@@ -4,8 +4,11 @@ Minecraft 1.20.1, Forge 47.4.0, Java 17, mappe `official`. Radice dei package:
 `io.github.simonerecchia.renewables` (nel testo: `RP`). Namespace, mod id, chiavi lang: `renewables`.
 
 Principio: **un solo posto per ogni responsabilità, e i sottosistemi si parlano solo attraverso i contratti della
-sezione 3**. Quello che il vecchio progetto faceva con statici sparsi (`Electricity.wireManager`, registri OBJ globali,
-un canale di rete singleton) qui ha un proprietario e un'interfaccia.
+sezione 3**. Niente stato statico senza padrone: le campate, i modelli, i buffer e il canale di rete hanno ciascuno un
+proprietario e un'interfaccia.
+
+Le colonne "stato" e i proprietari (F, G, M, C, B, W) e le note `STUB` registrano come è stato costruito il codice: oggi
+tutti i contratti sono implementati. Le firme sotto sono quelle attuali.
 
 ## 1. Mappa dei package
 
@@ -164,14 +167,15 @@ final class ClientBlockEntities { static void track(BlockEntity be); static void
 final class ModelBindings { static void register(Block b); static void registerAll(Map<?, RegistryObject<Block>> m); }   // [STUB: owner M]
 final class MeshModel { public final Map<String, Group> groups; }   // [STUB: owner M] i renderer clean leggono solo groups.keySet()
 // RP.client.render (M)
-record RenderContext(MeshModel model, ResourceLocation texture, int packedLight) {}
-abstract class MachineRenderer {                                // [STUB: owner M] le firme sono quelle contro cui sono scritti i renderer clean
-    static final class GroupBuffer {}
-    interface Draw<T extends BlockEntity> { void draw(T machine, RenderContext context, PoseStack poseStack, Matrix4f projection); }
+final class RenderContext { MeshModel model(); ResourceLocation texture(); int packedLight(); }   // la proiezione e i buffer della
+                                                                // macchina ci viaggiano dentro, visibili solo a MachineRenderer
+abstract class MachineRenderer {                                // possiede i buffer GPU: una cache per tipo di block entity
+    interface Draw<T extends BlockEntity> { void draw(T machine, RenderContext context, PoseStack poseStack); }
     protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent e, Class<T> type, double maxDistanceSq,
-            Function<BlockState, Direction> facing, Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache [, Draw<T> draw [, Predicate<T> filter]]);
-    protected static void renderGrouped(MeshModel m, Map<String, Matrix4f> poses, Matrix4f projection, ResourceLocation tex, int light, BlockPos pos, cache);
-    protected static void renderGrouped(MeshModel m, PoseStack stack, Matrix4f projection, ResourceLocation tex, int light, BlockPos pos, cache, Predicate<String> visible);
+            Function<BlockState, Direction> facing, Direction authored [, Draw<T> draw [, Predicate<T> filter]]);
+    protected static void renderGrouped(RenderContext context, Map<String, Matrix4f> poses);
+    protected static void renderGrouped(RenderContext context, PoseStack stack, Predicate<String> visible);
+    public static void releaseAll();                            // ricarica risorse, logout, cambio livello
     protected static Vec3 pivot(MeshModel m, String name, Vec3 fallback);
     protected static void cleanupAngles(Map<BlockPos, Float> angles, Set<BlockPos> seen);
     protected static Set<String> cableEntries(Level level, BlockPos pos, Direction authored, Direction facing, String prefix);
@@ -201,10 +205,13 @@ TRANSFORMER, GROUND_CONDUCTOR, WIND_TURBINE, TURBINE_TOWER, PV_ARRAY, PV_INVERTE
 SWITCHGEAR}`. Un registro di famiglia non va mai riassegnato: i blocchi si registrano in `static {}` nell'ordine del catalogo.
 
 ### 3.7 Blocchi comuni (F, REALE) e stub dei proprietari
-* `RP.block.MachineBlockEntity` — base dei BE con isolatori: ids (reclamati **in `onLoad` lato server**, mai nel
-  costruttore), ancoraggi (`computeAnchor(index)`: cima del riquadro dalla tabella `fittings.json`, ruotata col facing;
-  sovrascrivibile; `refreshAnchors()` da chiamare quando qualcosa li sposta), potenza ricevuta, salvataggio, pacchetto di
-  aggiornamento, tracking client e `InsulatorIndex`/`ClientWires` via `DistExecutor`.
+* `RP.block.MachineBlockEntity` — base di **tutti** i BE con isolatori, inverter e tratti posati a terra compresi: ids
+  (reclamati **in `onLoad` lato server**, mai nel costruttore), ancoraggi, potenza ricevuta, salvataggio, pacchetto di
+  aggiornamento, tracking client e `InsulatorIndex`/`ClientWires` via `DistExecutor`. L'ancoraggio è
+  `computeAnchor(index)` = `ExtraPose.toWorld(localAnchor(index), …)`: una sottoclasse sovrascrive solo
+  `localAnchor` (il punto nel frame del modello; di default la cima del riquadro da `fittings.json`, letto con
+  `fittingBox(index)`), e `fittingCount()` se non ha una definizione di modello (il tratto posato). `refreshAnchors()`
+  va chiamato quando qualcosa li sposta.
 * `RP.block.MachineBlock` — base dei blocchi macchina con FACING (piazzamento opposto allo sguardo), forma di render invisibile.
 * `RP.block.MachineShellBlock` — la cella-guscio (`grid-blocks.md` §1.2), REALE, con il clean `MachineShell`: stato
   `dx/dy/dz` con bias, forma dinamica dalla tabella dell'host, clic/pick/rottura inoltrati, guscio orfano -> aria. Nei tag
@@ -260,7 +267,7 @@ Valgono dove le specifiche lasciavano scelta; chi implementa non le riapre.
 
 ## 5. Regole di lavoro
 
-* Clean-room: `docs/spec/CLEANROOM-RULES.md`. Non leggere i file DIRTY del vecchio progetto.
+* Clean-room: `docs/spec/CLEANROOM-RULES.md` (cartella locale, non versionata).
 * Ogni agente lavora in un worktree e committa sul proprio branch; non tocca file di altri proprietari.
 * Prima di consegnare: `./gradlew build` verde nel proprio worktree. Il nome dei test, se ci sono, è `*Test`.
 * Stile: come il codice portato (tab, commenti in inglese che spiegano il perché, niente riferimenti a progetti esterni).

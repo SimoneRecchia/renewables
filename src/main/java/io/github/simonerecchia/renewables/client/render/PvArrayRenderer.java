@@ -28,7 +28,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PvArrayRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 	/**
 	 * Where the azimuth drive has actually got to, per block, so the half turn at noon is a sweep rather than a jump.
 	 */
@@ -39,10 +38,10 @@ public class PvArrayRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		cleanupAngles(AZIMUTH_CACHE, drawAll(event, PvArrayBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				PvArrayRenderer::drawnFacing, PvArrayBlock.AUTHORED, BUFFER_CACHE, PvArrayRenderer::render));
+				PvArrayRenderer::drawnFacing, PvArrayBlock.AUTHORED, PvArrayRenderer::render));
 	}
 
-	private static void render(PvArrayBlockEntity array, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(PvArrayBlockEntity array, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		boolean harnessed = array.harnessed();
 		Ends ends = ends(array);
@@ -50,8 +49,7 @@ public class PvArrayRenderer extends MachineRenderer {
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
 			// overload does the work
-			renderGrouped(model, poseStack, projection, context.texture(), context.packedLight(), array.getBlockPos(), BUFFER_CACHE,
-					groupName -> drawn(groupName, harnessed, ends));
+			renderGrouped(context, poseStack, groupName -> drawn(groupName, harnessed, ends));
 			return;
 		}
 
@@ -66,7 +64,7 @@ public class PvArrayRenderer extends MachineRenderer {
 
 		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, ends));
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), array.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(context, poses);
 	}
 
 	/** The groups that only exist once a set of leads has been worked into the array. */

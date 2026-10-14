@@ -236,4 +236,15 @@ public record InverterSpec(
 	public double nightDrawKw() {
 		return nightWatts / 1000.0;
 	}
+
+	/**
+	 * How large the one cabinet model is drawn for this machine, about the middle of its footprint: a string
+	 * inverter is a wall box, a central one a container.  The renderer scales by it and the wire anchor follows.
+	 */
+	public double renderScale() {
+		if (acPowerKw >= 1000.0) return 1.0;
+		if (acPowerKw <= 30.0) return 0.62;
+
+		return 0.92;
+	}
 }
