@@ -97,7 +97,8 @@ MODEL_BLOCK = {
     'pv_dual': 'pv_array',
 }
 
-# Models whose collision is a volume rather than a shape, and why.
+# Models whose collision is a volume rather than a shape, and why.  The turbine is not in it any more: it is
+# compared by turbine() below, as two shapes the model fixes - the tower's cone and the nacelle's box.
 SWEPT = {
     'pv_track':
         'the panel tracks the sun about its torque tube, so its collision has to cover the volume it '
@@ -105,10 +106,6 @@ SWEPT = {
         'a player fall through the row every afternoon',
     'pv_dual':
         'the frame turns about two axes, so the same holds and in one more direction',
-    'wind_turbine':
-        'the model carries its own tower, which in the world is a stack of turbine_tower blocks with '
-        'their own collision, and a hundred metres of turning rotor above it that nothing should be '
-        'able to stand on',
 }
 
 
@@ -215,6 +212,17 @@ RECTANGLES = {
         ('insulator_4', ('insulator_4',)),
         ('insulator_5', ('insulator_5',)),
         ('insulator_6', ('insulator_6',)),
+    ),
+    # The turbine's parts are measured, not tabulated: turbine() builds the tower's cone, the canopy and the
+    # cooler from them.  Listed anyway, because every group a model draws has to be a decision about collision:
+    # the hatch is 2 px of the roof, the beacon and the sensors are under a pixel across.  The rotor is a
+    # rotate_ group, which MOVING keeps out of every comparison: nothing a player can stand on.
+    'wind_turbine': (
+        ('tower', ('pole', 'pole_base')),
+        ('canopy', ('motor',)),
+        ('cooler', ('motor_cooler',)),
+        ('~decoration', ('motor_hatch', 'motor_sensors', 'motor_beacon')),
+        ('insulator', ('insulator',)),
     ),
     'utility_pole': (
         # the steps are what a player climbs, and they are within a pixel of the shaft either side of it
@@ -552,14 +560,96 @@ def reach():
             int(re.search(r'REACH_UP = (\d+)', text).group(1)))
 
 
+def turbine(printing):
+    """The turbine's two shapes, proved against the model: the tower's cone and the nacelle's box.
+
+    Neither is a table cut from the OBJ the way a machine's is - the tower is a stack of blocks stretched to
+    whatever height it is, and the nacelle is scaled by the machine - so the proof is that the figures in
+    gen_turbine_models are the ones the model draws, and that the staircase it builds from them stays inside
+    the drawn shaft and fills it.  Returns the number of faults.
+    """
+    import gen_turbine_models as gen
+
+    path = os.path.join(MODELS, 'wind_turbine', 'wind_turbine.obj')
+    groups = obj_groups(path)
+    faults = 0
+    body(groups, 'wind_turbine')           # every group the model draws is a decision about collision
+
+    # the shaft as drawn: its radius at the foot and at the head, read off the OBJ
+    shaft = [p for face in objlib.read(path) if face.group == 'pole' and face.material == 'tower'
+             for p in face.points]
+    foot = [math.hypot(p[0], p[2]) for p in shaft if abs(p[1]) < 1e-6]
+    head = [math.hypot(p[0], p[2]) for p in shaft if abs(p[1] - gen.H_POLE) < 1e-6]
+    for name, drawn, wanted in (('foot', max(foot), gen.R_BASE), ('head', max(head), gen.R_TOP)):
+        if abs(drawn - wanted) * 16.0 > 0.01:
+            faults += 1
+            print('    the shaft is drawn %.4f across at the %s and gen_turbine_models says %.4f'
+                  % (drawn, name, wanted))
+
+    # the staircase against the drawn cone, at every height of every machine
+    tallest = 0.0
+    for ident, diameter, exaggeration, low, high in gen.CATALOGUE:
+        _, scale = gen.scales(diameter, exaggeration, small=ident == 'sw_10')
+        for n in range(low, high + 1):
+            for index in range(n):
+                radius = gen.tower_radius(index, n, scale)
+                top = scale * gen.shaft_radius((index + 1) * gen.H_POLE / n)
+                boxes = gen.tower_boxes(radius)
+                # a corner is on the mid circle, so it pokes past the drawn shaft only where the shaft is
+                # narrower than the middle: at the head of the block, by half the block's taper
+                poke = max(math.hypot(w, d) for w, d in boxes) - top
+                tallest = max(tallest, poke * 16.0)
+                if poke * 16.0 > 0.25:
+                    faults += 1
+                    print('    %s on %d: block %d collides %.2f px outside the shaft' % (ident, n, index, poke * 16))
+                # and the union fills the circle gen.TOWER_FILL times as wide: probed round it
+                for degrees in range(0, 360, 3):
+                    a = math.radians(degrees)
+                    point = (abs(math.cos(a)) * radius * gen.TOWER_FILL, abs(math.sin(a)) * radius * gen.TOWER_FILL)
+                    if not any(point[0] <= w + 1e-9 and point[1] <= d + 1e-9 for w, d in boxes):
+                        faults += 1
+                        print('    %s on %d: block %d has a gap in its collision at %d degrees'
+                              % (ident, n, index, degrees))
+                        break
+
+    print('turbine tower: %d machine heights, collision never %.2f px outside the cone, and fills it to %d%%'
+          % (sum(h - l + 1 for _, _, _, l, h in gen.CATALOGUE), tallest, round(gen.TOWER_FILL * 100)))
+
+    # the nacelle: the boxes the table prints are cut from the model's own groups
+    shapes = gen.hitboxes(gen.turbine())
+    floor = shapes['floor']
+    motor = [p for face in objlib.read(path) if face.group == 'motor' for p in face.points]
+    if abs(min(p[1] for p in motor) - floor) > 1e-6:
+        faults += 1
+        print('    the nacelle box does not start at the model\'s nacelle floor')
+    print('turbine nacelle: canopy %s' % (gen.pixels(gen.cell_box(
+        (shapes['nacelle'][0][0], shapes['nacelle'][0][1] - floor, shapes['nacelle'][0][2]),
+        (shapes['nacelle'][1][0], shapes['nacelle'][1][1] - floor, shapes['nacelle'][1][2]), 1.0)),))
+
+    if printing:
+        gen.java(gen.turbine())
+
+    return faults
+
+
 def main():
     printing = '--java' in sys.argv
     faults = 0
-    side, up = reach()
+    try:
+        side, up = reach()
+    except FileNotFoundError:
+        side = up = None
+        print('MachineShell.java is not written yet: the reach of a machine\'s cells is not checked '
+              '(docs/spec/QUESTIONS.md)')
     hand_written = []
+    skipped = 0
     for path in sorted(glob.glob(os.path.join(MODELS, '*', '*.obj'))):
         directory = os.path.basename(os.path.dirname(path))
         if directory in ELSEWHERE:
+            continue
+
+        if directory == 'wind_turbine':
+            faults += turbine(printing)
             continue
 
         name = MODEL_BLOCK.get(directory, directory)
@@ -570,7 +660,12 @@ def main():
 
         groups = obj_groups(path)
         cells = claimed(pieces(body(groups, directory)))
-        source = open(os.path.join(BLOCKS, block + '.java')).read()
+        try:
+            source = open(os.path.join(BLOCKS, block + '.java')).read()
+        except FileNotFoundError:
+            print('%-16s skipped: %s.java is not written yet (docs/spec/QUESTIONS.md)' % (name, block))
+            skipped += 1
+            continue
         print('%-16s %d cell(s), %d box(es), modelled facing %s' % (
             os.path.basename(path), len(cells), sum(len(boxes) for boxes in cells.values()),
             authored(source) or 'nowhere in particular'))
@@ -606,7 +701,7 @@ def main():
 
         # a cell further out than the shell block can store an offset for would throw on placement
         for cell in sorted(have, key=order):
-            if abs(cell[0]) > side or abs(cell[2]) > side or not 0 <= cell[1] <= up:
+            if side is not None and (abs(cell[0]) > side or abs(cell[2]) > side or not 0 <= cell[1] <= up):
                 faults += 1
                 print('    cell %-11s is further from its machine than REACH_SIDE %d / REACH_UP %d allow'
                       % (str(cell), side, up))
@@ -616,6 +711,8 @@ def main():
     if hand_written:
         print('%d machine(s) fit inside their own block and keep a shape written by hand: %s'
               % (len(hand_written), ', '.join(hand_written)))
+    if skipped:
+        print('%d machine(s) not compared at all: the Java that declares their shape is not written yet' % skipped)
     return 1 if faults else 0
 
 
