@@ -38,7 +38,7 @@ public class MetStationRenderer extends MachineRenderer {
 	private static final double CUP_SPEED_RATIO = 1.0 / 3.0;
 	/** Radius the cups run at, in blocks, matching what the generator authors. */
 	private static final double CUP_RADIUS_BLOCKS = 0.135;
-	/** Degrees a frame the vane may turn. */
+	/** Degrees a frame the vane may turn, at 60 frames a second (see {@link #frameScale()}). */
 	private static final float VANE_STEP = 6.0f;
 
 	@SubscribeEvent
@@ -87,7 +87,7 @@ public class MetStationRenderer extends MachineRenderer {
 		double metresPerSecond = windSpeed * CUP_SPEED_RATIO;
 		double radiusM = CUP_RADIUS_BLOCKS * io.github.simonerecchia.renewables.api.WorldConditions.METRES_PER_BLOCK;
 		double degreesPerSecond = Math.toDegrees(metresPerSecond / radiusM);
-		float next = (float) ((current + degreesPerSecond / 20.0) % 360.0);
+		float next = (float) ((current + degreesPerSecond * frameSeconds()) % 360.0);
 		CUP_ANGLE.put(pos, next);
 		return next;
 	}
@@ -101,7 +101,8 @@ public class MetStationRenderer extends MachineRenderer {
 		if (Minecraft.getInstance().isPaused()) return current;
 
 		float delta = Mth.wrapDegrees(target - current);
-		float next = Math.abs(delta) <= VANE_STEP ? target : Mth.wrapDegrees(current + Math.signum(delta) * VANE_STEP);
+		float step = VANE_STEP * frameScale();
+		float next = Math.abs(delta) <= step ? target : Mth.wrapDegrees(current + Math.signum(delta) * step);
 		VANE_ANGLE.put(pos, next);
 		return next;
 	}
