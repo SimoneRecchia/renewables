@@ -168,7 +168,7 @@ RECTANGLES = {
     # 2 px of its own face.  The antenna is its own, because it is 16 mm across on a bracket at one end of a
     # 400 mm roof: swept into the cabinet's box it would be a slab of air over the other end of it.
     'plant_controller': (
-        ('cabinet', ('plinth', 'cabinet', 'door', 'rail', 'glands')),
+        ('cabinet', ('plinth', 'cabinet', 'door', 'glands')),
         ('antenna', ('antenna',)),
     ),
     'met_mast': (
