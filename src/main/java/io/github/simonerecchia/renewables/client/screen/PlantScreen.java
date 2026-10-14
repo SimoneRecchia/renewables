@@ -111,6 +111,20 @@ public abstract class PlantScreen<T extends BlockEntity> extends Screen {
 	/** Everything inside the panel. */
 	protected abstract void drawPanel(GuiGraphics graphics);
 
+	/**
+	 * A drag on a slider ends where the button is let go, on the slider or off it: vanilla hands a release only to the
+	 * widget under the pointer, so a drag carried past the end of the slider would otherwise never send.
+	 */
+	@Override
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		if (button == 0 && getFocused() instanceof SetpointSlider slider && slider.release(mouseX, mouseY)) {
+			setDragging(false);
+			return true;
+		}
+
+		return super.mouseReleased(mouseX, mouseY, button);
+	}
+
 	@Override
 	public boolean isPauseScreen() {
 		return false;
