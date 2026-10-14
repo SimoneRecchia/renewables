@@ -15,12 +15,15 @@ import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.SimpleWaterloggedBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -37,12 +40,16 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * bend on a wide radius, a dead-end compression clamp, a parallel-groove clamp where a third leg joins,
  * and a length lying loose. Shapes printed by {@code tools/gen_conductor_models.py --java}, which also
  * proves the block still declares them.
+ *
+ * It lies in water as a conductor in a wet trench does, waterlogged: before, water washed it away, because a block
+ * an ankle high is not solid to a fluid.
  */
-public class GroundConductorBlock extends Block implements EntityBlock {
+public class GroundConductorBlock extends Block implements EntityBlock, SimpleWaterloggedBlock {
 	public static final BooleanProperty NORTH = BlockStateProperties.NORTH;
 	public static final BooleanProperty EAST = BlockStateProperties.EAST;
 	public static final BooleanProperty SOUTH = BlockStateProperties.SOUTH;
 	public static final BooleanProperty WEST = BlockStateProperties.WEST;
+	public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
 
 	/** The order gen_conductor_models numbers the sides in, which is the bitmask's own order. */
 	private static final Direction[] MASK_ORDER = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
@@ -134,7 +141,7 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 		this.spec = spec;
 		this.shapes = shapes(hubs(), arms());
 		registerDefaultState(defaultBlockState().setValue(NORTH, false).setValue(EAST, false)
-				.setValue(SOUTH, false).setValue(WEST, false));
+				.setValue(SOUTH, false).setValue(WEST, false).setValue(WATERLOGGED, false));
 	}
 
 	private static VoxelShape[] shapes(Map<Integer, VoxelShape> hubs, Map<Direction, VoxelShape> arms) {
@@ -157,7 +164,7 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 
 	@Override
 	protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-		builder.add(NORTH, EAST, SOUTH, WEST);
+		builder.add(NORTH, EAST, SOUTH, WEST, WATERLOGGED);
 	}
 
 	private static Map<Direction, BooleanProperty> sides() {
@@ -218,12 +225,19 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 	@Override
 	@Nullable
 	public BlockState getStateForPlacement(BlockPlaceContext context) {
-		return connected(context.getLevel(), context.getClickedPos(), defaultBlockState());
+		boolean water = context.getLevel().getFluidState(context.getClickedPos()).getType() == Fluids.WATER;
+		return connected(context.getLevel(), context.getClickedPos(), defaultBlockState().setValue(WATERLOGGED, water));
+	}
+
+	@Override
+	public FluidState getFluidState(BlockState state) {
+		return state.getValue(WATERLOGGED) ? Fluids.WATER.getSource(false) : super.getFluidState(state);
 	}
 
 	@Override
 	public BlockState updateShape(BlockState state, Direction direction, BlockState neighbour, LevelAccessor level, BlockPos pos, BlockPos neighbourPos) {
 		if (!canSurvive(state, level, pos)) return net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+		if (state.getValue(WATERLOGGED)) level.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));
 		if (!direction.getAxis().isHorizontal()) return state;
 
 		return state.setValue(SIDES.get(direction), joins(level, pos, direction));
