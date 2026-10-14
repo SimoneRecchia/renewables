@@ -158,6 +158,7 @@ anything past 0.20 is rough air. It used to run to 1.0 and mean nothing in parti
 | `bladePitchAngle` | ° 0–90 | collective, the angle the blades are drawn at |
 | `bladePitchAngle1..3` | ° 0–90 | collective ±0.25, clamped to the mechanical travel |
 | `airPressure` | hPa | **the weather model's own field**, at this site's elevation |
+| `rotorExposure` | 0–1 | the share of the rotor's disc in open air; `0` when no air reaches it at all (see 4.5) |
 
 The relations are exact. The constants inside them — 690 V, 50 Hz, a generator at 1800
 rpm — are chosen rather than modelled, but they are the usual ones for a machine of this
@@ -348,7 +349,17 @@ All measured on a C90-3.0 against a reference of 11 blocks of tower on flat plai
 
 **Siting beats everything.** A ridge is worth more than three extra blocks of tower and
 more than any biome. Walk the high ground first — that is what a wind developer does, and
-the answer does not change from one day to the next.
+the answer does not change from one day to the next. The ridge is the land as the world
+made it, read from the terrain generator: a tower stood on a pillar or a building gains
+nothing from what is under its foot, and a tower founds only on solid ground, never on
+another machine.
+
+**The rotor has to be out in the air.** Nothing solid or wet over the nacelle — a cave, a
+roof, the sea — and no block in the hub: then no wind reaches it, the panel says *rotor
+obstructed* and `rotorExposure` reads `0`, and the item refuses to place a turbine there in
+the first place. Blocks in the disc the blades sweep — trees, a wall, the next turbine's
+tower — take their share of it: a rotor half behind a hillside makes half. A tower founded
+in the sea measures its wind from the water's surface, not from the sea floor.
 
 **Height is the dependable one.** One more block is about 3% on plains, and considerably
 more over rough ground where the profile is steeper. The panel quotes the figure for

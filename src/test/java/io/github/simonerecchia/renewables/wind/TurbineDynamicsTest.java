@@ -461,4 +461,13 @@ class TurbineDynamicsTest {
 			assertEquals(90.0, TurbineDynamics.collectivePitch(true, v, offered, 0.0, C130), 1e-12);
 		}
 	}
+
+	/** A rotor partly behind blocks takes the open share of what the wind offers; one no air reaches takes nothing. */
+	@Test
+	void aRotorTakesOnlyTheShareOfTheWindThatReachesIt() {
+		double open = TurbineDynamics.uncappedKw(false, 10.0, RHO, C130);
+		assertEquals(open, TurbineDynamics.uncappedKw(false, 10.0, RHO, 1.0, C130), 1e-9);
+		assertEquals(open * 0.4, TurbineDynamics.uncappedKw(false, 10.0, RHO, 0.4, C130), 1e-9);
+		assertEquals(0.0, TurbineDynamics.uncappedKw(false, 10.0, RHO, 0.0, C130), 0.0);
+	}
 }

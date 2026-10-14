@@ -43,6 +43,8 @@ public final class TurbineTelemetrySimulator {
 			double rotorDegreesPerTick,
 			/** The collective pitch the machine is at, from {@code TurbineDynamics.collectivePitch}: the one it is drawn at. */
 			double bladePitchDegrees,
+			/** The share of the rotor's disc in open air ({@code RotorClearance.exposure}). */
+			double rotorExposure,
 			/** Rotor is held stopped, whatever the reason: wind cut-out or a command. */
 			boolean braked,
 			boolean windCutOut,
@@ -133,6 +135,7 @@ public final class TurbineTelemetrySimulator {
 
 		// the barometer reads the weather model's own field now, rather than a figure worked
 		out.put(TurbineTelemetry.AIR_PRESSURE, s.pressureHpa() + wobble(s, 1201.0, 0.6));
+		out.put(TurbineTelemetry.ROTOR_EXPOSURE, Mth.clamp(s.rotorExposure(), 0.0, 1.0));
 
 		// ---- simulated ----
 		out.put(TurbineTelemetry.GEARBOX_OIL_TEMP, lag(TurbineTelemetry.GEARBOX_OIL_TEMP, ambient + 18.0 + 42.0 * load, ambient));

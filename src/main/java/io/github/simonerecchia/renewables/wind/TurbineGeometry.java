@@ -29,6 +29,17 @@ public final class TurbineGeometry {
 	/** The insulator's post and plate, never scaled, as boxes of the foot block (frame facing south). */
 	public static final double[] INSULATOR_BOX = {0.775, 0.0, 0.775, 0.975, 6.25 / 16.0, 0.975};
 
+	/** The rotor's centre, authored: this far above the nacelle's floor and this far ahead of the tower's axis (pivot H). */
+	public static final double HUB_HEIGHT = 0.300;
+	public static final double HUB_AHEAD = 1.040;
+	/** The blade tips' radius about the hub, authored: the C130's 6.5 blocks. */
+	public static final double ROTOR_RADIUS = TurbineSpec.MODEL_ROTOR_DIAMETER_BLOCKS / 2.0;
+	/** About one point per block of swept area, within these bounds. */
+	private static final int MIN_DISC_POINTS = 12;
+	private static final int MAX_DISC_POINTS = 160;
+	/** The golden angle: successive points of a sunflower spiral, which spreads them evenly over a disc. */
+	private static final double GOLDEN_ANGLE = Math.PI * (3.0 - Math.sqrt(5.0));
+
 	/** A pile of tower this tall stands for anybody, and holds up under a walker. */
 	public static final int SAFE_SEGMENTS = 16;
 	/** The tallest a pile can be built before it folds as soon as the block is set. */
@@ -55,6 +66,49 @@ public final class TurbineGeometry {
 	public static List<double[]> nacelleBoxes(TurbineSpec spec) {
 		double scale = spec.nacelleRenderScale();
 		return List.of(cellBox(NACELLE, scale), cellBox(COOLER, scale));
+	}
+
+	// ---- the rotor ----
+
+	/**
+	 * Where the hub is, as {x, y, z} in blocks from the middle of the floor of the turbine's own block, for a nacelle the
+	 * model draws turned {@code modelYawDegrees}: ahead of the tower's axis and above the nacelle's floor, at its scale.
+	 */
+	public static double[] hubOffset(TurbineSpec spec, double modelYawDegrees) {
+		double scale = spec.nacelleRenderScale();
+		double angle = Math.toRadians(modelYawDegrees);
+		return new double[] {Math.sin(angle) * HUB_AHEAD * scale, HUB_HEIGHT * scale, Math.cos(angle) * HUB_AHEAD * scale};
+	}
+
+	/** The radius the blade tips sweep, in blocks. */
+	public static double rotorRadius(TurbineSpec spec) {
+		return ROTOR_RADIUS * spec.renderScale();
+	}
+
+	/**
+	 * Points spread evenly over the disc the blades sweep, each standing for the same share of its area, as {x, y, z} from
+	 * the middle of the floor of the turbine's block: a sunflower spiral in the plane square to the rotor's axis through the
+	 * hub.  About one to a block of area, so a C130's 133 blocks of disc is surveyed block by block.
+	 */
+	public static List<double[]> rotorDisc(TurbineSpec spec, double modelYawDegrees) {
+		double[] hub = hubOffset(spec, modelYawDegrees);
+		double radius = rotorRadius(spec);
+		double angle = Math.toRadians(modelYawDegrees);
+		// the model's +x, its right seen from behind, turned with it
+		double rightX = Math.cos(angle);
+		double rightZ = -Math.sin(angle);
+
+		int count = (int) Math.max(MIN_DISC_POINTS, Math.min(MAX_DISC_POINTS, Math.ceil(Math.PI * radius * radius)));
+		List<double[]> points = new ArrayList<>(count);
+		for (int k = 0; k < count; k++) {
+			double r = radius * Math.sqrt((k + 0.5) / count);
+			double phi = k * GOLDEN_ANGLE;
+			double across = r * Math.cos(phi);
+			double up = r * Math.sin(phi);
+			points.add(new double[] {hub[0] + rightX * across, hub[1] + up, hub[2] + rightZ * across});
+		}
+
+		return points;
 	}
 
 	// ---- the tower ----
