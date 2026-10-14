@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from modellib import (FITTING, HEX, ROUND, Mesh, box, clad_box, cylinder, hemisphere,   # noqa: E402
+from modellib import (FITTING, HEX, ROUND, Mesh, box, clad_box, cylinder, frame_box, hemisphere,   # noqa: E402
                       lathe, pin_insulator, square_uv, tube, write_mtl)
 
 OUT = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models')
@@ -79,6 +79,8 @@ HULL = (                              # z, half width, floor, roof, upper corner
 )
 HULL_FRONT = 0.62
 NOSE_R = 0.135                         # the main-bearing housing the hub is bolted to
+SHAFT_R = 0.10                         # the main shaft's flange, from inside the housing to inside the hub
+SHAFT_FROM, SHAFT_TO = HULL_FRONT + 0.030, 0.71
 
 # The hub: a spinner, 80-sided, a solid of revolution about the rotor axis.
 SPIN_Z0, SPIN_Z1, SPIN_TIP = 0.68, 1.06, 1.40
@@ -114,6 +116,7 @@ INSULATOR_BASE_Y = 0.25                # the porcelain's bottom centre
 INSULATOR_D = 0.18
 POST_R = 0.026
 PLATE_R, PLATE_H = 0.10, 0.012
+DUCT_W, DUCT_H = 0.05, 0.016           # the cable trough from the tower's foot to the post
 
 # The catalogue, for the scale table and the clearance proof: id, rotor diameter m, rotor exaggeration,
 # tower segments min and max.  wind.md section 2.
@@ -402,6 +405,13 @@ def nacelle(mesh):
     # the main-bearing housing the hub bolts to, standing out of the front face
     cylinder(mesh, steel, (0.0, AXIS_Y, HULL_FRONT + 0.02), 'z', NOSE_R, 0.02, sides=ROUND, uv_scale=2.0,
              uv_along=0.1, caps=steel)
+    # and the main shaft's flange out of it into the hub: the spinner stopped 0.02 short of the housing, so the
+    # whole rotor hung in front of the nacelle on nothing.  An object of its own so the canopy's box (the
+    # contract's motor) and the hub's (the pivot) stay what they were; turned round the rotor axis, it is the
+    # same at every angle, so it need not turn
+    shaft = mesh.faces('motor_shaft', 'flange')
+    cylinder(mesh, shaft, (0.0, AXIS_Y, (SHAFT_FROM + SHAFT_TO) / 2.0), 'z', SHAFT_R, (SHAFT_TO - SHAFT_FROM) / 2.0,
+             sides=ROUND, uv_scale=2.0, uv_along=0.1, caps=shaft)
     # the louvred intake grilles on each flank, framed, and a bank of them on the back face
     for side in (-1, 1):
         wall = side * HULL[2][1]
@@ -731,6 +741,17 @@ def insulator(mesh):
                  0.006, sides=HEX, uv_scale=0.2, caps=steel, phase=a)
     pin_insulator(mesh, porcelain, steel, (x, INSULATOR_BASE_Y, z), INSULATOR_D)
 
+    # The cable's way from the tower to the post: a precast trough at grade from under the post's plate to the
+    # tower's axis.  Never scaled, like the insulator, so whatever size the renderer draws the foot at, the trough
+    # runs into its plinth: on the C130 it is all but buried in it, on the SW-10 it is what ties a post 0.53 from
+    # the axis to a tower 0.085 across.  DUCT_H keeps its top off every machine's plinth and flange top (0.045 and
+    # 0.075 times the nacelle scale), so no size of the six puts two faces in one plane.
+    duct = mesh.faces('insulator_duct', 'concrete')
+    reach = math.hypot(x, z)
+    along = (x / reach, 0.0, z / reach)
+    frame_box(mesh, duct, (0.0, 0.0, 0.0), (along, (0.0, 1.0, 0.0), (-along[2], 0.0, along[0])),
+              (0.0, 0.0, -DUCT_W / 2.0), (reach - PLATE_R + 0.02, DUCT_H, DUCT_W / 2.0), uv_scale=2.0)
+
 
 # ------------------------------------------------------------------ the whole
 
@@ -890,7 +911,7 @@ def hitboxes(mesh):
     floor = box_of(corners(mesh, 'motor', exact=True))[0][1]
     nacelle = box_of(corners(mesh, 'motor', exact=True))
     cooler = box_of(corners(mesh, 'motor_cooler', exact=True))
-    insulator = box_of(corners(mesh, 'insulator'))
+    insulator = box_of(corners(mesh, 'insulator', exact=True))
     return {
         'nacelle': nacelle,
         'cooler': cooler,
@@ -943,6 +964,8 @@ def main():
         return
 
     directory = os.path.join(OUT, NAME)
+    # one normal a corner on the curved surfaces: the blades, the spinner, the shaft were lit as flat strips
+    mesh.smooth()
     mesh.write(os.path.join(directory, NAME + '.obj'), NAME + '.mtl', 'gen_turbine_models.py')
     write_mtl(os.path.join(directory, NAME + '.mtl'), mesh.materials(), MATERIALS, 'gen_turbine_models.py')
     vertices, faces = mesh.stats()

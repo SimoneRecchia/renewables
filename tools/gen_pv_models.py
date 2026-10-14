@@ -663,13 +663,18 @@ def dual_axis():
         box(mesh, pedestal, (0.044, 0.046, -0.012), (0.115, 0.20, 0.012), uv_scale=0.2,
             rot=((0.0, 0.0, 0.0), 'y', turn))
 
+    # the head flange the slew drive is bolted down to - without it the turning head stood on air above the column -
+    # no wider than the modules let it be at full tilt (check_pv_clearance)
+    cylinder(mesh, pedestal, (0.0, top - 0.007, 0.0), 'y', 0.050, 0.007, sides=ROUND, uv_scale=0.6,
+             caps=mesh.faces('pedestal', 'steel_end'))
+
     pivot(mesh, 'azimuth', (0.0, top + 0.05, 0.0))
     pivot(mesh, 'elevation', (0.0, pivot_y, 0.0))
 
     azimuth = mesh.faces('rotate_azimuth', 'cabinet')
-    # the slew ring: a collar on the column, with the drive worm on its flank
+    # the slew ring: a collar on the flange, closed, with the drive worm on its flank
     cylinder(mesh, azimuth, (0.0, top + 0.05, 0.0), 'y', 0.058, 0.05, sides=ROUND, uv_scale=1.0,
-             caps=mesh.faces('rotate_azimuth', 'cabinet_top'), cap_ends=(1,))
+             caps=mesh.faces('rotate_azimuth', 'cabinet_top'))
     cylinder(mesh, mesh.faces('rotate_azimuth', 'steel'), (0.0, top + 0.02, 0.0), 'y', 0.062, 0.018,
              sides=ROUND, uv_scale=0.3)
     box(mesh, azimuth, (-0.030, top + 0.052, -0.062), (0.030, top + 0.094, -0.030), uv_scale=0.2)
