@@ -31,7 +31,7 @@ import objlib                                                                   
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models')
 BLOCKS = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'block')
-RENDERERS = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'client', 'render', 'block')
+RENDERERS = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'client', 'render')
 
 # Groups that are a marker, a moving part, or something that is only sometimes there.
 # 'flag_' is a breaker's position indicator: two plates in one place, one drawn per state, and both far

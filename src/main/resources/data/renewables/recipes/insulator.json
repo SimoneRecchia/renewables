@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "n n",
+    "nWn",
+    "n n"
+  ],
+  "key": {
+    "W": {
+      "item": "minecraft:glass"
+    },
+    "n": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "result": {
+    "item": "renewables:insulator",
+    "count": 3
+  }
+}

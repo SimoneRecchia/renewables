@@ -34,7 +34,7 @@ ITEM_MODELS = os.path.join(ASSETS, 'models', 'item')
 # Which tile each conductor's own surface takes: a jacketed bundle is black, a bare one is aluminium.
 JACKETS = {'abc_conductor': 'line_abc', 'mv_conductor': 'line_alu', 'hv_conductor': 'line_alu'}
 
-CATALOGUE = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'main', 'registry',
+CATALOGUE = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'catalog',
                          'ConductorCatalog.java')
 
 

@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "zzz",
+    "xxx",
+    "ubE"
+  ],
+  "key": {
+    "E": {
+      "item": "renewables:enclosure"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    },
+    "u": {
+      "item": "renewables:slew_drive"
+    },
+    "x": {
+      "item": "renewables:generator_set"
+    },
+    "z": {
+      "item": "renewables:long_blade"
+    }
+  },
+  "result": {
+    "item": "renewables:wind_turbine"
+  }
+}

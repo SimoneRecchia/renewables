@@ -17,6 +17,9 @@ minecraft {
     mappings channel: mapping_channel, version: mapping_version
     copyIdeResources = true
 
+    // Forge 47 has no API for adding a game rule: ModGameRules reaches the private vanilla registrar through this.
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
     runs {
         configureEach {
             workingDirectory project.file('run')
@@ -50,8 +53,38 @@ minecraft {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+repositories {
+    // Mekanism publishes its API here for third-party integrations
+    maven {
+        name = 'ModMaven'
+        url = 'https://modmaven.dev/'
+        content {
+            includeGroup 'mekanism'
+        }
+    }
+
+    // CC:Tweaked is not on Maven Central for 1.20.1, only on its own maven
+    maven {
+        name = 'CC:Tweaked'
+        url = 'https://squiddev.cc/maven/'
+        content {
+            includeGroup 'cc.tweaked'
+        }
+    }
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Both integrations are soft: the mod builds and runs without them, and everything that names their types
+    // lives in RP.compat.* behind a ModList check.  Only the API is needed to compile.
+    compileOnly "mekanism:Mekanism:${mekanism_version}:api"
+    compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
+
+    // Present only so runClient / runServer can exercise the integrations.
+    runtimeOnly fg.deobf("mekanism:Mekanism:${mekanism_version}")
+    runtimeOnly fg.deobf("mekanism:Mekanism:${mekanism_version}:generators")
+    runtimeOnly fg.deobf("cc.tweaked:cc-tweaked-${minecraft_version}-forge:${cctweaked_version}")
 }
 
 tasks.named('processResources', ProcessResources).configure {

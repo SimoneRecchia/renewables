@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "MIM",
+    "CBC",
+    "MIM"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "C": {
+      "item": "renewables:circuit_board"
+    },
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "M": {
+      "item": "renewables:metal_casing"
+    }
+  },
+  "result": {
+    "item": "renewables:electric_cabin"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "qqq",
+    "rCr",
+    "nnn"
+  ],
+  "key": {
+    "C": {
+      "item": "renewables:circuit_board"
+    },
+    "n": {
+      "item": "minecraft:iron_nugget"
+    },
+    "q": {
+      "item": "minecraft:quartz"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "item": "renewables:cpu"
+  }
+}

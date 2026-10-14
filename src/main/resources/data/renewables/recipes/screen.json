@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "yyy",
+    "yry",
+    "nCn"
+  ],
+  "key": {
+    "C": {
+      "item": "renewables:circuit_board"
+    },
+    "n": {
+      "item": "minecraft:iron_nugget"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    },
+    "y": {
+      "item": "minecraft:glass_pane"
+    }
+  },
+  "result": {
+    "item": "renewables:screen"
+  }
+}

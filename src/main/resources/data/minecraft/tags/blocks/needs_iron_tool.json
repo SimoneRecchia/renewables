@@ -1,0 +1,23 @@
+{
+  "replace": false,
+  "values": [
+    "renewables:c112_30",
+    "renewables:c52_085",
+    "renewables:c80_20",
+    "renewables:c90_30",
+    "renewables:electric_cabin",
+    "renewables:lattice_suspension",
+    "renewables:lattice_tension",
+    "renewables:lattice_terminal",
+    "renewables:machine_shell",
+    "renewables:mv_breaker",
+    "renewables:mv_disconnector",
+    "renewables:power_box",
+    "renewables:sw_10",
+    "renewables:turbine_tower",
+    "renewables:tx_machine",
+    "renewables:tx_substation",
+    "renewables:utility_pole",
+    "renewables:wind_turbine"
+  ]
+}

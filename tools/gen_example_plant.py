@@ -43,7 +43,7 @@ PACK_FORMAT = 15
 PACK = os.path.join('build', 'plant', 'datapack')
 # The namespace and name the function is called by: /function renewables:plant
 FUNCTION = ('renewables', 'plant')
-REGISTRY = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'main', 'registry')
+REGISTRY = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'catalog')
 BLOCKS = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables', 'block')
 
 STRING = 'renewables:dc_string_cable'
