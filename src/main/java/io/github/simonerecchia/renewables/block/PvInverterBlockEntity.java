@@ -8,13 +8,13 @@ import io.github.simonerecchia.renewables.api.power.PvArraySpec;
 import io.github.simonerecchia.renewables.api.power.PvModuleSpec;
 import io.github.simonerecchia.renewables.api.power.RedstoneMode;
 import io.github.simonerecchia.renewables.api.power.Telemetry;
-import io.github.simonerecchia.renewables.api.power.TickBudget;
 import io.github.simonerecchia.renewables.catalog.CableCatalog;
 import io.github.simonerecchia.renewables.catalog.CombinerCatalog;
 import io.github.simonerecchia.renewables.catalog.InverterCatalog;
 import io.github.simonerecchia.renewables.compat.energy.EnergyBridge;
 import io.github.simonerecchia.renewables.core.ServerConfig;
 import io.github.simonerecchia.renewables.grid.FittingTypes;
+import io.github.simonerecchia.renewables.grid.GeneratorBudget;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
 import io.github.simonerecchia.renewables.model.PartBox;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
@@ -81,7 +81,7 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 	private volatile double activePowerLimitKw;
 	private volatile double powerFactorSetpoint = 1.0;
 
-	private final TickBudget budget = new TickBudget();
+	private final GeneratorBudget budget = new GeneratorBudget(GeneratorBudget.Kind.PHOTOVOLTAIC);
 	private final LazyOptional<IEnergyStorage> forgeEnergy = LazyOptional.of(() -> EnergyBridge.forgeEnergyView(this));
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 
@@ -139,7 +139,7 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		accumulateEnergy(serverLevel);
 		updateTelemetry(serverLevel, spec);
 
-		budget.open(Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW);
+		budget.open(Math.max(0.0, acPowerKw), spec.acPowerKw());
 		EnergyBridge.emit(this, this, worldPosition, energyFaces());
 
 		clientSync.throttled(this);
@@ -565,9 +565,10 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		return Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW;
 	}
 
-	/** What the wire network may carry away this tick, in kW. */
+	/** What the wire network may carry away this tick, in kW: the output less what other mods' cables took. */
+	@Override
 	public double getGeneratedPower() {
-		return Math.max(0.0, acPowerKw - budget.claimed() / EnergyBridge.JOULES_PER_KW);
+		return budget.netKw(Math.max(0.0, acPowerKw));
 	}
 
 	/** Whether this generator is putting a disturbance onto the network. */
@@ -575,24 +576,20 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		return false;
 	}
 
+	/** What other mods' cables may still take this tick: the output, held to pvExportFraction and pvMaxJoulesPerTick. */
 	@Override
 	public double getAvailableJoules() {
-		if (level == null || level.isClientSide() || !ServerConfig.externalEnergyEnabled()) return 0.0;
-
-		return budget.available();
+		return level == null || level.isClientSide() ? 0.0 : budget.getAvailableJoules();
 	}
 
 	@Override
 	public double getMaxJoulesPerTick() {
-		if (level == null || level.isClientSide() || !ServerConfig.externalEnergyEnabled()) return 0.0;
-
-		double share = spec().acPowerKw() * EnergyBridge.JOULES_PER_KW * ServerConfig.pvExportFraction();
-		return Math.min(share, ServerConfig.pvMaxJoulesPerTick());
+		return level == null || level.isClientSide() ? 0.0 : budget.getMaxJoulesPerTick();
 	}
 
 	@Override
 	public double claimJoules(double joules, boolean simulate) {
-		return budget.claim(joules, simulate);
+		return level == null || level.isClientSide() ? 0.0 : budget.claimJoules(joules, simulate);
 	}
 
 	@Nonnull
