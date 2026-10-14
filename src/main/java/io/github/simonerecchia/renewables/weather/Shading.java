@@ -3,10 +3,14 @@ package io.github.simonerecchia.renewables.weather;
 
 
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.vehicle.AbstractMinecart;
+import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -15,6 +19,7 @@ import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
  * What stands between an array and the sky.
@@ -24,8 +29,6 @@ import net.minecraft.world.phys.Vec3;
 public final class Shading {
 	/** How far a beam ray is traced, in blocks. */
 	private static final int BEAM_TRACE_BLOCKS = 24;
-	/** Step along the ray, in blocks. */
-	private static final double TRACE_STEP = 0.5;
 	/** How far a sky ray is traced. */
 	private static final int SKY_TRACE_BLOCKS = 12;
 	/** How far along the sun's direction an entity can still cast its shadow onto the array, in blocks. */
@@ -38,8 +41,6 @@ public final class Shading {
 	private static final double PACKED_ICE = 0.35;
 	private static final double WATER = 0.50;
 	private static final double LEAVES = 0.25;
-	/** What a block that is not solid but does not pass skylight either lets through. */
-	private static final double PARTIAL = 0.05;
 
 	/** Metres of real snow one vanilla snow layer stands for. */
 	public static final double METRES_PER_SNOW_LAYER = 0.05;
@@ -62,20 +63,25 @@ public final class Shading {
 
 	// ---- what is overhead ----
 
-	/** Fraction of the beam reaching a block, traced along the sun's own direction. */
-	public static double beamFraction(Level level, BlockPos arrayPos, SunPosition sun) {
+	/**
+	 * Fraction of the beam reaching a row, traced along the sun's own direction from the middle of its module plane.
+	 *
+	 * @param planeHeight how far above the block's floor the module plane is, in blocks: a ballasted table sits low and
+	 *                    a tracker's plane on its torque tube, and a block beside the row shades the modules only if it
+	 *                    stands higher than they do
+	 * @param sameField   blocks the trace passes through: the other rows, whose shading of this one is the row model's
+	 */
+	public static double beamFraction(Level level, BlockPos arrayPos, double planeHeight, SunPosition sun, Predicate<BlockState> sameField) {
 		if (!sun.up()) return 0.0;
 
-		Vec3 towardsSun = towardsSun(sun);
-		Vec3 from = new Vec3(arrayPos.getX() + 0.5, arrayPos.getY() + 1.0, arrayPos.getZ() + 0.5);
-		return traceTransmittance(level, from, towardsSun, BEAM_TRACE_BLOCKS);
+		return traceTransmittance(level, planeCentre(arrayPos, planeHeight), towardsSun(sun), BEAM_TRACE_BLOCKS, sameField);
 	}
 
-	/** Fraction of the sky dome a block can see */
-	public static double skyViewFactor(Level level, BlockPos arrayPos) {
-		Vec3 from = new Vec3(arrayPos.getX() + 0.5, arrayPos.getY() + 1.0, arrayPos.getZ() + 0.5);
+	/** Fraction of the sky dome a row's module plane can see. */
+	public static double skyViewFactor(Level level, BlockPos arrayPos, double planeHeight, Predicate<BlockState> sameField) {
+		Vec3 from = planeCentre(arrayPos, planeHeight);
 
-		double weighted = traceTransmittance(level, from, new Vec3(0.0, 1.0, 0.0), SKY_TRACE_BLOCKS);
+		double weighted = traceTransmittance(level, from, new Vec3(0.0, 1.0, 0.0), SKY_TRACE_BLOCKS, sameField);
 		double totalWeight = 1.0;
 
 		double sin45 = Math.sin(Math.toRadians(45.0));
@@ -83,47 +89,51 @@ public final class Shading {
 		for (int i = 0; i < 8; i++) {
 			double bearing = Math.toRadians(i * 45.0);
 			Vec3 direction = new Vec3(cos45 * Math.cos(bearing), sin45, cos45 * Math.sin(bearing));
-			weighted += sin45 * traceTransmittance(level, from, direction, SKY_TRACE_BLOCKS);
+			weighted += sin45 * traceTransmittance(level, from, direction, SKY_TRACE_BLOCKS, sameField);
 			totalWeight += sin45;
 		}
 
 		return Mth.clamp(weighted / totalWeight, 0.0, 1.0);
 	}
 
+	private static Vec3 planeCentre(BlockPos arrayPos, double planeHeight) {
+		return new Vec3(arrayPos.getX() + 0.5, arrayPos.getY() + planeHeight, arrayPos.getZ() + 0.5);
+	}
+
 	/** Unit vector pointing at the sun, on the world's axes. */
-	private static Vec3 towardsSun(SunPosition sun) {
+	static Vec3 towardsSun(SunPosition sun) {
 		double bearing = Math.toRadians(sun.azimuthDeg());
 		double cosElevation = sun.cosElevation();
 		return new Vec3(cosElevation * Math.cos(bearing), sun.sinElevation(), cosElevation * Math.sin(bearing));
 	}
 
-	private static double traceTransmittance(Level level, Vec3 from, Vec3 direction, int blocks) {
-		Vec3 step = direction.normalize().scale(TRACE_STEP);
-		BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-		BlockPos last = null;
-		double transmittance = 1.0;
+	/** Every block a ray crosses, once each, in order: vanilla's own walk, the one {@code Level.clip} makes. */
+	private static double traceTransmittance(Level level, Vec3 from, Vec3 direction, double blocks, Predicate<BlockState> sameField) {
+		Vec3 to = from.add(direction.normalize().scale(blocks));
+		double[] transmittance = {1.0};
 
-		int steps = (int) Math.ceil(blocks / TRACE_STEP);
-		for (int i = 1; i <= steps; i++) {
-			cursor.set(Mth.floor(from.x + step.x * i), Mth.floor(from.y + step.y * i), Mth.floor(from.z + step.z * i));
-			if (cursor.getY() > level.getMaxBuildHeight()) break;
-			if (cursor.getY() < level.getMinBuildHeight()) continue;
+		BlockGetter.traverseBlocks(from, to, transmittance, (passed, pos) -> {
+			if (pos.getY() > level.getMaxBuildHeight()) return Boolean.TRUE;
+			if (pos.getY() < level.getMinBuildHeight()) return null;
 			// an unloaded chunk ends the trace rather than blocking it: an unknown must not be able to
 			// manufacture a shadow that appears and disappears with a player's render distance
-			if (!level.hasChunkAt(cursor)) break;
-			if (cursor.equals(last)) continue;
+			if (!level.hasChunkAt(pos)) return Boolean.TRUE;
 
-			last = cursor.immutable();
-			transmittance *= blockTransmittance(level, level.getBlockState(last), last);
-			if (transmittance <= 0.0) return 0.0;
-		}
+			BlockState state = level.getBlockState(pos);
+			if (sameField.test(state)) return null;
 
-		return transmittance;
+			passed[0] *= blockTransmittance(level, state, pos, from, to);
+			return passed[0] <= 0.0 ? Boolean.TRUE : null;
+		}, passed -> Boolean.FALSE);
+
+		return Math.max(0.0, transmittance[0]);
 	}
 
-	/** What one block passes. */
-	private static double blockTransmittance(BlockGetter level, BlockState state, BlockPos pos) {
+	/** What one block passes of a ray running from {@code from} to {@code to}. */
+	private static double blockTransmittance(BlockGetter level, BlockState state, BlockPos pos, Vec3 from, Vec3 to) {
 		if (state.isAir()) return 1.0;
+		// a few centimetres of snow on the ground, or on the modules - where the snow model already counts it
+		if (state.getBlock() instanceof SnowLayerBlock) return 1.0;
 		if (state.is(BlockTags.LEAVES)) return LEAVES;
 		if (state.is(BlockTags.IMPERMEABLE)) return GLASS;
 		// glass panes and iron bars are the same class in vanilla, and both pass more than a solid
@@ -132,37 +142,87 @@ public final class Shading {
 		if (state.is(Blocks.ICE) || state.is(Blocks.FROSTED_ICE)) return ICE;
 		if (state.is(Blocks.PACKED_ICE) || state.is(Blocks.BLUE_ICE)) return PACKED_ICE;
 		if (!state.getFluidState().isEmpty()) return WATER;
+		if (state.isSolidRender(level, pos)) return 0.0;
 
-		int lightBlock = state.getLightBlock(level, pos);
-		if (lightBlock >= 15 || state.isSolidRender(level, pos)) return 0.0;
-		if (lightBlock <= 0) return 1.0;
+		// anything else is a shape: a cabinet, a slab, a fence, a post. The ray has to pass through it, and then
+		// it takes what its outline covers across the beam - a cabinet nearly all of it, a fence post a quarter
+		VoxelShape shape = state.getShape(level, pos);
+		if (shape.isEmpty() || shape.clip(from, to, pos) == null) return 1.0;
 
-		return PARTIAL;
+		return 1.0 - crossSection(shape.bounds(), to.subtract(from).normalize());
+	}
+
+	/** How much of a block's cross-section across a direction a box covers, 0 to 1. */
+	static double crossSection(AABB box, Vec3 direction) {
+		double x = Math.abs(direction.x);
+		double y = Math.abs(direction.y);
+		double z = Math.abs(direction.z);
+		double shadow = x * box.getYsize() * box.getZsize() + y * box.getXsize() * box.getZsize() + z * box.getXsize() * box.getYsize();
+		return Mth.clamp(shadow / Math.max(1.0e-9, x + y + z), 0.0, 1.0);
 	}
 
 	// ---- what is moving over it ----
 
-	/** Fraction of the beam an array loses to whatever is standing over it, 0 to 1 kept. */
-	public static double entityBeamFraction(Level level, BlockPos arrayPos, SunPosition sun) {
+	/** Fraction of the beam a row keeps after whatever is standing or moving between it and the sun, 0 to 1. */
+	public static double entityBeamFraction(Level level, BlockPos arrayPos, double planeHeight, SunPosition sun) {
 		if (!sun.up()) return 1.0;
 
 		Vec3 towardsSun = towardsSun(sun);
-		Vec3 base = new Vec3(arrayPos.getX() + 0.5, arrayPos.getY() + 1.0, arrayPos.getZ() + 0.5);
-		Vec3 far = base.add(towardsSun.scale(ENTITY_SHADOW_REACH));
-		AABB corridor = new AABB(base, far).inflate(1.0);
+		double planeY = arrayPos.getY() + planeHeight;
+		AABB square = new AABB(arrayPos.getX(), planeY, arrayPos.getZ(), arrayPos.getX() + 1.0, planeY, arrayPos.getZ() + 1.0);
+		// anything whose shadow can reach the square stands somewhere along the sun's direction from it
+		AABB corridor = square.minmax(square.move(towardsSun.scale(ENTITY_SHADOW_REACH))).inflate(0.01);
 
-		List<Entity> entities = level.getEntities((Entity) null, corridor, entity -> !entity.isSpectator() && !entity.isInvisible());
+		List<Entity> entities = level.getEntities((Entity) null, corridor, Shading::castsShadow);
 		if (entities.isEmpty()) return 1.0;
 
 		double covered = 0.0;
 		for (Entity entity : entities) {
-			AABB box = entity.getBoundingBox();
-			// the shadow of a body is its cross-section across the beam, and the footprint is a good
-			// enough stand-in: a player is 0.6 of a block wide either way
-			covered += Mth.clamp((box.getXsize() * box.getZsize()), 0.0, 1.0);
+			covered += shadowOnSquare(entity.getBoundingBox(), square, towardsSun);
 		}
 
 		return Mth.clamp(1.0 - covered, 0.0, 1.0);
+	}
+
+	/** Bodies and vehicles; not dropped items, arrows, orbs or anyone who cannot be seen. */
+	private static boolean castsShadow(Entity entity) {
+		if (entity.isSpectator() || entity.isInvisible()) return false;
+
+		return entity instanceof LivingEntity || entity instanceof AbstractMinecart || entity instanceof Boat;
+	}
+
+	/**
+	 * The part of a one-block square at the module plane that a box's shadow covers: the box above the plane
+	 * projected down the sun's direction onto it, and the overlap of that footprint with the square.
+	 */
+	static double shadowOnSquare(AABB box, AABB square, Vec3 towardsSun) {
+		double planeY = square.minY;
+		if (box.maxY <= planeY || towardsSun.y <= 0.0) return 0.0;
+
+		double bottom = Math.max(box.minY, planeY);
+		double minX = Double.MAX_VALUE;
+		double maxX = -Double.MAX_VALUE;
+		double minZ = Double.MAX_VALUE;
+		double maxZ = -Double.MAX_VALUE;
+		for (double y : new double[]{bottom, box.maxY}) {
+			// how far back along the ray this height lands on the plane
+			double run = (y - planeY) / towardsSun.y;
+			for (double x : new double[]{box.minX, box.maxX}) {
+				double projected = x - towardsSun.x * run;
+				minX = Math.min(minX, projected);
+				maxX = Math.max(maxX, projected);
+			}
+
+			for (double z : new double[]{box.minZ, box.maxZ}) {
+				double projected = z - towardsSun.z * run;
+				minZ = Math.min(minZ, projected);
+				maxZ = Math.max(maxZ, projected);
+			}
+		}
+
+		double overlapX = Math.max(0.0, Math.min(maxX, square.maxX) - Math.max(minX, square.minX));
+		double overlapZ = Math.max(0.0, Math.min(maxZ, square.maxZ) - Math.max(minZ, square.minZ));
+		return Mth.clamp(overlapX * overlapZ, 0.0, 1.0);
 	}
 
 	// ---- the array shading itself ----
