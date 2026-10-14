@@ -2,6 +2,7 @@ package io.github.simonerecchia.renewables.block;
 
 import io.github.simonerecchia.renewables.api.power.SwitchgearSpec;
 import io.github.simonerecchia.renewables.grid.Grid;
+import io.github.simonerecchia.renewables.item.Tools;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 
 import java.util.List;
@@ -33,7 +34,8 @@ import net.minecraft.world.phys.shapes.Shapes;
 /**
  * A disconnector or a breaker: one cell, six insulators (line side first), an open/closed state.
  *
- * <b>By hand</b> (an empty hand only; with anything in it the click goes to the item): a breaker opens and
+ * <b>By hand</b> (an empty hand only, and no tool of the mod in the other; otherwise the click goes to the item -
+ * {@link Tools#emptyHanded}): a breaker opens and
  * closes whenever it is asked.  A disconnector closes whenever it is asked but will not open with load on it -
  * an arc across bare blades in air does not go out - and says so; open the breaker first.
  *
@@ -45,8 +47,9 @@ import net.minecraft.world.phys.shapes.Shapes;
  * <b>Tripping</b>: a closed breaker that is carrying more than it is rated for opens itself, once a second
  * at most.
  *
- * Every change of state recalculates the grid at once, so the power reading that follows is the one with the
- * switch in its new position.
+ * A change by hand recalculates the grid at once, so the reading the player takes next is the one with the switch
+ * in its new position.  One by redstone or by a trip waits for the end of the tick, when the grid is solved anyway:
+ * a clock on ten breakers used to rebuild and solve the whole level's network ten times a tick.
  */
 public class SwitchgearBlock extends MachineBlock {
 	public static final BooleanProperty OPEN = BlockStateProperties.OPEN;
@@ -109,7 +112,7 @@ public class SwitchgearBlock extends MachineBlock {
 
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 
 		boolean wantOpen = !open(state);
@@ -119,18 +122,19 @@ public class SwitchgearBlock extends MachineBlock {
 			return InteractionResult.CONSUME;
 		}
 
-		setOpen(level, pos, state, wantOpen);
+		setOpen(level, pos, state, wantOpen, true);
 		player.displayClientMessage(Component.translatable(wantOpen ? "message.renewables.switch.opened" : "message.renewables.switch.closed"), true);
 		return InteractionResult.CONSUME;
 	}
 
 	/**
-	 * Puts the switch in a position: the state, the sound and an immediate recount of the grid.  A switch
+	 * Puts the switch in a position: the state, the sound, and for a hand an immediate recount of the grid.  A switch
 	 * already there does nothing.
 	 *
+	 * @param byHand whether a player is waiting to read it; otherwise the grid takes it at the end of the tick
 	 * @return whether it moved
 	 */
-	public static boolean setOpen(Level level, BlockPos pos, BlockState state, boolean open) {
+	public static boolean setOpen(Level level, BlockPos pos, BlockState state, boolean open, boolean byHand) {
 		if (!(state.getBlock() instanceof SwitchgearBlock block) || open(state) == open) return false;
 
 		level.setBlock(pos, state.setValue(OPEN, open), Block.UPDATE_ALL);
@@ -139,7 +143,7 @@ public class SwitchgearBlock extends MachineBlock {
 		level.playSound(null, pos, sound, SoundSource.BLOCKS, 0.7f, block.spec.breaksLoad() ? 0.6f : 1.1f);
 
 		// the reading a player takes next must be of the switch where it is now, not where it was a tick ago
-		if (level instanceof ServerLevel serverLevel) Grid.recalcNow(serverLevel);
+		if (byHand && level instanceof ServerLevel serverLevel) Grid.recalcNow(serverLevel);
 		return true;
 	}
 

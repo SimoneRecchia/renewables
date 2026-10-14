@@ -102,6 +102,8 @@ public class ConductorItem extends Item {
 		if (!placing.canPlace()) return InteractionResult.PASS;
 
 		BlockPos pos = placing.getClickedPos();
+		if (level.isOutsideBuildHeight(pos) || !level.getWorldBorder().isWithinBounds(pos)) return InteractionResult.PASS;
+
 		Block block = registered.get();
 		BlockState state = block.getStateForPlacement(placing);
 		if (state == null || !state.canSurvive(level, pos)) return InteractionResult.PASS;
@@ -112,7 +114,9 @@ public class ConductorItem extends Item {
 		// the client is told it worked and the server does the work
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 
-		level.setBlock(pos, state, Block.UPDATE_ALL_IMMEDIATE);
+		// a reel is paid for a block that is there, and only then
+		if (!level.setBlock(pos, state, Block.UPDATE_ALL_IMMEDIATE)) return InteractionResult.FAIL;
+
 		level.gameEvent(GameEvent.BLOCK_PLACE, pos, GameEvent.Context.of(player, state));
 		level.playSound(null, pos, state.getSoundType(level, pos, player).getPlaceSound(), SoundSource.BLOCKS, 0.8f, 1.1f);
 

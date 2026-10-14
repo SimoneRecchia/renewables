@@ -2,6 +2,7 @@ package io.github.simonerecchia.renewables.block;
 
 import io.github.simonerecchia.renewables.api.power.CombinerSpec;
 import io.github.simonerecchia.renewables.api.power.DcCableSpec;
+import io.github.simonerecchia.renewables.item.Tools;
 
 import java.util.List;
 import javax.annotation.Nullable;
@@ -101,7 +102,7 @@ public class PvCombinerBlock extends HorizontalDirectionalBlock implements Entit
 	/** An empty hand throws the switch. */
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
 
 		boolean isolated = !state.getValue(ISOLATED);
 		if (!level.isClientSide) {

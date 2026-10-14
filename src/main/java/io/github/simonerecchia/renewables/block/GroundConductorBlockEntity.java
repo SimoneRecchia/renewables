@@ -5,8 +5,11 @@ import io.github.simonerecchia.renewables.grid.FittingTypes;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 
+import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -73,6 +76,23 @@ public class GroundConductorBlockEntity extends MachineBlockEntity {
 		return other instanceof LatticeTowerBlockEntity || other instanceof UtilityPoleBlockEntity
 				|| other instanceof ElectricCabinBlockEntity || other instanceof PowerBoxBlockEntity
 				|| other instanceof TransformerBlockEntity;
+	}
+
+	@Nullable
+	@Override
+	public ConductorSpec laidConductor() {
+		return spec();
+	}
+
+	/** The sides the block joins on, which GroundConductorBlock keeps to the same conductor only. */
+	@Override
+	public List<BlockPos> laidNeighbours() {
+		List<BlockPos> joined = new ArrayList<>(4);
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			if (GroundConductorBlock.joinedOn(getBlockState(), side)) joined.add(worldPosition.relative(side));
+		}
+
+		return joined;
 	}
 
 	/** Its own product and nothing else: a run of street bundle is not where a transmission phase lands. */
