@@ -21,7 +21,7 @@ public final class WeatherSampler {
 	 * @param x            block column of the machine
 	 * @param z            block column of the machine
 	 * @param groundY      the block at the foot of the mast: the machine's own block lowered by the mast's height
-	 * @param seaLevel     the level's sea level, in blocks
+	 * @param seaLevel     the sea level of the level's terrain generator, in blocks (a flat world's is -63)
 	 * @param mastBlocks   how many blocks of mast the instrument stands on; 1 for a ground instrument
 	 * @param dayTime      the day clock, in ticks
 	 * @param gameTime     the game clock, in ticks, which the gusts run on
@@ -59,7 +59,9 @@ public final class WeatherSampler {
 
 		double stability = Atmosphere.stability(dayPhase, in.raining(), thundering);
 		double heightM = heightM(in.mastBlocks());
-		double elevationM = (in.groundY() - in.seaLevel()) * WorldConditions.METRES_PER_BLOCK;
+		// the air the instrument stands in: the ground's height above the sea, and the mast on top of it. Ground
+		// below the sea is the floor of a sea or a cave; the air above it starts at the surface
+		double elevationM = Math.max(0, in.groundY() - in.seaLevel()) * WorldConditions.METRES_PER_BLOCK + heightM;
 
 		Atmosphere.Flow aloft = Atmosphere.geostrophicWind(in.seed(), in.x(), in.z(), in.dayTime());
 		double windAloft = aloft.speed() * (1.0 + site.exposure(in.groundY()));
@@ -78,15 +80,15 @@ public final class WeatherSampler {
 		double density = Atmosphere.airDensity(temperature, pressure);
 		double shear = Atmosphere.profileExponent(site.roughness(), stability);
 
-		SkyConditions sky = in.withSky() ? skyAt(in, site, dayPhase, pressure, temperature, instantWind, direction, thundering) : null;
+		SkyConditions sky = in.withSky() ? skyAt(in, site, dayPhase, pressure, temperature, instantWind, thundering) : null;
 
 		return new WeatherSnapshot(meanWind, instantWind, gust, turbulence, direction, temperature, pressure, density, shear, sky);
 	}
 
 	private static SkyConditions skyAt(Input in, SiteConditions site, double dayPhase, double pressure, double temperature,
-			double windSpeed, float direction, boolean thundering) {
+			double windSpeed, boolean thundering) {
 		double cover = Atmosphere.cloudCover(in.seed(), in.x(), in.z(), in.dayTime(), in.gameTime(), site.downfall(),
-				windSpeed, direction, in.raining(), thundering);
+				in.raining(), thundering);
 
 		return Atmosphere.sky(Atmosphere.sunPosition(dayPhase), pressure, cover, site.albedo(), temperature, windSpeed);
 	}

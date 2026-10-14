@@ -86,8 +86,17 @@ public final class LevelWeather {
 		boolean raining = level.isRainingAt(pos.above());
 
 		return WeatherSampler.sample(new WeatherSampler.Input(level.getSeed(), pos.getX(), pos.getZ(), ground.getY(),
-				level.getSeaLevel(), towerBlocks, level.getDayTime(), level.getGameTime(), raining,
+				seaLevel(), towerBlocks, level.getDayTime(), level.getGameTime(), raining,
 				raining && level.isThundering(), siteAt(ground), withSky));
+	}
+
+	/**
+	 * Where the sea is in this level.  {@code Level.getSeaLevel()} is the constant 63 in 1.20.1, whatever the world;
+	 * a flat world's ground is at -60, which read against 63 put it 1230 m under the sea, in air at 1170 hPa and 1.48
+	 * kg/m3.  The terrain generator knows its own: 63 for the default, -63 for a flat world, 32 for the Nether.
+	 */
+	private int seaLevel() {
+		return level.getChunkSource().getGenerator().getSeaLevel();
 	}
 
 	/** What the ground under a machine does to wind and light.  Surveys the column, or reuses a recent survey of its square. */

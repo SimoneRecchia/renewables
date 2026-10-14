@@ -1,6 +1,8 @@
 package io.github.simonerecchia.renewables.grid;
 
+import io.github.simonerecchia.renewables.api.power.ConductorSpec;
 import io.github.simonerecchia.renewables.api.power.PowerDeliveryEvent;
+import io.github.simonerecchia.renewables.catalog.ConductorCatalog;
 import io.github.simonerecchia.renewables.net.Net;
 import io.github.simonerecchia.renewables.net.packet.PowerUpdatePayload;
 
@@ -12,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.DoubleUnaryOperator;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -134,18 +137,32 @@ final class LevelGrid {
 			addNode(nodes, hosts, firstNode, span.startInsulatorId(), span.startBlockPos(), start);
 			addNode(nodes, hosts, firstNode, span.endInsulatorId(), span.endBlockPos(), end);
 
+			// a conductor this build does not know is carried without loss: there is no resistance to give it
 			double length = Math.sqrt(span.startBlockPos().distSqr(span.endBlockPos()));
+			ConductorSpec conductor = ConductorCatalog.byPath(span.wireType());
+			double ohms = conductor == null ? 0.0 : conductor.resistanceOhms(length);
+			double volts = conductor == null ? 0.0 : conductor.nominalVolts();
 			boolean same = span.startBlockPos().equals(span.endBlockPos());
 			boolean forward = FlowRules.allows(start.host().feeds(end.host()), end.host().passesThrough(),
 					span.startPowerType(), span.endPowerType(), same);
 			boolean backward = FlowRules.allows(end.host().feeds(start.host()), start.host().passesThrough(),
 					span.endPowerType(), span.startPowerType(), same);
 
-			edges.add(new GridSolver.Edge(span.startInsulatorId(), span.endInsulatorId(), length, forward, backward));
+			edges.add(new GridSolver.Edge(span.startInsulatorId(), span.endInsulatorId(), ohms, volts, forward, backward));
+		}
+
+		// what a machine burns carrying power across itself (a transformer's no-load and load losses), and where the
+		// power ends: the machines that draw it
+		Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
+		Set<Long> loads = new HashSet<>();
+		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
+			InsulatorHost host = entry.getValue();
+			if (host.losesInPassing()) passages.put(entry.getKey(), host::throughLossKw);
+			if (host.isLoad()) loads.add(entry.getKey());
 		}
 
 		List<GridSolver.Source> sources = sources(level, hosts, firstNode);
-		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources);
+		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads);
 		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(nodes.values(), readings);
 
 		deliver(level, hosts, byPosition);

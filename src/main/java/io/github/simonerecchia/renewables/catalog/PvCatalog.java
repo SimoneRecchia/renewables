@@ -15,10 +15,13 @@ public final class PvCatalog {
 			id("solar_panel"), "FT-415", PvModuleCatalog.HP_108_415, PvMounting.FLAT, null,
 			22, 2));
 
-	/** The same flat table with heterojunction modules. */
+	/**
+	 * The same flat table with heterojunction modules.  At 49.3 V open and -0.24 %/K, eighteen of them reach the
+	 * 1000 V the module is rated for on a -10 C morning, so the forty-four are four strings of eleven.
+	 */
 	public static final PvArraySpec FT_430 = ARRAYS.register(new PvArraySpec(
 			id("pv_flat_430"), "FT-430", PvModuleCatalog.HJ_132_430, PvMounting.FLAT, null,
-			22, 2));
+			11, 4));
 
 	/** Tilted rack, bifacial utility modules, one string of eighteen. */
 	public static final PvArraySpec TR_580 = ARRAYS.register(new PvArraySpec(
