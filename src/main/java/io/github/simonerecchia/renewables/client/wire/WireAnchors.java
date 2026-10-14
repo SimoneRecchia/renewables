@@ -25,6 +25,15 @@ final class WireAnchors {
 	/** The end of a wire at fitting {@code id}, or null while it cannot be told. */
 	@Nullable
 	static Vec3 anchorOf(Level level, int id, BlockPos hostPos) {
+		return anchorOf(level, id, hostPos, null);
+	}
+
+	/**
+	 * The end of a wire at fitting {@code id} that runs towards {@code toward} (a tension tower's dead-end on that side;
+	 * see {@link InsulatorHost#getWirePosition(int, Vec3)}), or the fitting's one point when {@code toward} is null.
+	 */
+	@Nullable
+	static Vec3 anchorOf(Level level, int id, BlockPos hostPos, @Nullable Vec3 toward) {
 		if (id <= 0) return null;
 
 		InsulatorHost host = InsulatorIndex.find(id);
@@ -39,7 +48,9 @@ final class WireAnchors {
 		}
 
 		int index = indexOf(host.getInsulatorIds(), id);
-		return index < 0 ? null : host.getWirePosition(index);
+		if (index < 0) return null;
+
+		return toward == null ? host.getWirePosition(index) : host.getWirePosition(index, toward);
 	}
 
 	/** The position of {@code id} among a machine's fitting ids, or -1. */
