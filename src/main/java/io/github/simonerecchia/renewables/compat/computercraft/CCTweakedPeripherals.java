@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.common.util.LazyOptional;
 import io.github.simonerecchia.renewables.block.TurbineTowerBlock;
@@ -44,26 +45,33 @@ public final class CCTweakedPeripherals {
 	}
 
 	public static void register() {
-		ForgeComputerCraftAPI.registerPeripheralProvider((level, pos, side) -> {
-			WindTurbineBlockEntity turbine = turbineAt(level, pos);
-			if (turbine != null) {
-				return LazyOptional.of(() -> new WindTurbinePeripheral(turbine));
-			}
+		ForgeComputerCraftAPI.registerPeripheralProvider(CCTweakedPeripherals::peripheralAt);
+	}
 
-			if (level.getBlockEntity(pos) instanceof PvInverterBlockEntity inverter) {
-				return LazyOptional.of(() -> new PvInverterPeripheral(inverter));
-			}
+	/**
+	 * What a computer or a modem against {@code pos} sees.  A turbine hands out the one peripheral it keeps, from its own
+	 * block and from every block of its tower, and withdraws it when it goes: ComputerCraft listens for that and looks
+	 * again, and the tower's blocks are told when a turbine is placed on them.
+	 */
+	public static LazyOptional<IPeripheral> peripheralAt(Level level, BlockPos pos, Direction side) {
+		WindTurbineBlockEntity turbine = turbineAt(level, pos);
+		if (turbine != null) {
+			return turbine.peripheral(WindTurbinePeripheral::new).cast();
+		}
 
-			if (level.getBlockEntity(pos) instanceof PvArrayBlockEntity array) {
-				return LazyOptional.of(() -> new PvArrayPeripheral(array));
-			}
+		if (level.getBlockEntity(pos) instanceof PvInverterBlockEntity inverter) {
+			return LazyOptional.of(() -> new PvInverterPeripheral(inverter));
+		}
 
-			if (level.getBlockEntity(pos) instanceof MetStationBlockEntity station) {
-				return LazyOptional.of(() -> new MetStationPeripheral(station));
-			}
+		if (level.getBlockEntity(pos) instanceof PvArrayBlockEntity array) {
+			return LazyOptional.of(() -> new PvArrayPeripheral(array));
+		}
 
-			return LazyOptional.empty();
-		});
+		if (level.getBlockEntity(pos) instanceof MetStationBlockEntity station) {
+			return LazyOptional.of(() -> new MetStationPeripheral(station));
+		}
+
+		return LazyOptional.empty();
 	}
 
 	/** The turbine a modem at this position should see, or null. */
@@ -196,27 +204,29 @@ public final class CCTweakedPeripherals {
 
 		// ---- names shared with Mekanism's generators ----
 
+		// the energy figures and the running state come from one Reading, so they are always of the same tick
+
 		/** Joules produced in the last tick. */
 		@LuaFunction
 		public final double getProductionRate() {
-			return machine.getGrossJoulesPerTick();
+			return machine.reading().grossJoulesPerTick();
 		}
 
 		/** Ceiling on what this generator will hand out per tick, in Joules. */
 		@LuaFunction
 		public final double getMaxOutput() {
-			return machine.getMaxJoulesPerTick();
+			return machine.reading().maxJoulesPerTick();
 		}
 
 		/** Joules still unclaimed in this tick's budget. */
 		@LuaFunction
 		public final double getEnergy() {
-			return machine.getAvailableJoules();
+			return machine.reading().availableJoules();
 		}
 
 		@LuaFunction
 		public final double getMaxEnergy() {
-			return machine.getMaxJoulesPerTick();
+			return machine.reading().maxJoulesPerTick();
 		}
 
 		/** Always zero: these machines are sources and accept nothing. */
@@ -227,8 +237,8 @@ public final class CCTweakedPeripherals {
 
 		@LuaFunction
 		public final double getEnergyFilledPercentage() {
-			double max = machine.getMaxJoulesPerTick();
-			return max <= 0.0 ? 0.0 : machine.getAvailableJoules() / max;
+			Dispatchable.Reading reading = machine.reading();
+			return reading.maxJoulesPerTick() <= 0.0 ? 0.0 : reading.availableJoules() / reading.maxJoulesPerTick();
 		}
 
 		/**
@@ -263,7 +273,7 @@ public final class CCTweakedPeripherals {
 		/** Whether it is running and allowed to generate, for any reason. */
 		@LuaFunction
 		public final boolean isRunning() {
-			return machine.isRunning();
+			return machine.reading().running();
 		}
 
 		/** True when the current redstone mode and signal are holding it down. */
@@ -330,6 +340,20 @@ public final class CCTweakedPeripherals {
 		@LuaFunction
 		public final boolean isWindCutOut() {
 			return turbine.isWindCutOut();
+		}
+
+		/**
+		 * Where the machine is, as {x, y, z}: the same for every block of its tower, so a program that reaches one turbine
+		 * through two modems can tell it is one.
+		 */
+		@LuaFunction
+		public final Map<String, Object> getPosition() {
+			BlockPos pos = turbine.getBlockPos();
+			Map<String, Object> out = new LinkedHashMap<>();
+			out.put("x", pos.getX());
+			out.put("y", pos.getY());
+			out.put("z", pos.getZ());
+			return out;
 		}
 	}
 

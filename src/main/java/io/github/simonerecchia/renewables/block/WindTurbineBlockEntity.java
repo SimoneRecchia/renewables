@@ -21,6 +21,7 @@ import io.github.simonerecchia.renewables.weather.WeatherSnapshot;
 import io.github.simonerecchia.renewables.wind.TurbineDynamics;
 
 import java.util.List;
+import java.util.function.Function;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -58,6 +59,8 @@ import org.joml.Vector3f;
 public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispatchable, ExtraPose {
 	/** How often the height of the tower under the machine is looked at again, in ticks. */
 	private static final int TOWER_RECHECK_TICKS = 20;
+	/** A nacelle that has turned this many degrees sweeps somewhere else, and its rotor's clearance is looked at again. */
+	private static final double CLEARANCE_YAW_STEP = 5.0;
 	/** The yaw has to have moved this far from the last one the client was told before it is worth telling it sooner. */
 	private static final double YAW_SYNC_THRESHOLD = 1.0;
 	/** Fastest the client turns its drawn nacelle onto the synced yaw, in degrees per tick. */
@@ -66,6 +69,10 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private static final double DRAWN_YAW_CATCH_UP = 0.25;
 	/** Fastest the drawn blades feather or unfeather, in degrees per tick. */
 	private static final double DRAWN_PITCH_STEP = 2.0;
+	/** Telemetry nobody is reading is worked out once a second: SCADA itself polls no faster, and it is sixty-odd boxed values. */
+	private static final int TELEMETRY_IDLE_TICKS = 20;
+	/** After a computer reads it, it is worked out every tick for this long. */
+	private static final int TELEMETRY_WATCHED_TICKS = 100;
 
 	// ---- control: what a player, a computer or a signal has set ----
 
@@ -89,7 +96,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private double airDensity = WorldConditions.REFERENCE_AIR_DENSITY;
 	private double windDirection;
 	private double turbulence;
-	private boolean cutOut;
+	/** Volatile because a computer asks for it from its own thread. */
+	private volatile boolean cutOut;
 	/** Which way the nacelle points, in the wind's system; meaningful once {@link #yawInitialised}. */
 	private double yawWind;
 	private boolean yawInitialised;
@@ -98,6 +106,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private double uncappedKw;
 	/** The rotor's real speed, in degrees per tick. */
 	private double rotorSpeed;
+	/** The share of what the wind offers the rotor can take, 0 to 1 ({@link RotorClearance#exposure}): saved for the panel. */
+	private double rotorExposure = 1.0;
 
 	// ---- not saved ----
 
@@ -105,6 +115,10 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private double lastSentYaw;
 	private int towerSegments = -1;
 	private int towerRecheck = TOWER_RECHECK_TICKS;
+	/** What is round the rotor, looked at again every second and when the nacelle has swung {@link #CLEARANCE_YAW_STEP} off it. */
+	private RotorClearance clearance = RotorClearance.OPEN;
+	private double clearanceYaw = Double.NaN;
+	private int clearanceRecheck;
 
 	private final GeneratorBudget budget = new GeneratorBudget(GeneratorBudget.Kind.TURBINE);
 	private final ClientSync clientSync = new ClientSync();
@@ -112,6 +126,15 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 	private final TurbineTelemetrySimulator telemetrySimulator = new TurbineTelemetrySimulator();
 	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
+	/** What a computer reads besides the telemetry, published whole at the end of each tick. */
+	private volatile Reading reading = Reading.NONE;
+	/** What a computer sees of this machine: one per machine, so it can be withdrawn when the machine goes. */
+	@Nullable
+	private LazyOptional<?> peripheral;
+	/** Set by a read from a computer's thread, taken by the next server tick. */
+	private volatile boolean telemetryRead;
+	private int telemetryWatched;
+	private int telemetryIdle;
 
 	// ---- client only: what is drawn, which lags what is true ----
 
@@ -211,7 +234,12 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	public float bladePitchDegrees() {
 		if (level != null && level.isClientSide()) return (float) drawnPitch;
 
-		return (float) TurbineDynamics.collectivePitch(isBraked(), alignedWind, spec());
+		return (float) pitchNow(spec());
+	}
+
+	/** The collective pitch the machine's state implies, curtailment included: drawn, and reported, from the same figures. */
+	private double pitchNow(TurbineSpec spec) {
+		return TurbineDynamics.collectivePitch(isBraked(), alignedWind, uncappedKw, activePowerLimitKw, spec);
 	}
 
 	/** Whether the rotor is held still by a command or by redstone.  A machine cut out by the wind still idles. */
@@ -225,7 +253,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		drawnReady = true;
 		drawnYaw = drawnYawBefore = currentYawWind();
 		clientSpeed = rotorSpeed;
-		drawnPitch = TurbineDynamics.collectivePitch(isBraked(), alignedWind, spec());
+		drawnPitch = pitchNow(spec());
 	}
 
 	// ---- ExtraPose: the model is drawn from the foot of the tower up ----
@@ -291,6 +319,19 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		return airDensity;
 	}
 
+	/**
+	 * The share of what the wind offers that the rotor can take: the part of its disc in open air, and nothing when the
+	 * nacelle is covered over or the hub is inside a block or a fluid.
+	 */
+	public double getRotorExposure() {
+		return rotorExposure;
+	}
+
+	/** No air reaches the rotor at all: it is covered over, or its hub is in a block or under water. */
+	public boolean isRotorObstructed() {
+		return rotorExposure <= 0.0;
+	}
+
 	/** Turbulence intensity at the hub: the standard deviation of the wind over its mean. */
 	public double getTurbulence() {
 		return turbulence;
@@ -316,7 +357,12 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		return TurbineDynamics.rpmOf(rotorSpeed);
 	}
 
+	/**
+	 * The latest published telemetry.  Read from a computer's thread; a read asks for it every tick for the next five
+	 * seconds, and until then it is at most a second old.
+	 */
 	public Telemetry.Snapshot getTelemetry() {
+		telemetryRead = true;
 		return telemetry;
 	}
 
@@ -363,21 +409,29 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 
 		recheckTower();
 		TurbineSpec spec = spec();
+		surveyRotor(spec);
 
-		// the weather at the hub, for a tower that is within what the model is sold on
-		int mast = spec.clampTowerSegments(getTowerSegments());
+		// the weather at the hub, for a tower that is within what the model is sold on, measured from the water's
+		// surface for a tower that stands in the sea
+		int mast = Math.max(1, spec.clampTowerSegments(getTowerSegments()) - clearance.submerged());
 		WeatherSnapshot weather = LevelWeather.get(serverLevel).sampleWind(worldPosition, mast);
-		meanWind = weather.meanWind();
-		gustWind = weather.gustWind();
-		instantWind = weather.instantWind();
+		// a rotor no air reaches - in a cave, under the sea, under a roof, its hub in a wall - is in no wind at all
+		rotorExposure = clearance.exposure();
+		boolean inTheAir = rotorExposure > 0.0;
+		meanWind = inTheAir ? weather.meanWind() : 0.0;
+		gustWind = inTheAir ? weather.gustWind() : 0.0;
+		instantWind = inTheAir ? weather.instantWind() : 0.0;
 		windDirection = weather.direction();
-		turbulence = weather.turbulence();
+		turbulence = inTheAir ? weather.turbulence() : 0.0;
 		shearExponent = weather.shearExponent();
 		airDensity = weather.airDensity();
 		ambientTempC = weather.temperatureC();
 		pressureHpa = weather.pressureHpa();
 
-		TurbineDynamics.YawStep yaw = TurbineDynamics.stepYaw(currentYawWind(), windDirection);
+		// the yaw drive follows a wind the vane can feel; a nacelle no air reaches stays where it is
+		TurbineDynamics.YawStep yaw = inTheAir
+				? TurbineDynamics.stepYaw(currentYawWind(), windDirection)
+				: new TurbineDynamics.YawStep(currentYawWind(), false, 0.0);
 		yawWind = yaw.yaw();
 		yawInitialised = true;
 		yawing = yaw.yawing();
@@ -390,16 +444,48 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		// what the wind offers, then the speed (which reads the limit against that offer), and only then the power,
 		// because the generator can take no more than its rated torque times the speed the rotor has actually reached
 		boolean braked = isBraked();
-		uncappedKw = TurbineDynamics.uncappedKw(braked, alignedWind, airDensity, spec);
+		uncappedKw = TurbineDynamics.uncappedKw(braked, alignedWind, airDensity, rotorExposure, spec);
 		rotorSpeed = TurbineDynamics.lagSpeed(rotorSpeed,
 				TurbineDynamics.targetDegreesPerTick(isParked(), cutOut, alignedWind, activePowerLimitKw, uncappedKw, spec));
 		producedKw = TurbineDynamics.producedKw(braked, uncappedKw, activePowerLimitKw, TurbineDynamics.rpmOf(rotorSpeed), spec);
 
 		budget.open(producedKw, spec.ratedPowerKw());
 		EnergyBridge.emit(this, this, footPos(), energyFaces());
+		reading = new Reading(getGrossJoulesPerTick(), budget.getAvailableJoules(), budget.getMaxJoulesPerTick(), isRunning());
 
-		publishTelemetry(serverLevel, spec, braked);
+		if (telemetryDue()) publishTelemetry(serverLevel, spec, braked);
 		syncIfDue();
+	}
+
+	/** Looks round the rotor every second, and at once when the nacelle has swung far enough to sweep somewhere else. */
+	private void surveyRotor(TurbineSpec spec) {
+		if (level == null) return;
+
+		double yawNow = currentYawWind();
+		boolean turned = !(Math.abs(TurbineDynamics.shortestAngle(clearanceYaw, yawNow)) < CLEARANCE_YAW_STEP);
+		if (--clearanceRecheck > 0 && !turned) return;
+
+		clearanceRecheck = TOWER_RECHECK_TICKS;
+		clearanceYaw = yawNow;
+		clearance = RotorClearance.survey(level, worldPosition, getTowerSegments(), spec, TurbineDynamics.modelRotationDegrees(yawNow));
+	}
+
+	/** Every tick while a computer is reading the telemetry, once a second otherwise. */
+	private boolean telemetryDue() {
+		if (telemetryRead) {
+			telemetryRead = false;
+			telemetryWatched = TELEMETRY_WATCHED_TICKS;
+		}
+
+		if (telemetryWatched > 0) {
+			telemetryWatched--;
+			return true;
+		}
+
+		if (--telemetryIdle > 0) return false;
+
+		telemetryIdle = TELEMETRY_IDLE_TICKS;
+		return true;
 	}
 
 	/**
@@ -421,16 +507,15 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	}
 
 	private void publishTelemetry(ServerLevel serverLevel, TurbineSpec spec, boolean braked) {
-		boolean raining = serverLevel.isRainingAt(worldPosition.above());
+		LevelWeather weather = LevelWeather.get(serverLevel);
 
 		telemetry = telemetrySimulator.sample(new TurbineTelemetrySimulator.Sample(
 				producedKw, spec.ratedPowerKw(), activePowerLimitKw,
 				TurbineDynamics.powerLimited(braked, alignedWind, uncappedKw, producedKw, spec),
-				meanWind, alignedWind, windDirection, yawWind, turbulence, rotorSpeed,
+				meanWind, alignedWind, windDirection, yawWind, turbulence, rotorSpeed, pitchNow(spec), rotorExposure,
 				braked, cutOut, stoppedByComputer, stoppedByPlayer, isStoppedByRedstone(), yawing,
-				ambientTempC, pressureHpa, raining, raining && serverLevel.isThundering(),
-				serverLevel.getGameTime(), Math.abs(worldPosition.hashCode() % 1024), cableTwist,
-				spec.ratedSpeed(), spec.stormOnsetSpeed(), spec.cutOutSpeed(), spec.gearboxRatio()));
+				ambientTempC, pressureHpa, weather.precipitationAt(worldPosition), weather.thunderAt(worldPosition),
+				serverLevel.getGameTime(), Math.abs(worldPosition.hashCode() % 1024), cableTwist, spec.gearboxRatio()));
 	}
 
 	/** Tells the clients every half second, and sooner when the nacelle has turned noticeably since they last heard. */
@@ -467,7 +552,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 			rotorProgressBefore -= 360.0;
 		}
 
-		double pitchTarget = TurbineDynamics.collectivePitch(isBraked(), alignedWind, spec);
+		double pitchTarget = pitchNow(spec);
 		drawnPitch += Mth.clamp(pitchTarget - drawnPitch, -DRAWN_PITCH_STEP, DRAWN_PITCH_STEP);
 	}
 
@@ -560,6 +645,12 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		return spec().ratedPowerKw();
 	}
 
+	/** The figures of the last tick, all of a piece, for a computer reading from its own thread. */
+	@Override
+	public Reading reading() {
+		return reading;
+	}
+
 	/** Saves and tells every client at once: somebody changed a setting and is watching for it to take. */
 	private void onControlChanged() {
 		ClientSync.now(this);
@@ -614,6 +705,24 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		super.invalidateCaps();
 		forgeEnergy.invalidate();
 		mekanismEnergy.invalidate();
+		// ComputerCraft listens to this one: a computer against any block of the tower drops the machine when it goes
+		if (peripheral != null) peripheral.invalidate();
+	}
+
+	/**
+	 * The computer's view of this machine, made by {@code make} the first time and then kept, and handed out for every
+	 * block of the tower.  A fresh one for each question could never be withdrawn, so a computer went on reading a
+	 * removed turbine's last snapshot and stopping a block entity that was no longer in the world.
+	 */
+	public LazyOptional<?> peripheral(Function<WindTurbineBlockEntity, ?> make) {
+		if (isRemoved()) return LazyOptional.empty();
+
+		if (peripheral == null || !peripheral.isPresent()) {
+			Object view = make.apply(this);
+			peripheral = LazyOptional.of(() -> view);
+		}
+
+		return peripheral;
 	}
 
 	// ---- the wire fitting ----
@@ -691,6 +800,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		tag.putDouble("produced", producedKw);
 		tag.putDouble("uncapped", uncappedKw);
 		tag.putDouble("rotorSpeed", rotorSpeed);
+		tag.putDouble("rotorExposure", rotorExposure);
 	}
 
 	@Override
@@ -725,6 +835,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		producedKw = tag.getDouble("produced");
 		uncappedKw = tag.getDouble("uncapped");
 		rotorSpeed = tag.getDouble("rotorSpeed");
+		rotorExposure = tag.contains("rotorExposure") ? Mth.clamp(tag.getDouble("rotorExposure"), 0.0, 1.0) : 1.0;
 	}
 
 	/** The client takes everything the server knows, then carries its animation on from it. */

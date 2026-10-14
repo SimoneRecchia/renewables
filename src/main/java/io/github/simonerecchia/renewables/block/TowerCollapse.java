@@ -78,6 +78,14 @@ public final class TowerCollapse {
 		ACTIVE.clear();
 	}
 
+	/**
+	 * Drops the collapses under way in a level that is going: left in the list they would go on asking a closed level for
+	 * its blocks, and loading its chunks again to answer.
+	 */
+	public static void forget(ServerLevel level) {
+		ACTIVE.removeIf(collapse -> collapse.level == level);
+	}
+
 	/** @return whether this collapse has finished. */
 	private boolean advance() {
 		tick++;
@@ -85,7 +93,8 @@ public final class TowerCollapse {
 
 		for (int index = 0; index < segments.size(); index++) {
 			BlockPos pos = segments.get(index);
-			if (!(level.getBlockState(pos).getBlock() instanceof TurbineTowerBlock)) continue;
+			// a segment whose chunk has gone is left standing rather than loaded back to be broken
+			if (!level.isLoaded(pos) || !(level.getBlockState(pos).getBlock() instanceof TurbineTowerBlock)) continue;
 
 			anyLeft = true;
 			// counted from the top, so the fracture starts where the tower failed

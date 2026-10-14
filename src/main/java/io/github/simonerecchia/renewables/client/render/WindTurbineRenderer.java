@@ -6,9 +6,11 @@ import io.github.simonerecchia.renewables.block.MachineBlock;
 import io.github.simonerecchia.renewables.block.ModelFacing;
 import io.github.simonerecchia.renewables.block.WindTurbineBlock;
 import io.github.simonerecchia.renewables.block.WindTurbineBlockEntity;
+import io.github.simonerecchia.renewables.client.model.GroupPoses;
 import io.github.simonerecchia.renewables.client.model.MeshModel;
 import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.model.ExtraPose;
+import io.github.simonerecchia.renewables.model.PartBox;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -19,6 +21,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -66,85 +69,127 @@ public class WindTurbineRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		cleanupAngles(YAW, drawAll(event, WindTurbineBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				state -> state.getValue(MachineBlock.FACING), WindTurbineBlock.AUTHORED, WindTurbineRenderer::render));
+				state -> state.getValue(MachineBlock.FACING), WindTurbineBlock.AUTHORED, WindTurbineRenderer::render, null,
+				WindTurbineRenderer::bounds));
+	}
+
+	/**
+	 * What the turbine's groups are posed with, from its specification and its tower: the two scales, the height of the
+	 * tower, and where the model's hub is and where the drawn one is.
+	 */
+	record Layout(float nacelleScale, float rotorScale, int segments, float authoredHeight, float nacelleBottom, Vec3 hubCentre,
+			Vec3 hub) {
+		static Layout of(MeshModel model, WindTurbineBlockEntity turbine) {
+			TurbineSpec spec = turbine.spec();
+			int segments = Math.max(0, turbine.towerHeight());
+			float nacelleScale = (float) spec.nacelleRenderScale();
+			Vec3 hubCentre = centerOf(model, "rotate_2", HUB_FALLBACK);
+			float nacelleBottom = WindTurbineRenderer.nacelleBottom(model, (float) hubCentre.y);
+			// the hub rides on the nacelle: the same height above its underside, scaled with it
+			Vec3 hub = new Vec3(hubCentre.x * nacelleScale, segments + nacelleScale * (hubCentre.y - nacelleBottom), hubCentre.z * nacelleScale);
+			return new Layout(nacelleScale, (float) spec.renderScale(), segments, authoredTowerHeight(model), nacelleBottom, hubCentre, hub);
+		}
 	}
 
 	private static void render(WindTurbineBlockEntity turbine, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
-		TurbineSpec spec = turbine.spec();
-		BlockPos pos = turbine.getBlockPos();
-		Direction facing = turbine.getBlockState().getValue(MachineBlock.FACING);
+		Layout layout = Layout.of(model, turbine);
 		float partialTick = Minecraft.getInstance().getFrameTime();
 
-		int segments = Math.max(0, turbine.towerHeight());
-		float nacelleScale = (float) spec.nacelleRenderScale();
-		float rotorScale = (float) spec.renderScale();
-
-		Vec3 hubCentre = centerOf(model, "rotate_2", HUB_FALLBACK);
-		float nacelleBottom = nacelleBottom(model, (float) hubCentre.y);
-		float authoredHeight = authoredTowerHeight(model);
-		// the hub rides on the nacelle: the same height above its underside, scaled with it
-		Vec3 hub = new Vec3(hubCentre.x * nacelleScale, segments + nacelleScale * (hubCentre.y - nacelleBottom), hubCentre.z * nacelleScale);
-
-		float yaw = smoothYaw(pos, modelYaw(turbine.yawDegrees(partialTick)));
-		float relativeYaw = Mth.wrapDegrees(yaw - ModelFacing.degrees(WindTurbineBlock.AUTHORED, facing));
+		float yaw = smoothYaw(turbine.getBlockPos(), modelYaw(turbine.yawDegrees(partialTick)));
+		float relativeYaw = relativeYaw(yaw, turbine);
 		// the real turbines turn clockwise seen from the front; a positive turn about +z is the other way
 		float rotor = -turbine.rotorAngleDegrees(partialTick);
 
 		poseStack.pushPose();
 		// the model starts at the foot of the tower; if the block entity does not already say so, lower it
-		if (!(turbine instanceof ExtraPose)) poseStack.translate(0.0, -segments, 0.0);
+		if (!(turbine instanceof ExtraPose)) poseStack.translate(0.0, -layout.segments(), 0.0);
 
+		Matrix4f base = poseStack.last().pose();
 		Map<String, Matrix4f> poses = new HashMap<>();
 		for (String groupName : model.groups.keySet()) {
-			if (groupName.startsWith("pivot_")) continue;
-
-			poseStack.pushPose();
-			if (groupName.startsWith("pole")) {
-				// the tower and the fitting at its foot never follow the wind: the tube is the same all the way
-				// round, and the fitting is what the picker and the wire anchor stand on
-				if (segments <= 0) {
-					poseStack.popPose();
-					continue;
-				}
-
-				if (groupName.startsWith("pole_base")) {
-					// the base (door, flange, nuts) is a thing of fixed size: stretching it with the tube would squash the door
-					poseStack.scale(nacelleScale, nacelleScale, nacelleScale);
-				} else {
-					poseStack.scale(nacelleScale, segments / authoredHeight, nacelleScale);
-				}
-			} else if (groupName.startsWith("insulator")) {
-				// stays at the foot, as it was authored
-			} else {
-				// everything that is up at the machine turns about the axis of the tower to face into the wind
-				if (relativeYaw != 0.0f) poseStack.mulPose(Axis.YP.rotationDegrees(relativeYaw));
-
-				if (groupName.startsWith("rotate_1")) {
-					spin(poseStack, hub, hubCentre, rotorScale, rotor);
-				} else if (groupName.startsWith("rotate_2")) {
-					spin(poseStack, hub, hubCentre, nacelleScale, rotor);
-				} else {
-					poseStack.translate(0.0, segments, 0.0);
-					poseStack.scale(nacelleScale, nacelleScale, nacelleScale);
-					poseStack.translate(0.0, -nacelleBottom, 0.0);
-				}
-			}
-
-			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
-			poseStack.popPose();
+			Matrix4f pose = new Matrix4f(base);
+			if (groupPose(groupName, layout, relativeYaw, rotor, true, pose)) poses.put(groupName, pose);
 		}
 
 		renderGrouped(context, poses);
 		poseStack.popPose();
 	}
 
+	/**
+	 * Multiplies onto {@code pose} what one group is drawn with, in the model's frame at the foot of the tower; false when
+	 * the group is not drawn.  The drawing and the picker both call it, the picker with {@code withRotor} false: a rotor
+	 * turning at speed is not something to aim at.
+	 */
+	static boolean groupPose(String groupName, Layout layout, float relativeYaw, float rotorDegrees, boolean withRotor, Matrix4f pose) {
+		if (groupName.startsWith("pivot_")) return false;
+
+		if (groupName.startsWith("pole")) {
+			// the tower and the fitting at its foot never follow the wind: the tube is the same all the way round, and
+			// the fitting is what the picker and the wire anchor stand on
+			if (layout.segments() <= 0) return false;
+
+			float s = layout.nacelleScale();
+			// the base (door, flange, nuts) is a thing of fixed size: stretching it with the tube would squash the door
+			if (groupName.startsWith("pole_base")) {
+				pose.scale(s);
+			} else {
+				pose.scale(s, layout.segments() / layout.authoredHeight(), s);
+			}
+			return true;
+		}
+
+		// stays at the foot, as it was authored
+		if (groupName.startsWith("insulator")) return true;
+
+		// everything that is up at the machine turns about the axis of the tower to face into the wind
+		if (relativeYaw != 0.0f) pose.rotate(Axis.YP.rotationDegrees(relativeYaw));
+
+		if (groupName.startsWith("rotate_1")) {
+			if (!withRotor) return false;
+			spin(pose, layout.hub(), layout.hubCentre(), layout.rotorScale(), rotorDegrees);
+		} else if (groupName.startsWith("rotate_2")) {
+			spin(pose, layout.hub(), layout.hubCentre(), layout.nacelleScale(), rotorDegrees);
+		} else {
+			pose.translate(0.0f, layout.segments(), 0.0f);
+			pose.scale(layout.nacelleScale());
+			pose.translate(0.0f, -layout.nacelleBottom(), 0.0f);
+		}
+		return true;
+	}
+
 	/** Moves the hub of the model to where the hub really is, scales, turns about the rotor's axis, moves back. */
-	private static void spin(PoseStack poseStack, Vec3 hub, Vec3 centre, float scale, float degrees) {
-		poseStack.translate(hub.x, hub.y, hub.z);
-		poseStack.scale(scale, scale, scale);
-		poseStack.mulPose(Axis.ZP.rotationDegrees(degrees));
-		poseStack.translate(-centre.x, -centre.y, -centre.z);
+	private static void spin(Matrix4f pose, Vec3 hub, Vec3 centre, float scale, float degrees) {
+		pose.translate((float) hub.x, (float) hub.y, (float) hub.z);
+		pose.scale(scale);
+		pose.rotate(Axis.ZP.rotationDegrees(degrees));
+		pose.translate((float) -centre.x, (float) -centre.y, (float) -centre.z);
+	}
+
+	/** The nacelle's yaw relative to the block's facing, which the pass has already turned the model by. */
+	private static float relativeYaw(float modelYaw, WindTurbineBlockEntity turbine) {
+		Direction facing = turbine.getBlockState().getValue(MachineBlock.FACING);
+		return Mth.wrapDegrees(modelYaw - ModelFacing.degrees(WindTurbineBlock.AUTHORED, facing));
+	}
+
+	/**
+	 * The box the whole turbine is drawn in, from the foot of its tower to the top of the rotor's sweep; the default
+	 * round the block would lose a tower taller than the model's own reach.
+	 */
+	private static AABB bounds(WindTurbineBlockEntity turbine, MeshModel model) {
+		Layout layout = Layout.of(model, turbine);
+		PartBox blades = model.union("rotate_1");
+		double sweep = blades == null ? 6.5 : Math.max(
+				Math.max(Math.abs(blades.min().x() - layout.hubCentre().x), Math.abs(blades.max().x() - layout.hubCentre().x)),
+				Math.max(Math.abs(blades.min().y() - layout.hubCentre().y), Math.abs(blades.max().y() - layout.hubCentre().y)));
+		// the blades' box is a box round three of them; turning, a tip reaches its diagonal
+		double reach = sweep * Math.sqrt(2.0) * layout.rotorScale() + Math.abs(layout.hub().z) + 1.0;
+
+		BlockPos pos = turbine.getBlockPos();
+		double x = pos.getX() + 0.5;
+		double z = pos.getZ() + 0.5;
+		double foot = pos.getY() - layout.segments();
+		return new AABB(x - reach, foot - 0.5, z - reach, x + reach, foot + layout.hub().y + reach, z + reach);
 	}
 
 	/**
@@ -195,6 +240,15 @@ public class WindTurbineRenderer extends MachineRenderer {
 
 	public static void init() {
 		ModelBindings.registerAll(ModBlocks.TURBINES);
+		// the picker sees the turbine at its own size, its tower stretched and its nacelle where it last was drawn
+		GroupPoses.register(WindTurbineBlockEntity.class, (turbine, model) -> {
+			Layout layout = Layout.of(model, turbine);
+			float yaw = relativeYaw(YAW.getOrDefault(turbine.getBlockPos(), modelYaw(turbine.yawDegrees(1.0f))), turbine);
+			return groupName -> {
+				Matrix4f pose = new Matrix4f();
+				return groupPose(groupName, layout, yaw, 0.0f, false, pose) ? pose : null;
+			};
+		});
 		TurbineTowerRenderer.init();
 	}
 }

@@ -141,8 +141,11 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 	@Nullable
 	protected Vec3 computeAnchor(int index) {
 		Vec3 local = localAnchor(index);
-		if (local == null) return null;
+		return local == null ? null : modelToWorld(local);
+	}
 
+	/** A point of this machine's model in the world, through the one transform the renderer draws it with. */
+	protected Vec3 modelToWorld(Vec3 local) {
 		Direction authored = authored();
 		return ExtraPose.toWorld(local, getBlockPos(), authored, facing(authored), this instanceof ExtraPose pose ? pose : null);
 	}
