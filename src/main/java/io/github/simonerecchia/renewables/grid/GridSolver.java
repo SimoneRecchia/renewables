@@ -115,7 +115,9 @@ final class GridSolver {
 
 	// scratch, kept so that a tick allocates nothing it does not have to
 	private final double[] inflow;
-	private final PowerDeliveryEvent[] carried;
+	/** The disturbance on its way into each bus, and the one that reached it, unboxed. */
+	private final Disturbances carried;
+	private final Disturbances reached;
 	private final double[] totalSent;
 	private final double[] totalArrived;
 	private double[][] sentNow = new double[0][];
@@ -198,8 +200,8 @@ final class GridSolver {
 		}
 
 		inflow = new double[clusterCount];
-		carried = new PowerDeliveryEvent[clusterCount];
-		Arrays.fill(carried, PowerDeliveryEvent.NONE);
+		carried = new Disturbances(clusterCount);
+		reached = new Disturbances(clusterCount);
 		totalSent = new double[ways];
 		totalArrived = new double[clusterCount];
 	}
@@ -290,15 +292,16 @@ final class GridSolver {
 		}
 
 		double[] power = new double[clusterCount];
-		PowerDeliveryEvent[] events = new PowerDeliveryEvent[clusterCount];
+		reached.clear();
 		boolean shared = false;
 		for (int pass = 0; pass < PASSES; pass++) {
 			Arrays.fill(power, 0.0);
-			Arrays.fill(events, PowerDeliveryEvent.NONE);
 
+			// a disturbance rides on the flow and does not change it, so only the pass that is kept carries one
+			boolean last = pass == PASSES - 1 || count <= 1;
 			for (int s = 0; s < count; s++) {
 				push(livePlans.get(s), live.get(s), sentNow[s], arrivedNow[s], shared ? sentBefore[s] : null,
-						shared ? arrivedBefore[s] : null, burns, power, events);
+						shared ? arrivedBefore[s] : null, burns, power, last);
 			}
 
 			// one generator shares its lines with nobody, so its first pass is already the answer
@@ -330,7 +333,7 @@ final class GridSolver {
 		Map<Integer, Reading> readings = new LinkedHashMap<>();
 		for (int i = 0; i < nodeCount; i++) {
 			int c = nodeCluster[i];
-			readings.put(nodeIds[i], new Reading(power[c], events[c]));
+			readings.put(nodeIds[i], new Reading(power[c], reached.event(c)));
 		}
 
 		return new Solution(readings, drawn);
@@ -358,7 +361,8 @@ final class GridSolver {
 	 * each of them the ways on with the share of the flow each takes.  The steps of {@code order[i]} are
 	 * {@code stepWay/stepShare[stepStart[i] .. stepStart[i + 1])}; a bus with none sends nothing on.
 	 */
-	private record Plan(int[] order, boolean[] passesOn, int[] stepStart, int[] stepWay, double[] stepShare, boolean reachesLoad) {
+	private record Plan(int[] order, boolean[] passesOn, int[] stepStart, int[] stepWay, int[] stepTo, double[] stepK,
+			double[] stepShare, boolean reachesLoad) {
 	}
 
 	/** Orders the buses a generator reaches by a shortest-path search on the loss coefficient, and shares out its loads. */
@@ -440,8 +444,16 @@ final class GridSolver {
 		}
 
 		stepStart[visited] = ways.size();
-		return new Plan(order, passesOn, stepStart, ways.stream().mapToInt(Integer::intValue).toArray(),
-				shares.stream().mapToDouble(Double::doubleValue).toArray(), !reach[start].isEmpty());
+		int[] stepWay = ways.stream().mapToInt(Integer::intValue).toArray();
+		int[] stepTo = new int[stepWay.length];
+		double[] stepK = new double[stepWay.length];
+		for (int k = 0; k < stepWay.length; k++) {
+			stepTo[k] = wayTo[stepWay[k]];
+			stepK[k] = wayK[stepWay[k]];
+		}
+
+		return new Plan(order, passesOn, stepStart, stepWay, stepTo, stepK, shares.stream().mapToDouble(Double::doubleValue).toArray(),
+				!reach[start].isEmpty());
 	}
 
 	/**
@@ -449,51 +461,137 @@ final class GridSolver {
 	 * sent down each of its ways ({@code sent}, by step) and brought into each of its buses ({@code arrived}, by
 	 * place in the order).  {@code sentBefore} / {@code arrivedBefore} are its own figures from the last pass, null
 	 * on the first; with them, what the others put on a way is the last pass's total less this generator's part.
+	 * Only a {@code kept} pass carries the disturbances, into {@link #reached}.
 	 */
 	private void push(Plan plan, Source source, double[] sent, double[] arrived, double[] sentBefore, double[] arrivedBefore,
-			DoubleUnaryOperator[] burns, double[] power, PowerDeliveryEvent[] events) {
+			DoubleUnaryOperator[] burns, double[] power, boolean kept) {
 		Arrays.fill(sent, 0.0);
 		Arrays.fill(arrived, 0.0);
 
 		int[] order = plan.order();
+		int[] stepStart = plan.stepStart();
+		int[] stepWay = plan.stepWay();
+		int[] stepTo = plan.stepTo();
+		double[] stepK = plan.stepK();
+		double[] stepShare = plan.stepShare();
+		boolean[] passesOn = plan.passesOn();
 		inflow[order[0]] = source.powerKw();
-		carried[order[0]] = source.event();
+		if (kept) carried.set(order[0], source.event());
 
 		// every bus a flow is sent into comes later in the order, so each is read once and then cleared
 		for (int i = 0; i < order.length; i++) {
 			int u = order[i];
 			double in = inflow[u];
-			PowerDeliveryEvent event = carried[u];
 			inflow[u] = 0.0;
-			carried[u] = PowerDeliveryEvent.NONE;
-			if (!(in > 0.0)) continue;
-
-			power[u] += in;
-			events[u] = GridMath.merge(events[u], event);
-			arrived[i] = in;
-			if (!plan.passesOn()[i]) continue;
-
-			// a transformer reads what goes in and passes on what is left after its core and windings
-			double onward = in;
-			DoubleUnaryOperator burn = burns[u];
-			if (burn != null) {
-				double through = in + (arrivedBefore == null ? 0.0 : Math.max(0.0, totalArrived[u] - arrivedBefore[i]));
-				onward = in * GridMath.keptThrough(through, burn.applyAsDouble(through));
+			boolean disturbed = kept && carried.any[u];
+			if (in > 0.0) {
+				power[u] += in;
+				arrived[i] = in;
+				if (disturbed) reached.merge(u, carried, u);
+				if (passesOn[i]) pushOn(plan, i, u, in, sent, arrivedBefore, sentBefore, burns, disturbed, stepStart, stepWay, stepTo, stepK, stepShare);
 			}
 
-			if (!(onward > 0.0)) continue;
+			if (disturbed) carried.reset(u);
+		}
+	}
 
-			for (int k = plan.stepStart()[i]; k < plan.stepStart()[i + 1]; k++) {
-				int way = plan.stepWay()[k];
-				double out = onward * plan.stepShare()[k];
-				sent[k] = out;
+	/** Sends what reached bus {@code u}, {@code order[i]} of the plan, down its ways on. */
+	private void pushOn(Plan plan, int i, int u, double in, double[] sent, double[] arrivedBefore, double[] sentBefore,
+			DoubleUnaryOperator[] burns, boolean disturbed, int[] stepStart, int[] stepWay, int[] stepTo, double[] stepK, double[] stepShare) {
+		// a transformer reads what goes in and passes on what is left after its core and windings
+		double onward = in;
+		DoubleUnaryOperator burn = burns[u];
+		if (burn != null) {
+			double through = in + (arrivedBefore == null ? 0.0 : Math.max(0.0, totalArrived[u] - arrivedBefore[i]));
+			onward = in * GridMath.keptThrough(through, burn.applyAsDouble(through));
+		}
 
-				double others = sentBefore == null ? 0.0 : Math.max(0.0, totalSent[way] - sentBefore[k]);
-				double eta = GridMath.keptFraction(out + others, wayK[way]);
-				int to = wayTo[way];
-				inflow[to] += out * eta;
-				carried[to] = GridMath.merge(carried[to], GridMath.attenuate(event, eta));
+		if (!(onward > 0.0)) return;
+
+		for (int k = stepStart[i]; k < stepStart[i + 1]; k++) {
+			double out = onward * stepShare[k];
+			sent[k] = out;
+
+			double others = sentBefore == null ? 0.0 : Math.max(0.0, totalSent[stepWay[k]] - sentBefore[k]);
+			double eta = GridMath.keptFraction(out + others, stepK[k]);
+			int to = stepTo[k];
+			inflow[to] += out * eta;
+			if (disturbed) carried.mergeAttenuated(to, u, eta);
+		}
+	}
+
+	/**
+	 * A disturbance per bus as plain arrays, with {@link GridMath#merge} and {@link GridMath#attenuate} worked in place,
+	 * figure for figure, so a tick allocates nothing for them: every turbine draws one every tick.  A bus with nothing on
+	 * it is {@link PowerDeliveryEvent#NONE}, whose figures every merge leaves as it found them.
+	 */
+	private static final class Disturbances {
+		final boolean[] any;
+		final double[] severity;
+		final int[] duration;
+		final boolean[] disconnecting;
+		final double[] voltage;
+
+		Disturbances(int size) {
+			any = new boolean[size];
+			severity = new double[size];
+			duration = new int[size];
+			disconnecting = new boolean[size];
+			voltage = new double[size];
+			clear();
+		}
+
+		void clear() {
+			for (int c = 0; c < any.length; c++) {
+				reset(c);
 			}
+		}
+
+		void reset(int c) {
+			any[c] = false;
+			severity[c] = 0.0;
+			duration[c] = 0;
+			disconnecting[c] = false;
+			voltage[c] = 1.0;
+		}
+
+		void set(int c, PowerDeliveryEvent event) {
+			reset(c);
+			if (event == PowerDeliveryEvent.NONE) return;
+
+			any[c] = true;
+			severity[c] = event.surgeSeverity();
+			duration[c] = event.durationTicks();
+			disconnecting[c] = event.disconnecting();
+			voltage[c] = event.voltageFactor();
+		}
+
+		/** Bus {@code c} meets what {@code from} carries at {@code f}: the worse of each. */
+		void merge(int c, Disturbances from, int f) {
+			if (!from.any[f]) return;
+
+			any[c] = true;
+			severity[c] = Math.max(severity[c], from.severity[f]);
+			duration[c] = Math.max(duration[c], from.duration[f]);
+			disconnecting[c] |= from.disconnecting[f];
+			voltage[c] = Math.min(voltage[c], from.voltage[f]);
+		}
+
+		/** Bus {@code c} meets what bus {@code f} carries after a hop of efficiency {@code eta}. */
+		void mergeAttenuated(int c, int f, double eta) {
+			double kept = Math.max(0.0, Math.min(1.0, eta));
+			int left = Math.max(0, duration[f] - 1);
+			double sag = left > 0 ? 1.0 - (1.0 - voltage[f]) * kept : 1.0;
+
+			any[c] = true;
+			severity[c] = Math.max(severity[c], Math.min(1.0, Math.max(0.0, severity[f] * kept * GridMath.DISTURBANCE_DECAY)));
+			duration[c] = Math.max(duration[c], left);
+			disconnecting[c] |= disconnecting[f] && left > 0;
+			voltage[c] = Math.min(voltage[c], Math.min(1.0, Math.max(0.0, sag)));
+		}
+
+		PowerDeliveryEvent event(int c) {
+			return any[c] ? new PowerDeliveryEvent(severity[c], duration[c], disconnecting[c], voltage[c]) : PowerDeliveryEvent.NONE;
 		}
 	}
 
