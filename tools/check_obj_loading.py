@@ -14,10 +14,10 @@ flat list, so every tool here read the twelve faces the game had reduced to one.
 
 **A fitting named after nothing.**  ModelDefinitions names each machine's fittings by group, and a wire is hung
 on one by pointing at it - so a name no model draws is a terminal that has no hover box and no anchor.  The
-wind turbine's said ``insulator_Plastic`` for as long as it has existed: the inherited model's object is
-``insulator`` and its material ``insulator_porcelain``, and the mod's loader keys a group as object + "_" +
-material, so the real name is ``insulator_insulator_porcelain``.  No wire could ever be hung on a turbine, and
-the only sign of it was a warning in the log at every resource reload.
+wind turbine's once said ``insulator_Plastic``: the model's object is ``insulator`` and its material
+``insulator_porcelain``, and the mod's loader keys a group as object + "_" + material, so the real name is
+``insulator_insulator_porcelain``.  No wire could be hung on a turbine, and the only sign of it was a warning in
+the log at every resource reload.
 
 **A model whose OBJ is not there.**  Minecraft logs ``Failed to load model`` at ERROR and carries on with
 a missing model, which in a multipart blockstate is a part of the run that silently does not draw.  A

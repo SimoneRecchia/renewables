@@ -13,10 +13,7 @@ import io.github.simonerecchia.renewables.grid.GeneratorBudget;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
 import io.github.simonerecchia.renewables.grid.WindSample;
 import io.github.simonerecchia.renewables.model.ExtraPose;
-import io.github.simonerecchia.renewables.model.ModelDefinition;
-import io.github.simonerecchia.renewables.model.ModelDefinitions;
 import io.github.simonerecchia.renewables.model.PartBox;
-import io.github.simonerecchia.renewables.model.PartBoxes;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 import io.github.simonerecchia.renewables.telemetry.TurbineTelemetrySimulator;
 import io.github.simonerecchia.renewables.weather.LevelWeather;
@@ -637,20 +634,26 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	}
 
 	/**
-	 * Where the wire ends: the middle of the fitting's porcelain, which stands beside the foot of the tower and not up at
-	 * the machine, so the model's frame is lowered by the tower under it exactly as the renderer lowers it.  Until the
-	 * model's table says where the fitting is, the middle of the foot block.
+	 * Where the wire ends: the middle of the fitting's porcelain, which stands beside the foot of the tower and not up
+	 * at the machine.  The pose this block entity is ({@link #poseOffset}) lowers it by the tower under it, exactly as
+	 * the renderer lowers the model.
 	 */
 	@Nullable
 	@Override
-	protected Vec3 computeAnchor(int index) {
-		ModelDefinition definition = ModelDefinitions.of(getBlockState().getBlock());
-		String group = FittingTypes.nameOf(definition, index);
-		PartBox box = group == null ? null : PartBoxes.box(getBlockState().getBlock(), group);
-		if (definition == null || box == null) return Vec3.atCenterOf(footPos());
+	protected Vec3 localAnchor(int index) {
+		PartBox box = fittingBox(index);
+		if (box == null) return null;
 
 		Vector3f centre = box.center();
-		return ExtraPose.toWorld(new Vec3(centre.x(), centre.y(), centre.z()), worldPosition, definition.authored(), facing(definition.authored()), this);
+		return new Vec3(centre.x(), centre.y(), centre.z());
+	}
+
+	/** Until the model's table says where the fitting is, the middle of the foot block. */
+	@Nullable
+	@Override
+	protected Vec3 computeAnchor(int index) {
+		Vec3 anchor = super.computeAnchor(index);
+		return anchor != null ? anchor : Vec3.atCenterOf(footPos());
 	}
 
 	// ---- persistence and syncing ----

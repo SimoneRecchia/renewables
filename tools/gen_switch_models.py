@@ -16,7 +16,7 @@ this mod's scale.  The line runs along z, the three poles are spread along x - t
 towers use, so a switch drops into a line without turning it.
 
 Group names are a contract: insulator_1..3 are the line side and insulator_4..6 the load side, in the order
-ObjDefinitions names them, and a wire is stored against the index.  rotate_* is what SwitchgearRenderer
+ModelDefinitions names them, and a span is stored against the index.  rotate_* is what SwitchgearRenderer
 turns and pivot_* is where it measures the hinge from.
 """
 

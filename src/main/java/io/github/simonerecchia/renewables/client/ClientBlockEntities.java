@@ -54,8 +54,8 @@ public final class ClientBlockEntities {
 	/**
 	 * Every tracked machine that wires can hang from, not removed.
 	 *
-	 * Not all of them share a base class (an inverter and a ground run are hosts but not machines of the common kind),
-	 * so this asks the interface rather than a class.  A fresh list: for a click, not for a frame.
+	 * Asks the interface rather than a base class, because the interface is the contract the wire path is written
+	 * against.  A fresh list: for a click, not for a frame.
 	 */
 	public static List<BlockEntity> hosts() {
 		List<BlockEntity> found = new ArrayList<>();

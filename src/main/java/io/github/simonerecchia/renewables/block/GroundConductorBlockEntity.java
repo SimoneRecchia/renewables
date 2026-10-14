@@ -1,25 +1,14 @@
 package io.github.simonerecchia.renewables.block;
 
 import io.github.simonerecchia.renewables.api.power.ConductorSpec;
-import io.github.simonerecchia.renewables.client.wire.ClientWires;
-import io.github.simonerecchia.renewables.client.wire.InsulatorIndex;
 import io.github.simonerecchia.renewables.grid.FittingTypes;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
-import io.github.simonerecchia.renewables.grid.InsulatorIds;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 
-import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
-import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 
 /**
  * The one fitting a length of ground-laid conductor offers a span.
@@ -31,19 +20,19 @@ import net.minecraftforge.fml.DistExecutor;
  * One fitting rather than one per sub-conductor: a bundle is dead-ended in one place and the four clamps
  * are the same termination, which is also how {@code WireRenderer} draws
  * a bundle - one connection, four sub-conductors.
+ *
+ * A run is drawn from block models, not from an OBJ, so it has no model definition and no entry in the
+ * fittings table: it says its own fitting count and where the clamp is, and everything else is the machine's.
  */
-public class GroundConductorBlockEntity extends BlockEntity implements InsulatorHost {
+public class GroundConductorBlockEntity extends MachineBlockEntity {
 	/** Where the dead-end clamp's palm is above the block's floor, from gen_conductor_models' CLAMP. */
 	private static final double CLAMP_Y = 1.55 / 16.0;
 
-	private final int[] insulatorIds = new int[1];
-	private double currentPower = 0.0;
-
 	public GroundConductorBlockEntity(BlockPos pos, BlockState state) {
 		super(ModBlockEntities.GROUND_CONDUCTOR.get(), pos, state);
-		InsulatorIds.claim(insulatorIds);
 	}
 
+	@Nullable
 	public ConductorSpec spec() {
 		if (getBlockState().getBlock() instanceof GroundConductorBlock block) return block.spec();
 
@@ -51,13 +40,15 @@ public class GroundConductorBlockEntity extends BlockEntity implements Insulator
 	}
 
 	@Override
-	public int[] getInsulatorIds() {
-		return insulatorIds.clone();
+	protected int fittingCount() {
+		return 1;
 	}
 
+	/** The clamp, on the block's vertical axis whichever way the run turns. */
+	@Nullable
 	@Override
-	public Vec3 getWirePosition(int index) {
-		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, CLAMP_Y, 0.5);
+	protected Vec3 localAnchor(int index) {
+		return index == 0 ? new Vec3(0.0, CLAMP_Y, 0.0) : null;
 	}
 
 	@Override
@@ -89,86 +80,5 @@ public class GroundConductorBlockEntity extends BlockEntity implements Insulator
 	public boolean takesConductor(ConductorSpec conductor, int index) {
 		ConductorSpec mine = spec();
 		return mine == null || mine.id().equals(conductor.id());
-	}
-
-	@Override
-	public void deliverPower(double power) {
-		currentPower = power;
-	}
-
-	public double getCurrentPower() {
-		return currentPower;
-	}
-
-	@Override
-	protected void saveAdditional(@Nonnull CompoundTag tag) {
-		super.saveAdditional(tag);
-		tag.putInt("insulatorId", insulatorIds[0]);
-		tag.putDouble("currentPower", currentPower);
-	}
-
-	@Override
-	public void load(@Nonnull CompoundTag tag) {
-		super.load(tag);
-		currentPower = tag.getDouble("currentPower");
-		if (tag.contains("insulatorId")) {
-			insulatorIds[0] = tag.getInt("insulatorId");
-			InsulatorIds.adopt(insulatorIds[0]);
-		} else {
-			InsulatorIds.claim(insulatorIds);
-		}
-	}
-
-	@Override
-	public CompoundTag getUpdateTag() {
-		CompoundTag tag = super.getUpdateTag();
-		tag.putInt("insulatorId", insulatorIds[0]);
-		tag.putDouble("currentPower", currentPower);
-		return tag;
-	}
-
-	@Override
-	public void handleUpdateTag(CompoundTag tag) {
-		super.handleUpdateTag(tag);
-		load(tag);
-		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-			InsulatorIndex.register(this);
-			ClientWires.invalidate(getInsulatorIds());
-		});
-	}
-
-	@Override
-	public Packet<ClientGamePacketListener> getUpdatePacket() {
-		return ClientboundBlockEntityDataPacket.create(this);
-	}
-
-	@Override
-	public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket packet) {
-		handleUpdateTag(packet.getTag());
-	}
-
-	@Override
-	public void onLoad() {
-		super.onLoad();
-		ClientTracking.track(this);
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				InsulatorIndex.register(this);
-				ClientWires.invalidate(getInsulatorIds());
-			});
-		}
-	}
-
-	@Override
-	public void setRemoved() {
-		super.setRemoved();
-		ClientTracking.untrack(this);
-		InsulatorIds.release(getInsulatorIds());
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				InsulatorIndex.unregister(getInsulatorIds());
-				ClientWires.invalidate(getInsulatorIds());
-			});
-		}
 	}
 }

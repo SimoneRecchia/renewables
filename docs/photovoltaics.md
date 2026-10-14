@@ -7,7 +7,7 @@ An **inverter** turns that into alternating current, holds a power factor, and i
 the grid and your computer talk to. A **meteorological mast** measures the sky.
 
 The division is the real one, and the first consequence of it is the one that surprises
-people: **an array with no inverter in range produces nothing at all.** That is not a rule
+people: **an array with no inverter at the end of its cable produces nothing at all.** That is not a rule
 imposed on it. An open-circuit string sits at its open-circuit voltage and passes no
 current, so it makes exactly zero watts however bright the day is — which is why a solar
 plant is an inverter with modules attached rather than the other way round. The array still
@@ -26,8 +26,10 @@ reports what it *could* have made, and its panel says so in as many words.
    steps up and down, and climbs the wall of a block to reach a run on top of it. Sneak on ground a
    shovel would move and it digs itself in instead: the spoil comes back, the run lies flush, and you
    walk over it.
-5. Run a **wire** from the fitting on top of the inverter to the **right** insulator of an
-   **Electric Cabin**, then on to poles and a Power Box exactly as a turbine does.
+5. With a **Medium-Voltage Conductor** in hand, string a span from the insulator on the inverter's roof
+   to the **input** insulator of an **Electric Cabin** (the end of its roof away from the door), or to a
+   Machine Transformer first; from the cabin on to poles and a Power Box exactly as a turbine does
+   ([Getting started](getting-started.md#building-your-first-grid)).
 6. Optionally place a **mast**. It needs no power and feeds nothing; it measures.
 
 An inverter takes the arrays whose runs are **shortest** first, up to the string terminals, the input

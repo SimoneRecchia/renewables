@@ -45,7 +45,7 @@ and an inventory model for free.
 | | frame | v | culling |
 |---|---|---|---|
 | `forge:obj` block model, baked into the chunk | block's own, corner at the origin | `flip_v: false`, v zero is the PNG's top row | **culls by winding** (`RenderType.solid`) |
-| `ObjRendererBase`, the machines | authored centred, −0.5..0.5 | does `1 - v` | **no culling** (`entityCutoutNoCull`) |
+| `MachineRenderer`, the machines (the mod's own loader in `client/model`) | authored centred on the block's vertical axis, y up from its floor | does `1 - v` | **no culling** (`entityCutoutNoCull`) |
 
 A quad wound clockwise as seen from the front is not drawn by the chunk renderer — it does not read the
 `vn` the model states. So a face wound the wrong way is a **hole**: you see through it, and through the
@@ -69,8 +69,9 @@ written as two same-named blocks, so the game drew the junction box's lid and dr
 one connector of a mated pair, and left holes wherever the dropped part had been the thing covering
 something. Legal OBJ for a part in several materials is **one `o` block with a `usemtl` section per
 material** — Forge makes a `ModelMesh` per material inside the group and bakes them all. The mod's own
-parser splits by object and then by material, which merges rather than replaces, so a machine loses
-nothing; only the block models were losing parts.
+loader (`client/model`: `ObjReader` reads the file, `ModelBuilder` splits it) keys a group as
+`object_material`, so a repeated name merges rather than replaces and a machine loses nothing; only the
+block models were losing parts.
 
 `Mesh.write` emits one `o` per name, `read_obj(..., forge_groups=True)` applies Forge's rule so the renders
 here stop lying, and `check_obj_loading.py` fails the build on a repeated name — and on a model whose OBJ
@@ -198,13 +199,23 @@ The renderers read them. Renaming one silently breaks something:
 | `pivot_*` | a zero-size marker the renderer measures a hinge from |
 | `harness*`, `entry*` | drawn only when a cable is connected. **Exactly one piece is drawn at each end of a fixed row**: `harness_entry_*` where a laid run meets the middle of that edge, `harness_input` where a row plugs into the corner, `harness_lead_*` otherwise — each carrying its own cable out of the moulded joint, so two pieces of cable in one place is not a state the renderer can reach |
 | `flag_shut`, `flag_open` | two plates in one place, one drawn per state. A vacuum breaker has nothing that moves where you can see it, so a flag is all it has to tell you with |
-| `insulator*` | a wire fitting, **named in `ObjDefinitions`** — and a wire is stored against its *index* in that list, so the order cannot change without moving every wire in every existing world. On a switch the index is also the side: `insulator_1..3` line, `insulator_4..6` load, which is what `busOf` splits on |
+| `insulator*`, `bushing*` | a wire fitting, **named in `ModelDefinitions`** (`model/ModelDefinitions.java`) — and a span is stored against its *index* in that list, so the order cannot change without moving every span in every existing world. On a switch the index is also the side: `insulator_1..3` line, `insulator_4..6` load, which is what `busOf` splits on |
 
-A machine that carries a fitting extends **`FittedBlockEntity`**, which owns the two arrays, the persistent
-ids, the update packet and the client registration — three block entities repeated all of it byte for byte.
-What a subclass says is where on its own model a wire lands (`landing`, the top of the fitting's box by
-default) and what it does with the power that arrives. Which way the model is turned comes off `MachineShell`,
-which every such machine already is.
+The server never loads a model, so where a fitting is lives in data both sides read:
+`tools/gen_fittings.py` writes every group's box of every machine OBJ into
+`src/main/resources/data/renewables/fittings.json`, one table per model, and `model/PartBoxes` reads it.
+Regenerate it whenever an OBJ changes; `check_fittings.py` fails until you do.
+
+A block entity that carries a fitting extends **`MachineBlockEntity`** — every one of them, from the pole to a
+length of ground-laid conductor. It owns the ids (claimed when the block entity loads on the server, never in
+the constructor, which runs before the saved ids are read), the anchor cache, the power the grid delivered, the
+NBT, the update packet and the client registration in `InsulatorIndex` and `ClientWires`. What a subclass says
+is where on its own model a wire lands (`localAnchor`: the top of the fitting's box by default; a tower's
+chain hangs from the bottom, the inverter's cabinet is drawn at its `renderScale`) and what it does with the
+power that arrives. `computeAnchor` then puts that point through **`ExtraPose.toWorld`** — the block's facing,
+and the block entity's own offset, yaw and pitch when it is an `ExtraPose` (the pole's arms, a kiosk on a
+wall, a turbine lowered onto its tower). The renderer, the picker (`PartPicker`) and the anchor all call that
+one function, so what is drawn, what is pointed at and where the wire ends cannot drift apart.
 
 And four questions the wires ask of a machine, all on `InsulatorHost`, so adding one is four methods and
 not an `instanceof` chain in eight files:
@@ -212,22 +223,23 @@ not an `instanceof` chain in eight files:
 | | |
 |---|---|
 | `feeds(other)` | whether power may flow from a fitting here to one there — where a machine sits in the chain |
-| `busOf(index)` | which internal bus a fitting is bonded to. Every machine says nought, so power crosses it; an **open switch** says its line side and its load side are two, and that is the only thing in the mod that stops power. `PowerNetwork` keys a cluster on (position, bus) for it |
-| `takesConductor(spec, index)` | which voltage class may be strung to this fitting. Without it the five conductors are interchangeable and a 400 kV quad bundle goes on a garden kiosk |
-| `fittingType()` | the string a saved wire holds. **Never change one**: every wire in every existing world has it |
+| `busOf(index)` | which internal bus a fitting is bonded to. Every machine says nought, so power crosses it; an **open switch** says its line side and its load side are two, and that is the only thing in the mod that stops power. `GridSolver` keys a cluster on (position, bus) for it |
+| `takesConductor(spec, index)` | which voltage class may be strung to this fitting. Without it the three conductors are interchangeable and a 400 kV quad bundle goes on a garden kiosk |
+| `fittingType()` | the string a saved span holds, from `FittingTypes`. **Never change one**: every span in every existing world has it |
 | `passesThrough()` | whether power crosses this fitting rather than stopping at it. A switch has no role of its own - it takes the role of the line it is in - so it is on nobody's `feeds` list, and for as long as that was the only rule **nothing in the mod could send power to a switch at all**: a switch in a line silently blocked it, and `busOf`, the refusal to open under load and the trip all read a power that never arrived |
 
-Twice now an `instanceof` chain over machine types has silently dropped the machines added after it was
-written: `wireable()` would not let a conductor be clicked onto a tower, and `resolveInsulatorPosition` saved
-the span and then drew nothing. **If you are writing `instanceof` over more than two block entities in the
+Twice an `instanceof` chain over machine types has silently dropped the machines added after it was written:
+a conductor could not be clicked onto a tower, and a span was saved and then drawn nowhere. **If you are writing `instanceof` over more than two block entities in the
 wire path, the answer is a method on `InsulatorHost`.**
 
-The same rule made five more spines, and a machine added later gets each of them for free. **Look here before
+The same rule made more spines, and a machine added later gets each of them for free. **Look here before
 writing a loop or a helper that a sibling class already has:**
 
 | | |
 |---|---|
-| `ObjRendererBase.drawAll` | the pass a renderer makes: every loaded machine of a type, posed onto its facing, then the buffers of what left the screen released. Three arities — whole model, a `Drawing` where something moves, a `Predicate` where only some are drawn. It returns what it drew, which is what `cleanupAngles` wants |
+| `MachineRenderer.drawAll` | the pass a renderer makes: every tracked machine of a type, posed onto its facing and its `ExtraPose`. Three arities — whole model, a `Draw` where something moves, a `Predicate` where only some are drawn. A `Draw` poses groups and hands them to `renderGrouped(context, …)`; the vertex buffers are `MachineRenderer`'s own, one cache per block entity type, released for what left the screen, on a level change and on a resource reload, so a renderer never holds one. It returns what it drew, which is what `cleanupAngles` wants |
+| `MachineBlockEntity` + `ExtraPose.toWorld` | ids, anchors, persistence and client registration for anything a wire hangs from, and the one transform from a model's frame to the world (above) |
+| `GeneratorBudget` | what a generator offers other mods each tick, held to the configuration's share of the nameplate and its ceiling; what they take is gone, and the wire grid gets the rest. The turbine and the inverter each own one |
 | `PlantScreen<T>` + `SetpointSlider` | a panel names its machine once and `machine()` comes back typed; a slider follows the machine while nobody holds it and sends only when the drag ends. **A caller never asks whether a drag is in progress** |
 | `Nameplate` | `rating()` for a label that never moves, `reading()` for a panel watched while it changes, and `fmt` at the root locale. Two precisions on purpose; there were five copies of the formatter |
 | `Dispatchable` | a machine a control system can stop, tell how to read redstone and hold to a setpoint. The turbine and the inverter, so `DispatchablePeripheral` is written once |
@@ -238,13 +250,15 @@ is the only thing in the mod that dispatches**, and what it holds it has to give
 and from `onRemove`. A limit left on a machine with the cabinet gone cannot be explained by anything standing
 in the world.
 
-And **the network layer decides reach, once**: `panelCommand` guards a command from a machine's panel (chunk
-loaded, inside the border, `mayInteract`, and within six blocks of the machine's own column), `clientRequest`
-is for a request that validates its own targets. Stringing a span is the only `clientRequest`, because its two
-ends are a conductor apart by design and the far one may be a fitting eleven blocks up a tower — twice a bound
-meant for a panel has stopped a wire being strung. A new server-bound message is one of those two, not a
-fourth hand-written subset of the checks: the pole's offsets had no distance bound at all for as long as they
-were written by hand.
+And **the network layer decides reach, once**: `PanelGuard.find` guards every command from a machine's panel
+(chunk loaded, inside the border, `mayInteract`, the block entity of the expected type, and within
+`PanelGuard.REACH` = 18 blocks of the machine's vertical axis — the wrench's 16 and a little slack).
+Stringing a span is the one request that validates its own targets: `SpanPlanner.request` looks both ends up
+again on the server and bounds reach itself (32 blocks from the end just clicked, 32 plus the conductor's span
+from the other), because its two ends are a conductor apart by design and the far one may be a fitting eleven
+blocks up a tower — twice a bound meant for a panel has stopped a wire being strung. A new server-bound message
+is one of those two, not a third hand-written subset of the checks: the pole's offsets had no distance bound at
+all for as long as they were written by hand.
 
 ## 6. Generate, never hand-edit
 
@@ -256,17 +270,19 @@ reasoning lives — read the module docstring before changing figures.
 runs last wins, and the output looks like a deliberate choice. `gen_pv_textures.py` held old
 low-resolution copies of twenty block textures and ran second, so every regeneration silently put them
 back — a 1024-pixel laminate became a 256-pixel one and nothing could tell you which tool had done it.
-`check_generated_assets.py` now fails the build on it.
+`check_generated_assets.py` now fails the build on it — for every generator whose table it can read, which is
+why a table of drawings is called `*_TEXTURES`: `gen_component_sprites.py` named its table otherwise, and drew
+the C130's inventory icon over `gen_pv_textures.py`'s unseen.
 
 **A figure belongs to one file too.** `check_pv_clearance.py` kept its own copy of the torque tube's
 height; the tube moved and the checker went on measuring the old axis, so it reported a clash that was
 not there and missed the one that was. It reads the `pivot_*` marker out of the model now, the same way
 the renderer does.
 
-**One reader, one writer.** `tools/objlib.py` is the only thing in this repo that parses an OBJ. Six checkers
+**One reader, one writer.** `tools/objlib.py` is the only Python in this repo that parses an OBJ. Six checkers
 had their own parser and CLAUDE.md's own loudest lesson is why that is dangerous — a reader that differs from
 the game proves nothing. What differs legitimately is kept and named: `forge_only()` is the block-model rule,
-`read()` merges the way the mod's own splitter does, `normal` stays None where the file states none (or
+`read()` merges the way the mod's own loader (`client/model/ModelBuilder`) does, `normal` stays None where the file states none (or
 `check_winding` passes vacuously), and nothing is triangulated. Verified by regenerating all twenty-eight
 renders byte for byte.
 
@@ -321,12 +337,15 @@ drawn at all.
 ```bash
 python3 tools/gen_block_textures.py     # every block texture
 python3 tools/gen_pv_textures.py        # item sprites and panel layouts
+python3 tools/gen_component_sprites.py  # the components' and the grid machines' sprites
+python3 tools/gen_icon.py               # the mod's logo
 python3 tools/gen_pv_models.py          # arrays, inverter, combiner, met mast
 python3 tools/gen_grid_models.py        # the pole and the pad-mount kiosk
 python3 tools/gen_cab_models.py         # the substation cabin
 python3 tools/gen_cable_models.py       # the string cable (--java prints the shape tables)
 python3 tools/gen_trunk_models.py       # the trunk, on the same framework and its own fittings
-python3 tools/gen_crafting.py           # recipes, part item models, language entries
+python3 tools/gen_core_data.py          # the language file, core item models and recipes: run before gen_crafting
+python3 tools/gen_crafting.py           # recipes, part item models, blockstates, loot, tags; merges its language keys
 python3 tools/gen_turbine_models.py     # the wind turbine, one mesh for all six (--java prints its hitbox tables)
 python3 tools/gen_turbine_textures.py   # its textures
 python3 tools/gen_tower_models.py       # the three lattice towers (--java prints the cell tables)
@@ -334,6 +353,8 @@ python3 tools/gen_transformer_models.py # the two transformers
 python3 tools/gen_switch_models.py      # the disconnector and the breaker
 python3 tools/gen_conductor_models.py   # the ground-laid line conductors (--java prints the shapes)
 python3 tools/gen_control_models.py     # the plant control cabinet
+python3 tools/gen_fittings.py           # data/renewables/fittings.json, after any OBJ changes (--check compares)
+python3 tools/splice_tables.py          # pastes the generators' shape tables into their blocks
 python3 tools/gen_example_plant.py      # one solar plant, as setblock commands and a datapack
 python3 tools/gen_example_site.py       # the whole site: two solar parks, a wind farm, a substation
 ```
@@ -350,16 +371,31 @@ python3 tools/check_row_cabling.py      # "nothing a row draws passes through an
 python3 tools/check_switch_travel.py    # "the blade grips its contact and clears everything else"
 python3 tools/check_model_textures.py   # "nothing mechanical left to find"
 python3 tools/check_generated_assets.py # "one generator a file, every file read, nothing under resolution"
+python3 tools/check_fittings.py         # "fittings.json is what the models say, and complete for every definition"
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle", and the swept floor matches
-python3 tools/check_gui_fits.py         # "0 problems"
+python3 tools/check_gui_fits.py         # "0 problems" - needs the vanilla font first, see below
 python3 tools/gen_cable_models.py       # "nothing a run draws touches anything else it draws"
 python3 tools/gen_trunk_models.py       # the same, on the heavier gauge
-python3 tools/check_deployed.py         # "the client reads exactly what is in the tree"
+python3 tools/check_deployed.py         # "the client reads exactly what is in the tree" - after a build
 python3 tools/gen_conductor_models.py   # the same, per conductor, and the shapes match the block
 python3 tools/gen_tower_models.py       # "LatticeTowerBlock declares the cells this authors"
 python3 tools/render_blocks.py          # and then *look* at build/render/
-./gradlew build -x test
+./gradlew build                         # compiles and runs the JUnit tests
 ```
+
+`check_gui_fits.py` measures text with Minecraft's own font sheet, which is not in this repo; take it out of the
+client jar ForgeGradle has already cached:
+
+```bash
+mkdir -p build/gui-check && unzip -p ~/.gradle/caches/forge_gradle/minecraft_repo/versions/1.20.1/client-extra.jar \
+    assets/minecraft/textures/font/ascii.png > build/gui-check/ascii.png
+```
+
+The game logic that can be is plain Java and tested without a game: the grid solver, the id pool, the span
+store, the turbine's dynamics and telemetry, the weather sampler, the OBJ reader and the picker, the client's
+wire maths, and the anchor transform. A test is named `*Test` and lives beside what it tests under
+`src/test/java`. What only a running world can show is checked on the headless server (`./gradlew runServer`)
+over RCON with `tools/rcon.py`; enable RCON in `run/server.properties` for the session and put it back after.
 
 A checker that finds nothing is not evidence the work is right; a checker that has never found
 anything is usually not looking. Every one of these was written because something shipped broken.
@@ -380,3 +416,32 @@ command to run it, the files it writes, and the two or three figures everything 
 
 Commit messages are the opposite: that is where the reasoning goes, in full, in prose. Nothing is
 "improved" or "enhanced" — say what changed and what it fixes.
+
+## 9. Where the code is
+
+Package root `io.github.simonerecchia.renewables`, mod id and namespace `renewables`. `docs/ARCHITECTURE.md`
+has the contracts between the parts; this is the map.
+
+| package | what is in it |
+|---|---|
+| (root) | `Renewables` (the mod, registration order), `RenewablesClient` (client setup, the server-to-client handlers) |
+| `registry` | `ModBlocks`, `ModItems`, `ModBlockEntities`, `ModTabs`; a family's map is keyed by catalogue id, in catalogue order |
+| `core` | `ServerConfig`, `ClientConfig`, `ModGameRules`, `RealTimeClock`, `ServerEvents` (the per-level ticks, wire sync at login, shutdown) |
+| `api`, `api.power` | the public types: specs, `Telemetry`, `Dispatchable`, `IEnergyBudget`, `IElectricPowerConsumer` and its capability, `PowerDeliveryEvent` |
+| `catalog` | `Catalogue<T>` and one catalogue per family: every product's datasheet |
+| `model` | what client and server both know about a machine's model: `ModelDefinitions` (block → OBJ, authored facing, fitting names), `PartBoxes` (reads `fittings.json`), `ExtraPose` |
+| `block` | every block and block entity: `MachineBlock` / `MachineBlockEntity` / `MachineShell` underneath, one pair per machine, and the DC side (`DcNetwork`, `PvStrings` follow the copper) |
+| `grid` | the AC network. `Grid` owns one `LevelGrid` per level, which builds the graph from the saved spans and the loaded machines at the end of every server tick and hands it to `GridSolver` (pure arithmetic, `GridMath` for the losses, `FlowRules` for direction). `WireLedger` is the way in to each level's spans (`WireData` saved data, `SpanStore`, `SpanCodec`); `SpanPlanner` validates and creates a span; `InsulatorIds` hands out the persistent fitting ids (`IdPool`); `FittingTypes` names the machine types a span stores; `GeneratorBudget` / `EnergyBudgets` are the export budget; `DisturbanceModel` the surges |
+| `net`, `net.packet` | the `renewables:main` channel (`Net`), `ServerHandlers`, `PanelGuard`, `ClientBridge` |
+| `weather`, `wind`, `telemetry` | `LevelWeather` and the sun, sky and wind models; the turbine's dynamics and geometry; the SCADA simulators |
+| `compat` | Forge Energy and Mekanism (`EnergyBridge`), ComputerCraft (`CCTweakedPeripherals`), each behind a `ModList` check |
+| `client.model` | the OBJ loader (`ObjReader`, `MtlReader`, `ModelBuilder` into a `MeshModel`), `ModelCache`, `ModelBindings` (which block draws which model), `PartPicker` (which part a ray hits) |
+| `client.render` | `MachineRenderer`, `RenderContext`, `RenderLifecycle` (buffers released on reload and logout), `FrameClock`, one renderer per machine family |
+| `client.wire` | the client's spans (`ClientWires`), fitting lookup (`InsulatorIndex`), the drawing (`WireRenderer`, `WireProfile`, `WireLod`) and the two-click link (`LinkMachine`) |
+| `client.hooks`, `client.events`, `client.screen`, `client.preview` | input, the wrench's targeting, the panels, the development preview stage |
+
+One tick on the server: the block entities tick first (a generator works out its output, opens its export
+budget and pushes energy to its neighbours), then `Grid.tick` solves each level and delivers what reaches every
+machine, sending the readings to the players tracking those chunks. One span: two clicks with a reel on the
+client, a `CreateSpanPayload`, `SpanPlanner` on the server, `WireLedger` stores it and tells the dimension's
+players, `ClientWires` adds it and `WireRenderer` draws it.

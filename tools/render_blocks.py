@@ -168,7 +168,7 @@ def read_obj(path, resolve, flip_v=False, shade=True, cull=True, forge_groups=Tr
 
     ``flip_v: false``, so v zero is the top row of the PNG; the mod's own renderer does 1 - v.
     ``cull`` because the two pipelines differ: a block model is baked into the chunk with RenderType.solid,
-    which culls by winding, while ObjRendererBase draws a machine with entityCutoutNoCull, which does not.
+    which culls by winding, while MachineRenderer draws a machine with entityCutoutNoCull, which does not.
     ``forge_groups`` is the other difference and objlib.forge_only explains it.  A face with no stated normal
     gets one from its winding, which is what the game does and what only a *renderer* may do.
     """

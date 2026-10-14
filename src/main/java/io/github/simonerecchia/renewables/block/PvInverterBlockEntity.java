@@ -8,26 +8,19 @@ import io.github.simonerecchia.renewables.api.power.PvArraySpec;
 import io.github.simonerecchia.renewables.api.power.PvModuleSpec;
 import io.github.simonerecchia.renewables.api.power.RedstoneMode;
 import io.github.simonerecchia.renewables.api.power.Telemetry;
-import io.github.simonerecchia.renewables.api.power.TickBudget;
 import io.github.simonerecchia.renewables.catalog.CableCatalog;
 import io.github.simonerecchia.renewables.catalog.CombinerCatalog;
 import io.github.simonerecchia.renewables.catalog.InverterCatalog;
-import io.github.simonerecchia.renewables.client.wire.ClientWires;
-import io.github.simonerecchia.renewables.client.wire.InsulatorIndex;
 import io.github.simonerecchia.renewables.compat.energy.EnergyBridge;
 import io.github.simonerecchia.renewables.core.ServerConfig;
 import io.github.simonerecchia.renewables.grid.FittingTypes;
+import io.github.simonerecchia.renewables.grid.GeneratorBudget;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
-import io.github.simonerecchia.renewables.grid.InsulatorIds;
-import io.github.simonerecchia.renewables.model.ModelDefinition;
-import io.github.simonerecchia.renewables.model.ModelDefinitions;
 import io.github.simonerecchia.renewables.model.PartBox;
-import io.github.simonerecchia.renewables.model.PartBoxes;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 import io.github.simonerecchia.renewables.telemetry.SolarTelemetrySimulator;
 import io.github.simonerecchia.renewables.weather.LevelWeather;
 
-import io.github.simonerecchia.renewables.Renewables;
 import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -37,26 +30,19 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.nbt.IntTag;
 import net.minecraft.nbt.LongTag;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
-import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.energy.IEnergyStorage;
-import net.minecraftforge.fml.DistExecutor;
 import org.joml.Vector3f;
 
 /** The inverter: the whole electrical side of a photovoltaic plant, in one block. */
-public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost, Dispatchable {
+public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatchable {
 	/** How often the plant is surveyed for arrays again, in ticks. */
 	private static final int RESCAN_TICKS = 40;
 	/** Ticks in a day, for the energy counters that reset with it. */
@@ -95,15 +81,11 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 	private volatile double activePowerLimitKw;
 	private volatile double powerFactorSetpoint = 1.0;
 
-	private final TickBudget budget = new TickBudget();
+	private final GeneratorBudget budget = new GeneratorBudget(GeneratorBudget.Kind.PHOTOVOLTAIC);
 	private final LazyOptional<IEnergyStorage> forgeEnergy = LazyOptional.of(() -> EnergyBridge.forgeEnergyView(this));
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 
 	private final ClientSync clientSync = new ClientSync();
-
-	/** The wire fitting on top of the cabinet. */
-	private Vec3[] wirePositions;
-	private int[] insulatorIds;
 
 	private final SolarTelemetrySimulator telemetrySimulator = new SolarTelemetrySimulator();
 	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
@@ -114,8 +96,6 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 	public PvInverterBlockEntity(BlockPos pos, BlockState state) {
 		super(ModBlockEntities.PV_INVERTER.get(), pos, state);
 		this.activePowerLimitKw = spec().acPowerKw();
-		ensureArraySizes();
-		generateInsulatorIds();
 	}
 
 	/** Which machine this is. */
@@ -127,93 +107,24 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 
 	// ---- the wire fitting ----
 
-	private ModelDefinition definition() {
-		return ModelDefinitions.of(getBlockState().getBlock());
-	}
+	/**
+	 * The middle of the porcelain on the roof, where the drawn cabinet has it: the whole model is scaled about the
+	 * middle of its footprint by {@link InverterSpec#renderScale}, so the fitting comes down and in with it.
+	 */
+	@Nullable
+	@Override
+	protected Vec3 localAnchor(int index) {
+		PartBox box = fittingBox(index);
+		if (box == null) return null;
 
-	private void ensureArraySizes() {
-		ModelDefinition definition = definition();
-		int count = definition == null ? 0 : definition.insulators().size();
-
-		if (wirePositions == null || wirePositions.length != count) {
-			wirePositions = new Vec3[count];
-		}
-
-		if (insulatorIds == null || insulatorIds.length != count) {
-			insulatorIds = new int[count];
-		}
-	}
-
-	private void generateInsulatorIds() {
-		ensureArraySizes();
-		InsulatorIds.claim(insulatorIds);
-	}
-
-	public Vec3 getWirePosition(int index) {
-		ensureArraySizes();
-		return index >= 0 && index < wirePositions.length ? wirePositions[index] : null;
-	}
-
-	public void setWirePosition(int index, Vec3 position) {
-		ensureArraySizes();
-		if (index >= 0 && index < wirePositions.length) {
-			wirePositions[index] = position;
-		}
-	}
-
-	public int getInsulatorId(int index) {
-		ensureArraySizes();
-		return index >= 0 && index < insulatorIds.length ? insulatorIds[index] : -1;
-	}
-
-	public int[] getInsulatorIds() {
-		ensureArraySizes();
-		return insulatorIds.clone();
-	}
-
-	/** Where the fitting is in the world, with the cabinet's own scale applied. */
-	public Vec3 calculateOrientedInsulatorCenter(int index) {
-		ensureArraySizes();
-		if (index < 0 || index >= wirePositions.length) return null;
-
-		String groupName = FittingTypes.nameOf(definition(), index);
-		if (groupName == null) return null;
-
-		PartBox boundingBox = PartBoxes.box(getBlockState().getBlock(), groupName);
-		if (boundingBox == null) return null;
-
-		Vector3f centre = boundingBox.center();
-		double scale = renderScale(spec());
-		Vec3 local = new Vec3(centre.x() * scale, centre.y() * scale, centre.z() * scale);
-
-		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0.0, 0.5).add(ModelFacing.turned(local, PvInverterBlock.AUTHORED, getBlockState().getValue(PvInverterBlock.FACING)));
-	}
-
-	/** How large this machine is drawn, restated from the renderer. */
-	private static double renderScale(InverterSpec spec) {
-		if (spec.acPowerKw() >= 1000.0) return 1.0;
-		if (spec.acPowerKw() <= 30.0) return 0.62;
-
-		return 0.92;
-	}
-
-
-	private void updateWirePositions() {
-		ensureArraySizes();
-		for (int i = 0; i < wirePositions.length; i++) {
-			Vec3 calculated = calculateOrientedInsulatorCenter(i);
-			if (calculated != null) {
-				wirePositions[i] = calculated;
-			}
-		}
+		Vector3f centre = box.center();
+		return new Vec3(centre.x(), centre.y(), centre.z()).scale(spec().renderScale());
 	}
 
 	// ---- the tick ----
 
 	public void serverTick() {
 		if (!(level instanceof ServerLevel serverLevel)) return;
-
-		updateWirePositions();
 
 		InverterSpec spec = spec();
 		if (--rescanCountdown <= 0) {
@@ -228,7 +139,7 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 		accumulateEnergy(serverLevel);
 		updateTelemetry(serverLevel, spec);
 
-		budget.open(Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW);
+		budget.open(Math.max(0.0, acPowerKw), spec.acPowerKw());
 		EnergyBridge.emit(this, this, worldPosition, energyFaces());
 
 		clientSync.throttled(this);
@@ -654,9 +565,10 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 		return Math.max(0.0, acPowerKw) * EnergyBridge.JOULES_PER_KW;
 	}
 
-	/** What the wire network may carry away this tick, in kW. */
+	/** What the wire network may carry away this tick, in kW: the output less what other mods' cables took. */
+	@Override
 	public double getGeneratedPower() {
-		return Math.max(0.0, acPowerKw - budget.claimed() / EnergyBridge.JOULES_PER_KW);
+		return budget.netKw(Math.max(0.0, acPowerKw));
 	}
 
 	/** Whether this generator is putting a disturbance onto the network. */
@@ -664,24 +576,20 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 		return false;
 	}
 
+	/** What other mods' cables may still take this tick: the output, held to pvExportFraction and pvMaxJoulesPerTick. */
 	@Override
 	public double getAvailableJoules() {
-		if (level == null || level.isClientSide() || !ServerConfig.externalEnergyEnabled()) return 0.0;
-
-		return budget.available();
+		return level == null || level.isClientSide() ? 0.0 : budget.getAvailableJoules();
 	}
 
 	@Override
 	public double getMaxJoulesPerTick() {
-		if (level == null || level.isClientSide() || !ServerConfig.externalEnergyEnabled()) return 0.0;
-
-		double share = spec().acPowerKw() * EnergyBridge.JOULES_PER_KW * ServerConfig.pvExportFraction();
-		return Math.min(share, ServerConfig.pvMaxJoulesPerTick());
+		return level == null || level.isClientSide() ? 0.0 : budget.getMaxJoulesPerTick();
 	}
 
 	@Override
 	public double claimJoules(double joules, boolean simulate) {
-		return budget.claim(joules, simulate);
+		return level == null || level.isClientSide() ? 0.0 : budget.claimJoules(joules, simulate);
 	}
 
 	@Nonnull
@@ -740,28 +648,6 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 
 		tag.put("arrays", positions);
 
-		// an entry is empty whenever the insulator's bounding box could not be found, and on a dedicated
-		ListTag wires = new ListTag();
-		for (Vec3 pos : wirePositions) {
-			CompoundTag entry = new CompoundTag();
-			if (pos != null) {
-				entry.putDouble("x", pos.x);
-				entry.putDouble("y", pos.y);
-				entry.putDouble("z", pos.z);
-			}
-
-			wires.add(entry);
-		}
-
-		tag.put("wirePositions", wires);
-
-		ListTag ids = new ListTag();
-		for (int id : insulatorIds) {
-			ids.add(IntTag.valueOf(id));
-		}
-
-		tag.put("insulatorIds", ids);
-
 		long[] boxes = new long[combiners.size()];
 		for (int i = 0; i < boxes.length; i++) {
 			boxes[i] = combiners.get(i).asLong();
@@ -812,72 +698,6 @@ public class PvInverterBlockEntity extends BlockEntity implements InsulatorHost,
 		}
 
 		integrated = tag.contains("combiner") ? CombinerCatalog.byId(new ResourceLocation(tag.getString("combiner"))) : null;
-
-		ensureArraySizes();
-		if (tag.contains("wirePositions")) {
-			ListTag wires = tag.getList("wirePositions", 10);
-			for (int i = 0; i < Math.min(wires.size(), wirePositions.length); i++) {
-				CompoundTag entry = wires.getCompound(i);
-				if (entry.contains("x")) {
-					wirePositions[i] = new Vec3(entry.getDouble("x"), entry.getDouble("y"), entry.getDouble("z"));
-				}
-			}
-		}
-
-		if (tag.contains("insulatorIds")) {
-			ListTag ids = tag.getList("insulatorIds", 3);
-			for (int i = 0; i < Math.min(ids.size(), insulatorIds.length); i++) {
-				insulatorIds[i] = ids.getInt(i);
-				InsulatorIds.adopt(insulatorIds[i]);
-			}
-		}
-
-		generateInsulatorIds();
-		updateWirePositions();
-	}
-
-	@Override
-	public void handleUpdateTag(CompoundTag tag) {
-		load(tag);
-	}
-
-	@Override
-	public CompoundTag getUpdateTag() {
-		CompoundTag tag = new CompoundTag();
-		saveAdditional(tag);
-		return tag;
-	}
-
-	@Override
-	public Packet<ClientGamePacketListener> getUpdatePacket() {
-		return ClientboundBlockEntityDataPacket.create(this);
-	}
-
-
-	@Override
-	public void onLoad() {
-		super.onLoad();
-		ClientTracking.track(this);
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				updateWirePositions();
-				InsulatorIndex.register(this, getInsulatorIds());
-				ClientWires.invalidate(getInsulatorIds());
-			});
-		}
-	}
-
-	@Override
-	public void setRemoved() {
-		super.setRemoved();
-		ClientTracking.untrack(this);
-		InsulatorIds.release(getInsulatorIds());
-		if (level != null && level.isClientSide()) {
-			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				InsulatorIndex.unregister(getInsulatorIds());
-				ClientWires.invalidate(getInsulatorIds());
-			});
-		}
 	}
 
 	/** Tells the arrays this inverter is letting them go. */

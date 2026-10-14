@@ -38,14 +38,6 @@ TEXTURES = os.path.join(ASSETS, 'textures')
 # block texture below it is one that was left behind by an older pass.
 MIN_BLOCK = 128
 
-# What is not drawn by a script: the item sprites, which are the original ones, kept at the user's word over a
-# generated set.  Everything else in the mod is generated - see CLAUDE.md section 6.
-INHERITED = {
-    'item/%s.png' % name for name in
-    ('cab', 'circuit_board', 'cpu', 'insulator', 'metal_casing', 'motor_core', 'power_box', 'screen',
-     'utility_pole')}
-
-
 def imported(name):
     """A generator module, or None when it reads a Java file the rewrite has not written yet.
 
@@ -203,7 +195,7 @@ def main():
                             % (path, ' and '.join(tools)))
 
     for path in sorted(measured):
-        if path not in claimed and path not in INHERITED:
+        if path not in claimed:
             problems.append('%s is on disk but no generator writes it' % path)
         elif path not in used:
             problems.append('%s is generated but no model, mtl or class names it' % path)

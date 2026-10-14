@@ -16,8 +16,8 @@ group.  Seven parsers is seven chances to make that mistake again in a different
 
 **The two pipelines group differently and it matters.**  Forge's ObjModel does ``parts.put(name, ...)`` into
 a map, so a second ``o`` of the same name *replaces* the first and every face it held is never baked - that
-is true of a block model, and only of one.  A machine's OBJ is read by the mod's own RenderixSplitter, which
-splits by object and then by material and *merges*.  So ``read`` merges, and ``forge_only`` is the filter the
+is true of a block model, and only of one.  A machine's OBJ is read by the mod's own loader
+(client/model: ObjReader, then ModelBuilder), which splits by object and then by material and *merges*.  So ``read`` merges, and ``forge_only`` is the filter the
 block-model path puts on top of it.
 """
 

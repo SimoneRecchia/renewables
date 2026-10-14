@@ -4,10 +4,7 @@ import io.github.simonerecchia.renewables.api.power.ConductorSpec;
 import io.github.simonerecchia.renewables.api.power.TowerSpec;
 import io.github.simonerecchia.renewables.grid.FittingTypes;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
-import io.github.simonerecchia.renewables.model.ModelDefinition;
-import io.github.simonerecchia.renewables.model.ModelDefinitions;
 import io.github.simonerecchia.renewables.model.PartBox;
-import io.github.simonerecchia.renewables.model.PartBoxes;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 
 import javax.annotation.Nullable;
@@ -33,22 +30,16 @@ public class LatticeTowerBlockEntity extends MachineBlockEntity {
 
 	@Nullable
 	@Override
-	protected Vec3 computeAnchor(int index) {
-		ModelDefinition definition = ModelDefinitions.of(getBlockState().getBlock());
-		if (definition == null || index < 0 || index >= definition.insulators().size()) return null;
-
-		PartBox box = PartBoxes.box(getBlockState().getBlock(), definition.insulators().get(index));
+	protected Vec3 localAnchor(int index) {
+		PartBox box = fittingBox(index);
 		if (box == null) return null;
 
 		double x = (box.min().x() + box.max().x()) * 0.5;
 		double z = (box.min().z() + box.max().z()) * 0.5;
-		Vec3 local = switch (spec().duty()) {
+		return switch (spec().duty()) {
 			case SUSPENSION, TENSION -> new Vec3(x, box.min().y(), z);
 			case TERMINAL -> new Vec3(x, (box.min().y() + box.max().y()) * 0.5, box.min().z());
 		};
-
-		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0.0, 0.5)
-				.add(ModelFacing.turned(local, definition.authored(), facing(definition.authored())));
 	}
 
 	@Override

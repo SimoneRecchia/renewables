@@ -1,5 +1,41 @@
 # Renewables — piano di riscrittura
 
+## Stato
+
+**La riscrittura è completata.** Ogni file Java con logica dell'altro progetto elencato più sotto è stato
+riscritto da zero da specifiche di comportamento, con struttura e nomi nuovi (`docs/ARCHITECTURE.md`); i file che
+erano interamente dell'autore sono stati portati nei package nuovi. Nessuna classe, libreria o asset di quel
+progetto è nel repo. Il resto di questo file è il registro storico dell'inventario da cui si è partiti.
+
+Dove stanno ora i sottosistemi riscritti (radice `io.github.simonerecchia.renewables`):
+
+| sottosistema | prima (registro sotto) | ora |
+|---|---|---|
+| ingresso della mod, registri, rete | `Electricity`, `ElectricityClient`, `ElectricityNetworking`, i payload | `Renewables`, `RenewablesClient`, `registry` (`ModBlocks`, `ModItems`, `ModBlockEntities`, `ModTabs`), `net` (`Net`, `ServerHandlers`, `PanelGuard`, `ClientBridge`, `net.packet`) |
+| configurazione, eventi del server | `ElectricityServerConfig`, `ElectricityClientConfig` | `core` (`ServerConfig`, `ClientConfig`, `ModGameRules`, `RealTimeClock`, `ServerEvents`) |
+| la rete elettrica | `PowerNetwork` | `grid` (`Grid`, `LevelGrid`, `GridSolver`, `GridMath`, `FlowRules`, `DisturbanceModel`, `EnergyBudgets`, `GeneratorBudget`) |
+| campate, id degli isolatori | `WireManager`, `InsulatorIdRegistry`, `InsulatorPartHelper` | `grid` (`WireLedger`, `WireData`, `SpanStore`, `SpanCodec`, `SpanPlanner`, `InsulatorIds`, `IdPool`, `FittingTypes`) |
+| base delle macchine con isolatori | `FittedBlockEntity`, `MachineShellBlock` | `block` (`MachineBlock`, `MachineBlockEntity`, `MachineShell`, `MachineShellBlock`); inverter e tratti posati compresi |
+| palo, cabina, kiosk, sezionatori, tralicci, trasformatori | i rispettivi `*Block` / `*BlockEntity` | `block` (stessi nomi, più `PowerShare`, `FePool`, `FieldSwitch`, `PowerFieldShape`, `SwitchLogic`, `TransformerFlow`) |
+| turbina, torre, meteo | `WindTurbineBlock(Entity)`, `TurbineTowerBlock`, `GlobalWeatherManager` | `block` (`WindTurbineBlock(Entity)`, `TurbineTowerBlock(Entity)`), `wind` (`TurbineDynamics`, `TurbineGeometry`), `weather` (`LevelWeather`) |
+| tabella dei modelli, ancoraggi | `ObjDefinitions`, `ObjBoundingBoxRegistry`, `ObjTransforms` | `model` (`ModelDefinitions`, `PartBoxes` su `data/renewables/fittings.json`, `ExtraPose`) |
+| caricamento OBJ, picking | `ObjModel`, `ObjLoader`, `ObjRaycaster`, `ObjBlockRegistry`, `ObjInteractionRegistry`, la libreria `renderix` | `client.model` (`ObjReader`, `MtlReader`, `ObjMesh`, `ModelBuilder`, `MeshModel`, `ModelCache`, `ObjModelLoader`, `ModelBindings`, `PartPicker`, `PartFrame`, `PartSearch`, `Rays`) |
+| disegno delle macchine | `ObjRendererBase`, `ObjRenderUtil`, `ObjRenderContext`, i renderer di palo, cabina, kiosk, traliccio, turbina | `client.render` (`MachineRenderer`, `RenderContext`, `RenderLifecycle`, `FrameClock`, un renderer per famiglia) |
+| cavi lato client, input, chiave | `WireRenderer`, `WireManagerClient`, `WirePhysics`, `InsulatorLookup`, `WireAnchorHelper`, `WireInteractionEvents`, gli hook client | `client.wire` (`ClientWires`, `InsulatorIndex`, `WireRenderer`, `WireProfile`, `WireLod`, `LinkMachine`, …), `client.hooks`, `client.events`, `client.ClientBlockEntities` |
+| schermate | `PowerInfoScreen`, `UtilityPoleConfigScreen` | `client.screen` (`PowerInfoScreen`, `UtilityPoleConfigScreen`, `PoleConfigText`) |
+| oggetti, API pubblica | `PowerWrenchItem`, `ConductorItem`, `TooltipItem`, `TooltipBlockItem`, `PowerDeliveryEvent`, `IElectricPowerConsumer`, `ElectricityCapabilities` | `item`, `api.power` (`RenewablesCapabilities`) |
+
+Asset: tutti generati dagli script di `tools/` — palo e kiosk da `gen_grid_models.py`, cabina da
+`gen_cab_models.py`, turbina da `gen_turbine_models.py` e `gen_turbine_textures.py` (`plastic2.png` non esiste
+più), icone d'inventario da `gen_component_sprites.py` e `gen_pv_textures.py`, logo da `gen_icon.py`, i `.mtl`
+con i loro modelli. Verificato: eseguendo ogni generatore su una copia dell'albero si ottiene
+`src/main/resources` identico byte per byte. Nessun file audio.
+
+Verifiche: `./gradlew build` (compilazione e 320 test JUnit), i `tools/check_*.py`, e il server headless
+(`./gradlew runServer`, prove via RCON con `tools/rcon.py`).
+
+## Registro storico: l'inventario di partenza
+
 Renewables nasce da un fork di [dooji2/electricity](https://github.com/dooji2/electricity) (codice GPL v3, asset
 All Rights Reserved), ma **non ne è più un fork**: l'obiettivo è che nel repo non resti nulla di dooji, né codice né
 asset. Questo file è l'inventario di quello che va rifatto e la regola con cui farlo.

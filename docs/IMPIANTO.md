@@ -5,7 +5,7 @@ Un sito completo, costruito e letto macchina per macchina su un server prima di 
 strada, ghiaia, edificio di controllo, **servizi ausiliari** e **35 cartelli** che dicono cos'è ogni cosa e
 a che tensione.
 
-Lo genera e lo verifica [tools/gen_example_site.py](tools/gen_example_site.py).
+Lo genera e lo verifica [tools/gen_example_site.py](../tools/gen_example_site.py).
 Per il solo impianto solare minimo c'è [IMPIANTO-SOLARE.md](IMPIANTO-SOLARE.md).
 
 ## Come entrarci

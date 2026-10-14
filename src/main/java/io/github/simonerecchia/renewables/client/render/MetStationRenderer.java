@@ -30,7 +30,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class MetStationRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 	private static final Map<BlockPos, Float> CUP_ANGLE = new HashMap<>();
 	private static final Map<BlockPos, Float> VANE_ANGLE = new HashMap<>();
 
@@ -44,12 +43,12 @@ public class MetStationRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		Set<BlockPos> seen = drawAll(event, MetStationBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				state -> state.getValue(MetStationBlock.FACING), MetStationBlock.AUTHORED, BUFFER_CACHE, MetStationRenderer::render);
+				state -> state.getValue(MetStationBlock.FACING), MetStationBlock.AUTHORED, MetStationRenderer::render);
 		cleanupAngles(CUP_ANGLE, seen);
 		cleanupAngles(VANE_ANGLE, seen);
 	}
 
-	private static void render(MetStationBlockEntity station, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(MetStationBlockEntity station, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		float cups = advanceCups(station.getBlockPos(), station.windSpeed());
 		float vane = smoothVane(station.getBlockPos(), (float) station.windDirection(), station.getBlockState().getValue(MetStationBlock.FACING));
@@ -76,7 +75,7 @@ public class MetStationRenderer extends MachineRenderer {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), station.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(context, poses);
 	}
 
 	/** Advances the cups at the speed the wind they are reading implies. */
