@@ -148,7 +148,7 @@ public class PvArrayBlockEntity extends BlockEntity {
 		expireClaim();
 
 		if (--skyViewCountdown <= 0) {
-			skyViewFactor = Shading.skyViewFactor(serverLevel, worldPosition);
+			skyViewFactor = Shading.skyViewFactor(serverLevel, worldPosition, planeHeight(), PvArrayBlock::row);
 			skyViewCountdown = SKY_VIEW_TTL;
 		}
 
@@ -160,6 +160,11 @@ public class PvArrayBlockEntity extends BlockEntity {
 		updateTelemetry(spec);
 
 		clientSync.throttled(this);
+	}
+
+	/** Height of the module plane above the block's floor, in blocks. */
+	private double planeHeight() {
+		return getBlockState().getBlock() instanceof PvArrayBlock block ? block.planeHeight() : 0.5;
 	}
 
 	/** Interpolates the tracker on the client, so the plane moves between the server's ten-tick updates. */
@@ -194,8 +199,9 @@ public class PvArrayBlockEntity extends BlockEntity {
 		// three separate ways the beam can be taken away, and they multiply: what is built or grown
 		// over the array, what is standing on it
 		rowShadedFraction = Shading.rowShadedFraction(spec.groundCoverRatio(), tilt, azimuth, sky.sun());
-		obstructionFraction = Shading.beamFraction(serverLevel, worldPosition, sky.sun())
-				 * Shading.entityBeamFraction(serverLevel, worldPosition, sky.sun());
+		double planeHeight = planeHeight();
+		obstructionFraction = Shading.beamFraction(serverLevel, worldPosition, planeHeight, sky.sun(), PvArrayBlock::row)
+				 * Shading.entityBeamFraction(serverLevel, worldPosition, planeHeight, sky.sun());
 
 		plane = plane.withBeamFraction(obstructionFraction * (1.0 - rowShadedFraction))
 				.withSkyFraction(skyViewFactor)
