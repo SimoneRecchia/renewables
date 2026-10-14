@@ -22,7 +22,7 @@ the copper is on the panels.
 
 **Alternating current is strung between fittings.** Hold a conductor reel, right-click an insulator, then a
 second one, and a span hangs between them. Three conductors, each for its own voltage class — aerial bundled
-cable at 1 kV (spans up to 40 blocks), a medium-voltage conductor at 24 kV (90), a 400 kV quad bundle (160) —
+cable at 1 kV (spans up to 40 blocks), a medium-voltage conductor at 33 kV (90), a 400 kV quad bundle (160) —
 and every fitting says which class it takes. Every server tick the grid carries what the generators make down
 the spans: about 1% is lost per block of span, parallel spans share the loss, and where a line divides the
 power divides equally.

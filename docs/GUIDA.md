@@ -64,7 +64,7 @@ Tre conduttori, e ognuno va **solo** sulla sua classe di tensione:
 | Conduttore | Classe | Campata massima | Blocchi per bobina |
 |---|---|---|---|
 | **Aerial Bundled Cable NFA2X 4×70** | bassa (1 kV) | 40 blocchi | 4 |
-| **Aster 228** (conduttore MT) | media (24 kV) | 90 blocchi | 8 |
+| **Aster 228** (conduttore MT) | media (33 kV) | 90 blocchi | 8 |
 | **Curlew ACSR quadruplo** | alta (420 kV) | 160 blocchi | 16 |
 
 Se sbagli classe il gioco te lo dice: *"Neither of those fittings is built for … Match the conductor to the
@@ -213,7 +213,8 @@ un impianto dimensionato bene. `derating` quando è troppo caldo e si autolimita
 | **C130-4.0** | 4000 kW | 130 m | 3,0 m/s | 25 m/s | 9–13 |
 
 **Come si monta:** impila i blocchi **Turbine Tower** fino all'altezza che vuoi, poi posa la turbina
-sopra l'ultimo. Nient'altro sta in piedi sopra i 16 blocchi.
+sopra l'ultimo. Una pila nuda di più di 16 blocchi crolla appena qualcosa ci sale sopra, e oltre i 20 crolla
+mentre la costruisci.
 
 **Se sbagli altezza te lo dice:** *"… is built for … to … blocks of tower. This one stands …"*. E se la
 torre è troppo alta per la macchina che le hai messo sopra, **l'acciaio cede**: la torre crolla.
@@ -248,7 +249,7 @@ carico. Occupa diverse celle.
 I **tre isolatori bassi** vogliono conduttore **MT**, i **tre alti** vogliono conduttore **AT**. Da qui
 parte la linea di trasmissione, e da qui **solo** verso tralicci o verso un tratto posato.
 
-### 6.3 Sezionatore (Disconnector) e interruttore (Circuit Breaker), 24 kV
+### 6.3 Sezionatore (Disconnector) e interruttore (Circuit Breaker), 33 kV
 
 Si mettono **in mezzo** a una linea MT: tre isolatori sul lato linea, tre sul lato carico. Tira una
 campata da monte ai primi tre e da lì ai secondi tre verso valle.
@@ -256,7 +257,7 @@ campata da monte ai primi tre e da lì ai secondi tre verso valle.
 * **Click destro a mano vuota** lo apre o lo chiude.
 * Il **sezionatore** rifiuta di aprirsi se c'è carico: *"There is load on it. A disconnector cannot break
   current — open the breaker first."* È il comportamento vero di un sezionatore.
-* L'**interruttore** apre sotto carico, e **scatta da solo** sopra i 26 MW.
+* L'**interruttore** apre sotto carico, e **scatta da solo** sopra i 36 MW (630 A a 33 kV: sono apparecchi di classe 36 kV).
 * Quando è aperto, la potenza si ferma: il lato linea e il lato carico diventano due nodi separati.
 * **Come vedi lo stato:** il sezionatore mostra la lama alzata, la gola d'aria si vede da fuori.
   L'interruttore ha i contatti nel vuoto e non ha niente che si muova a vista: te lo dice con una
@@ -369,8 +370,8 @@ significati.
 Tutto si fa al banco da lavoro, in tre livelli.
 
 **Materia prima:** piastra d'acciaio (ferro + carbone), profilato (da due piastre), sbarra di rame
-(3 rame), matassa (3 sbarre + pepita), resina (favo + slime), lingotto e wafer di silicio (dalla sabbia
-fusa), vetro temperato.
+(3 rame), matassa (3 sbarre + pepita), resina (favo + slime), lingotto e wafer di silicio (dal quarzo
+fuso), vetro temperato.
 
 **Componenti:** cella solare, diodo di bypass, connettore DC, scatola di giunzione, modulo di potenza,
 banco di condensatori, nucleo magnetico, scheda di controllo, cuscinetto, ingranaggi, fusibile gPV,

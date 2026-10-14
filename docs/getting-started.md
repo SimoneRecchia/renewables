@@ -42,7 +42,7 @@ its own voltage class only:
 | Reel | Class | Longest span | Blocks of span per reel |
 |---|---|---|---|
 | Aerial Bundled Cable (NFA2X 4×70) | low, 1 kV | 40 blocks | 4 |
-| Medium-Voltage Conductor (Aster 228) | medium, 24 kV | 90 blocks | 8 |
+| Medium-Voltage Conductor (Aster 228) | medium, 33 kV | 90 blocks | 8 |
 | High-Voltage Conductor (Curlew ACSR, quad) | high, 420 kV | 160 blocks | 16 |
 
 A span costs one reel per started stretch of that length, and is free in creative. Breaking a machine takes

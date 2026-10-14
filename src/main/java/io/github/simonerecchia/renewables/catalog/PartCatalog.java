@@ -36,7 +36,7 @@ public final class PartCatalog {
 			new Part("copper_coil", Tier.RAW, "Copper Coil",
 					"Enamelled magnet wire, wound. Every winding in the mod starts here."),
 			new Part("silicon_ingot", Tier.RAW, "Silicon Ingot",
-					"Quartz reduced and cast. One step from sand to a solar cell."),
+					"Nether quartz reduced and cast. What every wafer is sawn from."),
 			new Part("silicon_wafer", Tier.RAW, "Silicon Wafer",
 					"Sawn from an ingot. The blank a cell is made on and a die is cut from."),
 			new Part("busbar", Tier.RAW, "Copper Busbar",
@@ -44,7 +44,7 @@ public final class PartCatalog {
 
 			// -------------------------------------------------------------- components
 			new Part("solar_cell", Tier.COMPONENT, "Solar Cell",
-					"A doped wafer with its fingers printed. Sixty of these make a module."),
+					"A doped wafer with its fingers printed. Strung in series, cells are what a module is made of."),
 			new Part("bypass_diode", Tier.COMPONENT, "Bypass Diode",
 					"Carries a shaded substring's current so it does not become a heater."),
 			new Part("mc4_connector", Tier.COMPONENT, "DC Connector",
@@ -78,7 +78,7 @@ public final class PartCatalog {
 			new Part("dc_section", Tier.ASSEMBLY, "DC Section",
 					"Fuse ways, busbar and a load-break switch: the front end of a big machine."),
 			new Part("inverter_bridge", Tier.ASSEMBLY, "Inverter Bridge",
-					"Power modules, DC link and magnetics on one busbar. One MPPT channel's worth."),
+					"Power modules, DC link and magnetics on one busbar: one three-phase power stage."),
 			new Part("mounting_rack", Tier.ASSEMBLY, "Mounting Rack",
 					"Purlins, rails and clamps. What a fixed array is bolted to."),
 			new Part("torque_tube", Tier.ASSEMBLY, "Torque Tube",
