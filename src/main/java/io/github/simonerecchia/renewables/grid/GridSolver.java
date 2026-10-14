@@ -48,8 +48,12 @@ import java.util.function.DoubleUnaryOperator;
  * line lose that of their sum: each works out a line's loss from its own flow plus what the others put on it in
  * the previous pass, and the solve runs {@link #PASSES} times.  A single generator is exact in one.
  *
- * Each bus is visited once per generator, so the cost is a shortest-path search per generator and nothing in a mesh
- * can exhaust a budget or a depth limit.
+ * <h2>Cost</h2>
+ * Everything that does not depend on the power - the clusters, the ways, and for each generator the order its flow
+ * reaches the buses in and the share each way takes - is worked out once for a network ({@link #network}) and kept
+ * by the caller for as long as the spans, the switches' contacts and the loads stay as they are; a tick then only
+ * pushes the powers through ({@link #solve(Collection, Map)}), which is linear in the buses and ways each generator
+ * reaches.
  */
 final class GridSolver {
 	/** Passes over the generators; the second and third bring in what the others put on each shared line. */
@@ -85,34 +89,60 @@ final class GridSolver {
 		static final Reading NOTHING = new Reading(0.0, PowerDeliveryEvent.NONE);
 	}
 
-	/** The spans from one bus to another, in one allowed direction, as one equivalent line. */
-	private record Way(int to, double k) {
+	/**
+	 * What one solve gives.
+	 *
+	 * @param readings by node id, what passes it
+	 * @param drawn    by the node of each generator given, what the network took from it (kW): all of its power when
+	 *                 a load can be reached from it, none when none can, so a generator's budget is spent only on
+	 *                 power that went somewhere
+	 */
+	record Solution(Map<Integer, Reading> readings, Map<Integer, Double> drawn) {
 	}
 
-	private final int[] nodeCluster;
 	private final int nodeCount;
-	private final int clusterCount;
-	/** Per cluster, the ways leaving it, one per destination bus. */
-	private final Way[][] ways;
-	/** Per cluster, what the machine there burns for a through flow, or null if it burns nothing. */
-	private final DoubleUnaryOperator[] clusterLoss;
-	private final boolean[] clusterIsLoad;
-	private final Map<Integer, Integer> indexOfId = new HashMap<>();
 	private final int[] nodeIds;
 	/** The position of every node's machine, packed. */
 	private final long[] nodePosition;
-	/** By switch position, its line-side and load-side clusters (-1 where that side has no node). */
-	private final Map<Long, int[]> switchSides = new HashMap<>();
+	/**
+	 * By switch position, its contacts: the way line side to load side, the way back (-1 where there is none: open, or
+	 * a side nothing is strung to), and the two sides' clusters (-1 for a side with no node).
+	 */
+	private final Map<Long, int[]> contacts = new HashMap<>();
+	private final int[] nodeCluster;
+	private final Map<Integer, Integer> indexOfId = new HashMap<>();
+	private final int clusterCount;
+	private final long[] clusterPosition;
+	private final boolean[] clusterIsLoad;
+	/** Per cluster, its index among the loads, or -1: the reach of a bus is a set of loads, not of buses. */
+	private final int[] loadIndex;
+	/** The ways leaving cluster c are {@code wayTo/wayK[wayStart[c] .. wayStart[c + 1])}, one per destination bus. */
+	private final int[] wayStart;
+	private final int[] wayTo;
+	private final double[] wayK;
+	/** Per start cluster, what does not change from one tick to the next for a generator there. */
+	private final Map<Integer, Plan> plans = new HashMap<>();
 
-	private GridSolver(Collection<Node> nodes, Collection<Edge> edges, Map<Long, DoubleUnaryOperator> passages, Set<Long> loads,
-			Map<Long, Boolean> switches) {
+	// scratch, kept so that a tick allocates nothing it does not have to
+	private final double[] inflow;
+	/** The disturbance on its way into each bus, and the one that reached it, unboxed. */
+	private final Disturbances carried;
+	private final Disturbances reached;
+	private final double[] totalSent;
+	private final double[] totalArrived;
+	private double[][] sentNow = new double[0][];
+	private double[][] arrivedNow = new double[0][];
+	private double[][] sentBefore = new double[0][];
+	private double[][] arrivedBefore = new double[0][];
+
+	private GridSolver(Collection<Node> nodes, Collection<Edge> edges, Set<Long> loads, Map<Long, Boolean> switches) {
 		nodeCount = nodes.size();
 		nodeIds = new int[nodeCount];
 		nodeCluster = new int[nodeCount];
 		nodePosition = new long[nodeCount];
 
 		Map<Long, Map<Integer, Integer>> clusterOf = new HashMap<>();
-		List<Long> clusterPosition = new ArrayList<>();
+		List<Long> positions = new ArrayList<>();
 		int index = 0;
 		for (Node node : nodes) {
 			indexOfId.put(node.id(), index);
@@ -122,21 +152,24 @@ final class GridSolver {
 			Map<Integer, Integer> buses = clusterOf.computeIfAbsent(node.position(), key -> new HashMap<>());
 			Integer cluster = buses.get(node.bus());
 			if (cluster == null) {
-				cluster = clusterPosition.size();
+				cluster = positions.size();
 				buses.put(node.bus(), cluster);
-				clusterPosition.add(node.position());
+				positions.add(node.position());
 			}
 
 			nodeCluster[index] = cluster;
 			index++;
 		}
 
-		clusterCount = clusterPosition.size();
-		clusterLoss = new DoubleUnaryOperator[clusterCount];
+		clusterCount = positions.size();
+		clusterPosition = new long[clusterCount];
 		clusterIsLoad = new boolean[clusterCount];
+		loadIndex = new int[clusterCount];
+		int loadCount = 0;
 		for (int c = 0; c < clusterCount; c++) {
-			clusterLoss[c] = passages.get(clusterPosition.get(c));
-			clusterIsLoad[c] = loads.contains(clusterPosition.get(c));
+			clusterPosition[c] = positions.get(c);
+			clusterIsLoad[c] = loads.contains(clusterPosition[c]);
+			loadIndex[c] = clusterIsLoad[c] ? loadCount++ : -1;
 		}
 
 		// the spans of each direction between two buses, gathered so they can be seen as circuits
@@ -160,23 +193,71 @@ final class GridSolver {
 		}
 
 		// a closed switch's contacts: a way of no resistance each way between its two sides
+		Map<Long, int[]> sides = new HashMap<>();
 		for (Map.Entry<Long, Boolean> entry : switches.entrySet()) {
 			Map<Integer, Integer> buses = clusterOf.getOrDefault(entry.getKey(), Map.of());
 			int line = buses.getOrDefault(0, -1);
 			int load = buses.getOrDefault(1, -1);
-			switchSides.put(entry.getKey(), new int[] {line, load});
+			sides.put(entry.getKey(), new int[] {line, load});
 			if (!entry.getValue() || line < 0 || load < 0) continue;
 
 			spans.get(line).computeIfAbsent(load, key -> new ArrayList<>()).add(0.0);
 			spans.get(load).computeIfAbsent(line, key -> new ArrayList<>()).add(0.0);
 		}
 
-		ways = new Way[clusterCount][];
+		wayStart = new int[clusterCount + 1];
+		int ways = 0;
 		for (int c = 0; c < clusterCount; c++) {
-			ways[c] = spans.get(c).entrySet().stream()
-					.map(entry -> new Way(entry.getKey(), circuitCoefficient(entry.getValue())))
-					.toArray(Way[]::new);
+			wayStart[c] = ways;
+			ways += spans.get(c).size();
 		}
+
+		wayStart[clusterCount] = ways;
+		wayTo = new int[ways];
+		wayK = new double[ways];
+		int w = 0;
+		for (int c = 0; c < clusterCount; c++) {
+			for (Map.Entry<Integer, List<Double>> entry : spans.get(c).entrySet()) {
+				wayTo[w] = entry.getKey();
+				wayK[w] = circuitCoefficient(entry.getValue());
+				w++;
+			}
+		}
+
+		sides.forEach((pos, side) -> contacts.put(pos, new int[] {wayBetween(side[0], side[1]), wayBetween(side[1], side[0]), side[0], side[1]}));
+
+		inflow = new double[clusterCount];
+		carried = new Disturbances(clusterCount);
+		reached = new Disturbances(clusterCount);
+		totalSent = new double[ways];
+		totalArrived = new double[clusterCount];
+	}
+
+	/** {@link #network(Collection, Collection, Set, Map)} with no switch in it. */
+	static GridSolver network(Collection<Node> nodes, Collection<Edge> edges, Set<Long> loads) {
+		return network(nodes, edges, loads, Map.of());
+	}
+
+	/**
+	 * The network these nodes, spans, loads and switches make, ready to be solved for any set of generators.  Keep it
+	 * while the four stay equal: the per-generator work it caches is most of the cost of a solve.
+	 *
+	 * @param switches by block position, every switch and whether it is closed; its nodes are on bus 0 (line side)
+	 *                 and bus 1 (load side)
+	 */
+	static GridSolver network(Collection<Node> nodes, Collection<Edge> edges, Set<Long> loads, Map<Long, Boolean> switches) {
+		return new GridSolver(nodes, edges, loads, switches);
+	}
+
+	/** The way from cluster {@code from} to cluster {@code to}, or -1. */
+	private int wayBetween(int from, int to) {
+		if (from < 0 || to < 0) return -1;
+
+		for (int w = wayStart[from]; w < wayStart[from + 1]; w++) {
+			if (wayTo[w] == to) return w;
+		}
+
+		return -1;
 	}
 
 	/**
@@ -210,7 +291,7 @@ final class GridSolver {
 	}
 
 	/**
-	 * Solves a network.
+	 * Solves a network once, for callers that do not keep it.
 	 *
 	 * @param passages by block position, what the machine there burns (kW) for the flow (kW) crossing it
 	 * @param loads    the block positions of the machines that draw power: where the flow ends
@@ -221,65 +302,124 @@ final class GridSolver {
 	 */
 	static Map<Integer, Reading> solve(Collection<Node> nodes, Collection<Edge> edges, Collection<Source> sources,
 			Map<Long, DoubleUnaryOperator> passages, Set<Long> loads, Map<Long, Boolean> switches) {
-		GridSolver solver = new GridSolver(nodes, edges, passages, loads, switches);
+		return network(nodes, edges, loads, switches).solve(sources, passages).readings();
+	}
 
-		List<Plan> plans = new ArrayList<>();
-		for (Source source : sources) {
-			Integer start = solver.indexOfId.get(source.node());
-			if (start == null || !(source.powerKw() > 0.0)) continue;
-
-			plans.add(solver.plan(solver.nodeCluster[start], source));
+	/**
+	 * Pushes these generators' power through the network.
+	 *
+	 * @param passages by block position, what the machine there burns (kW) for the flow (kW) crossing it; read every
+	 *                 solve, since what a transformer burns is the machine's to say
+	 */
+	Solution solve(Collection<Source> sources, Map<Long, DoubleUnaryOperator> passages) {
+		DoubleUnaryOperator[] burns = new DoubleUnaryOperator[clusterCount];
+		if (!passages.isEmpty()) {
+			for (int c = 0; c < clusterCount; c++) {
+				burns[c] = passages.get(clusterPosition[c]);
+			}
 		}
 
-		double[] power = new double[solver.clusterCount];
-		PowerDeliveryEvent[] events = new PowerDeliveryEvent[solver.clusterCount];
-		Flows[] previous = new Flows[plans.size()];
-		Flows total = null;
-		Flows[] current = new Flows[0];
+		List<Source> live = new ArrayList<>();
+		List<Plan> livePlans = new ArrayList<>();
+		Map<Integer, Double> drawn = new LinkedHashMap<>();
+		for (Source source : sources) {
+			Integer start = indexOfId.get(source.node());
+			if (start == null || !(source.powerKw() > 0.0)) continue;
 
+			Plan plan = plans.computeIfAbsent(nodeCluster[start], this::plan);
+			live.add(source);
+			livePlans.add(plan);
+			drawn.merge(source.node(), plan.reachesLoad() ? source.powerKw() : 0.0, Double::sum);
+		}
+
+		int count = live.size();
+		sentNow = fit(sentNow, count);
+		arrivedNow = fit(arrivedNow, count);
+		sentBefore = fit(sentBefore, count);
+		arrivedBefore = fit(arrivedBefore, count);
+		for (int s = 0; s < count; s++) {
+			Plan plan = livePlans.get(s);
+			sentNow[s] = fit(sentNow[s], plan.stepWay().length);
+			arrivedNow[s] = fit(arrivedNow[s], plan.order().length);
+			sentBefore[s] = fit(sentBefore[s], plan.stepWay().length);
+			arrivedBefore[s] = fit(arrivedBefore[s], plan.order().length);
+		}
+
+		double[] power = new double[clusterCount];
+		reached.clear();
+		boolean shared = false;
 		for (int pass = 0; pass < PASSES; pass++) {
-			power = new double[solver.clusterCount];
-			Arrays.fill(events, PowerDeliveryEvent.NONE);
-			current = new Flows[plans.size()];
+			Arrays.fill(power, 0.0);
 
-			for (int s = 0; s < plans.size(); s++) {
-				current[s] = solver.push(plans.get(s), previous[s], total, power, events);
+			// a disturbance rides on the flow and does not change it, so only the pass that is kept carries one
+			boolean last = pass == PASSES - 1 || count <= 1;
+			for (int s = 0; s < count; s++) {
+				push(livePlans.get(s), live.get(s), sentNow[s], arrivedNow[s], shared ? sentBefore[s] : null,
+						shared ? arrivedBefore[s] : null, burns, power, last);
 			}
 
 			// one generator shares its lines with nobody, so its first pass is already the answer
-			if (plans.size() <= 1) break;
+			if (count <= 1) break;
 
-			previous = current;
-			total = Flows.sum(current, solver.clusterCount);
+			// what everyone put on each way and into each bus this pass is what the next one reads
+			Arrays.fill(totalSent, 0.0);
+			Arrays.fill(totalArrived, 0.0);
+			for (int s = 0; s < count; s++) {
+				Plan plan = livePlans.get(s);
+				for (int k = 0; k < plan.stepWay().length; k++) {
+					totalSent[plan.stepWay()[k]] += sentNow[s][k];
+				}
+
+				for (int i = 0; i < plan.order().length; i++) {
+					totalArrived[plan.order()[i]] += arrivedNow[s][i];
+				}
+			}
+
+			double[][] swap = sentBefore;
+			sentBefore = sentNow;
+			sentNow = swap;
+			swap = arrivedBefore;
+			arrivedBefore = arrivedNow;
+			arrivedNow = swap;
+			shared = true;
 		}
 
-		Flows last = Flows.sum(current, solver.clusterCount);
-		Map<Integer, Reading> result = new LinkedHashMap<>();
-		for (int i = 0; i < solver.nodeCount; i++) {
-			int c = solver.nodeCluster[i];
-			int[] sides = solver.switchSides.get(solver.nodePosition[i]);
-			result.put(solver.nodeIds[i], sides == null ? new Reading(power[c], events[c]) : solver.crossing(sides, last, events));
+		// a switch reads what crossed its contacts in the pass that is kept; with more than one generator the totals of
+		// that pass are already in totalSent
+		if (!contacts.isEmpty() && count <= 1) {
+			Arrays.fill(totalSent, 0.0);
+			if (count == 1) {
+				Plan plan = livePlans.get(0);
+				for (int k = 0; k < plan.stepWay().length; k++) {
+					totalSent[plan.stepWay()[k]] += sentNow[0][k];
+				}
+			}
 		}
 
-		return result;
+		Map<Integer, Reading> readings = new LinkedHashMap<>();
+		for (int i = 0; i < nodeCount; i++) {
+			int c = nodeCluster[i];
+			int[] ways = contacts.get(nodePosition[i]);
+			readings.put(nodeIds[i], ways == null ? new Reading(power[c], reached.event(c)) : crossing(ways));
+		}
+
+		return new Solution(readings, drawn);
 	}
 
 	/**
 	 * What a switch reads: the power across its contacts, line to load less load to line, with the disturbance of
 	 * either side.  Nothing crosses an open switch, or one with a side that nothing is strung to.
 	 */
-	private Reading crossing(int[] sides, Flows flows, PowerDeliveryEvent[] events) {
-		int line = sides[0];
-		int load = sides[1];
-		if (line < 0 || load < 0) return Reading.NOTHING;
+	private Reading crossing(int[] contact) {
+		if (contact[2] < 0 || contact[3] < 0) return Reading.NOTHING;
 
-		double across = Math.abs(flows.sent(way(line, load)) - flows.sent(way(load, line)));
-		return new Reading(across, across > 0.0 ? GridMath.merge(events[line], events[load]) : PowerDeliveryEvent.NONE);
+		double across = Math.abs(sentDown(contact[0]) - sentDown(contact[1]));
+		return new Reading(across, across > 0.0 ? GridMath.merge(reached.event(contact[2]), reached.event(contact[3])) : PowerDeliveryEvent.NONE);
 	}
 
-	/** A way's key in {@link Flows#sent}: the two clusters packed. */
-	private static long way(int from, int to) {
-		return ((long) from << 32) | (to & 0xFFFFFFFFL);
+	/** What the kept pass put down a way, all generators together; nothing down a way that is not there. */
+	private double sentDown(int way) {
+		return way < 0 ? 0.0 : totalSent[way];
 	}
 
 	/**
@@ -300,19 +440,22 @@ final class GridSolver {
 	// ---- one generator ----
 
 	/**
-	 * What does not change between passes for one generator: the order its flow reaches each bus in, which way every
-	 * span is used, and which loads lie beyond each bus.
+	 * What does not change between ticks for a generator at one bus: the buses its flow reaches, in order, and for
+	 * each of them the ways on with the share of the flow each takes.  The steps of {@code order[i]} are
+	 * {@code stepWay/stepShare[stepStart[i] .. stepStart[i + 1])}; a bus with none sends nothing on.
 	 */
-	private record Plan(Source source, int start, int[] order, int[] rank, BitSet[] reach) {
+	private record Plan(int[] order, boolean[] passesOn, int[] stepStart, int[] stepWay, int[] stepTo, double[] stepK,
+			double[] stepShare, boolean reachesLoad) {
 	}
 
-	/** Orders the buses a generator reaches by a shortest-path search on the loss coefficient, and finds its loads. */
-	private Plan plan(int start, Source source) {
+	/** Orders the buses a generator reaches by a shortest-path search on the loss coefficient, and shares out its loads. */
+	private Plan plan(int start) {
 		double[] distance = new double[clusterCount];
 		Arrays.fill(distance, Double.POSITIVE_INFINITY);
 		int[] rank = new int[clusterCount];
 		Arrays.fill(rank, -1);
-		List<Integer> order = new ArrayList<>();
+		int[] order = new int[clusterCount];
+		int visited = 0;
 
 		// ties go to the lower index, so the same network always gives the same answer
 		PriorityQueue<double[]> queue = new PriorityQueue<>((x, y) -> x[0] != y[0] ? Double.compare(x[0], y[0]) : Double.compare(x[1], y[1]));
@@ -323,138 +466,223 @@ final class GridSolver {
 			int u = (int) head[1];
 			if (rank[u] >= 0 || head[0] > distance[u]) continue;
 
-			rank[u] = order.size();
-			order.add(u);
+			rank[u] = visited;
+			order[visited++] = u;
 			// a load draws what reaches it and sends nothing on
 			if (clusterIsLoad[u] && u != start) continue;
 
-			for (Way way : ways[u]) {
-				double d = distance[u] + way.k();
-				if (rank[way.to()] < 0 && d < distance[way.to()]) {
-					distance[way.to()] = d;
-					queue.add(new double[] {d, way.to()});
+			for (int w = wayStart[u]; w < wayStart[u + 1]; w++) {
+				int to = wayTo[w];
+				double d = distance[u] + wayK[w];
+				if (rank[to] < 0 && d < distance[to]) {
+					distance[to] = d;
+					queue.add(new double[] {d, to});
 				}
 			}
 		}
 
+		order = Arrays.copyOf(order, visited);
+
 		// the loads beyond each bus, along ways that lead away from the generator
-		int[] sequence = order.stream().mapToInt(Integer::intValue).toArray();
 		BitSet[] reach = new BitSet[clusterCount];
-		for (int i = sequence.length - 1; i >= 0; i--) {
-			int u = sequence[i];
+		for (int i = visited - 1; i >= 0; i--) {
+			int u = order[i];
 			BitSet beyond = new BitSet();
 			if (clusterIsLoad[u] && u != start) {
-				beyond.set(u);
+				beyond.set(loadIndex[u]);
 			} else {
-				for (Way way : ways[u]) {
-					if (downstream(rank, u, way.to())) beyond.or(reach[way.to()]);
+				for (int w = wayStart[u]; w < wayStart[u + 1]; w++) {
+					if (rank[wayTo[w]] > rank[u]) beyond.or(reach[wayTo[w]]);
 				}
 			}
 
 			reach[u] = beyond;
 		}
 
-		return new Plan(source, start, sequence, rank, reach);
-	}
+		// every load beyond draws alike, so each way on takes the share of the loads it leads to
+		boolean[] passesOn = new boolean[visited];
+		int[] stepStart = new int[visited + 1];
+		List<Integer> ways = new ArrayList<>();
+		List<Double> shares = new ArrayList<>();
+		for (int i = 0; i < visited; i++) {
+			int u = order[i];
+			stepStart[i] = ways.size();
+			passesOn[i] = !reach[u].isEmpty() && !(clusterIsLoad[u] && u != start);
+			if (!passesOn[i]) continue;
 
-	private static boolean downstream(int[] rank, int from, int to) {
-		return rank[to] > rank[from];
-	}
-
-	/** Pushes one generator's power out to its loads, adding what passes each bus to {@code power}. */
-	private Flows push(Plan plan, Flows ownBefore, Flows allBefore, double[] power, PowerDeliveryEvent[] events) {
-		Flows flows = new Flows(clusterCount);
-		double[] inflow = new double[clusterCount];
-		PowerDeliveryEvent[] carried = new PowerDeliveryEvent[clusterCount];
-		Arrays.fill(carried, PowerDeliveryEvent.NONE);
-		inflow[plan.start()] = plan.source().powerKw();
-		carried[plan.start()] = plan.source().event();
-
-		for (int u : plan.order()) {
-			double arrived = inflow[u];
-			if (!(arrived > 0.0)) continue;
-
-			power[u] += arrived;
-			events[u] = GridMath.merge(events[u], carried[u]);
-			flows.arrived[u] = arrived;
-
-			BitSet loadsBeyond = plan.reach()[u];
-			if (loadsBeyond.isEmpty() || (clusterIsLoad[u] && u != plan.start())) continue;
-
-			// a transformer reads what goes in and passes on what is left after its core and windings
-			double onward = arrived;
-			DoubleUnaryOperator burns = clusterLoss[u];
-			if (burns != null) {
-				double through = arrived + others(ownBefore, allBefore, u);
-				onward = arrived * GridMath.keptThrough(through, burns.applyAsDouble(through));
-			}
-
-			if (!(onward > 0.0)) continue;
-
-			// every load beyond draws alike, so each way on takes the share of the loads it leads to
 			int share = 0;
-			for (Way way : ways[u]) {
-				if (downstream(plan.rank(), u, way.to())) share += plan.reach()[way.to()].cardinality();
+			for (int w = wayStart[u]; w < wayStart[u + 1]; w++) {
+				if (rank[wayTo[w]] > rank[u]) share += reach[wayTo[w]].cardinality();
 			}
 
-			for (Way way : ways[u]) {
-				if (!downstream(plan.rank(), u, way.to())) continue;
+			for (int w = wayStart[u]; w < wayStart[u + 1]; w++) {
+				if (rank[wayTo[w]] <= rank[u]) continue;
 
-				int beyond = plan.reach()[way.to()].cardinality();
+				int beyond = reach[wayTo[w]].cardinality();
 				if (beyond == 0) continue;
 
-				double sent = onward * beyond / share;
-				long key = way(u, way.to());
-				flows.sent.put(key, sent);
-
-				double eta = GridMath.keptFraction(sent + others(ownBefore, allBefore, key), way.k());
-				inflow[way.to()] += sent * eta;
-				carried[way.to()] = GridMath.merge(carried[way.to()], GridMath.attenuate(carried[u], eta));
+				ways.add(w);
+				shares.add((double) beyond / share);
 			}
 		}
 
-		return flows;
-	}
-
-	/** What the other generators sent down a way last pass. */
-	private static double others(Flows ownBefore, Flows allBefore, long way) {
-		if (allBefore == null || ownBefore == null) return 0.0;
-
-		return Math.max(0.0, allBefore.sent(way) - ownBefore.sent(way));
-	}
-
-	/** What the other generators brought into a bus last pass. */
-	private static double others(Flows ownBefore, Flows allBefore, int cluster) {
-		if (allBefore == null || ownBefore == null) return 0.0;
-
-		return Math.max(0.0, allBefore.arrived[cluster] - ownBefore.arrived[cluster]);
-	}
-
-	/** What one generator (or all of them, summed) put down each way and into each bus in one pass. */
-	private static final class Flows {
-		/** By way, packed {@code from << 32 | to} over cluster indices. */
-		final Map<Long, Double> sent = new HashMap<>();
-		/** By cluster. */
-		final double[] arrived;
-
-		Flows(int clusters) {
-			arrived = new double[clusters];
+		stepStart[visited] = ways.size();
+		int[] stepWay = ways.stream().mapToInt(Integer::intValue).toArray();
+		int[] stepTo = new int[stepWay.length];
+		double[] stepK = new double[stepWay.length];
+		for (int k = 0; k < stepWay.length; k++) {
+			stepTo[k] = wayTo[stepWay[k]];
+			stepK[k] = wayK[stepWay[k]];
 		}
 
-		double sent(long way) {
-			return sent.getOrDefault(way, 0.0);
-		}
+		return new Plan(order, passesOn, stepStart, stepWay, stepTo, stepK, shares.stream().mapToDouble(Double::doubleValue).toArray(),
+				!reach[start].isEmpty());
+	}
 
-		static Flows sum(Flows[] each, int clusters) {
-			Flows total = new Flows(clusters);
-			for (Flows flows : each) {
-				flows.sent.forEach((way, kw) -> total.sent.merge(way, kw, Double::sum));
-				for (int c = 0; c < clusters; c++) {
-					total.arrived[c] += flows.arrived[c];
-				}
+	/**
+	 * Pushes one generator's power out to its loads, adding what passes each bus to {@code power}, and records what it
+	 * sent down each of its ways ({@code sent}, by step) and brought into each of its buses ({@code arrived}, by
+	 * place in the order).  {@code sentBefore} / {@code arrivedBefore} are its own figures from the last pass, null
+	 * on the first; with them, what the others put on a way is the last pass's total less this generator's part.
+	 * Only a {@code kept} pass carries the disturbances, into {@link #reached}.
+	 */
+	private void push(Plan plan, Source source, double[] sent, double[] arrived, double[] sentBefore, double[] arrivedBefore,
+			DoubleUnaryOperator[] burns, double[] power, boolean kept) {
+		Arrays.fill(sent, 0.0);
+		Arrays.fill(arrived, 0.0);
+
+		int[] order = plan.order();
+		int[] stepStart = plan.stepStart();
+		int[] stepWay = plan.stepWay();
+		int[] stepTo = plan.stepTo();
+		double[] stepK = plan.stepK();
+		double[] stepShare = plan.stepShare();
+		boolean[] passesOn = plan.passesOn();
+		inflow[order[0]] = source.powerKw();
+		if (kept) carried.set(order[0], source.event());
+
+		// every bus a flow is sent into comes later in the order, so each is read once and then cleared
+		for (int i = 0; i < order.length; i++) {
+			int u = order[i];
+			double in = inflow[u];
+			inflow[u] = 0.0;
+			boolean disturbed = kept && carried.any[u];
+			if (in > 0.0) {
+				power[u] += in;
+				arrived[i] = in;
+				if (disturbed) reached.merge(u, carried, u);
+				if (passesOn[i]) pushOn(plan, i, u, in, sent, arrivedBefore, sentBefore, burns, disturbed, stepStart, stepWay, stepTo, stepK, stepShare);
 			}
 
-			return total;
+			if (disturbed) carried.reset(u);
 		}
+	}
+
+	/** Sends what reached bus {@code u}, {@code order[i]} of the plan, down its ways on. */
+	private void pushOn(Plan plan, int i, int u, double in, double[] sent, double[] arrivedBefore, double[] sentBefore,
+			DoubleUnaryOperator[] burns, boolean disturbed, int[] stepStart, int[] stepWay, int[] stepTo, double[] stepK, double[] stepShare) {
+		// a transformer reads what goes in and passes on what is left after its core and windings
+		double onward = in;
+		DoubleUnaryOperator burn = burns[u];
+		if (burn != null) {
+			double through = in + (arrivedBefore == null ? 0.0 : Math.max(0.0, totalArrived[u] - arrivedBefore[i]));
+			onward = in * GridMath.keptThrough(through, burn.applyAsDouble(through));
+		}
+
+		if (!(onward > 0.0)) return;
+
+		for (int k = stepStart[i]; k < stepStart[i + 1]; k++) {
+			double out = onward * stepShare[k];
+			sent[k] = out;
+
+			double others = sentBefore == null ? 0.0 : Math.max(0.0, totalSent[stepWay[k]] - sentBefore[k]);
+			double eta = GridMath.keptFraction(out + others, stepK[k]);
+			int to = stepTo[k];
+			inflow[to] += out * eta;
+			if (disturbed) carried.mergeAttenuated(to, u, eta);
+		}
+	}
+
+	/**
+	 * A disturbance per bus as plain arrays, with {@link GridMath#merge} and {@link GridMath#attenuate} worked in place,
+	 * figure for figure, so a tick allocates nothing for them: every turbine draws one every tick.  A bus with nothing on
+	 * it is {@link PowerDeliveryEvent#NONE}, whose figures every merge leaves as it found them.
+	 */
+	private static final class Disturbances {
+		final boolean[] any;
+		final double[] severity;
+		final int[] duration;
+		final boolean[] disconnecting;
+		final double[] voltage;
+
+		Disturbances(int size) {
+			any = new boolean[size];
+			severity = new double[size];
+			duration = new int[size];
+			disconnecting = new boolean[size];
+			voltage = new double[size];
+			clear();
+		}
+
+		void clear() {
+			for (int c = 0; c < any.length; c++) {
+				reset(c);
+			}
+		}
+
+		void reset(int c) {
+			any[c] = false;
+			severity[c] = 0.0;
+			duration[c] = 0;
+			disconnecting[c] = false;
+			voltage[c] = 1.0;
+		}
+
+		void set(int c, PowerDeliveryEvent event) {
+			reset(c);
+			if (event == PowerDeliveryEvent.NONE) return;
+
+			any[c] = true;
+			severity[c] = event.surgeSeverity();
+			duration[c] = event.durationTicks();
+			disconnecting[c] = event.disconnecting();
+			voltage[c] = event.voltageFactor();
+		}
+
+		/** Bus {@code c} meets what {@code from} carries at {@code f}: the worse of each. */
+		void merge(int c, Disturbances from, int f) {
+			if (!from.any[f]) return;
+
+			any[c] = true;
+			severity[c] = Math.max(severity[c], from.severity[f]);
+			duration[c] = Math.max(duration[c], from.duration[f]);
+			disconnecting[c] |= from.disconnecting[f];
+			voltage[c] = Math.min(voltage[c], from.voltage[f]);
+		}
+
+		/** Bus {@code c} meets what bus {@code f} carries after a hop of efficiency {@code eta}. */
+		void mergeAttenuated(int c, int f, double eta) {
+			double kept = Math.max(0.0, Math.min(1.0, eta));
+			int left = Math.max(0, duration[f] - 1);
+			double sag = left > 0 ? 1.0 - (1.0 - voltage[f]) * kept : 1.0;
+
+			any[c] = true;
+			severity[c] = Math.max(severity[c], Math.min(1.0, Math.max(0.0, severity[f] * kept * GridMath.DISTURBANCE_DECAY)));
+			duration[c] = Math.max(duration[c], left);
+			disconnecting[c] |= disconnecting[f] && left > 0;
+			voltage[c] = Math.min(voltage[c], Math.min(1.0, Math.max(0.0, sag)));
+		}
+
+		PowerDeliveryEvent event(int c) {
+			return any[c] ? new PowerDeliveryEvent(severity[c], duration[c], disconnecting[c], voltage[c]) : PowerDeliveryEvent.NONE;
+		}
+	}
+
+	private static double[][] fit(double[][] buffer, int length) {
+		return buffer.length >= length ? buffer : Arrays.copyOf(buffer, length);
+	}
+
+	private static double[] fit(double[] buffer, int length) {
+		return buffer != null && buffer.length == length ? buffer : new double[length];
 	}
 }

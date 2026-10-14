@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.minecraft.core.BlockPos;
 
 /**
  * The spans of one level, with the questions the rest of the mod asks of them answered without a scan: is this
@@ -67,12 +69,57 @@ final class SpanStore {
 
 	/** Takes out every span that has one of these ids at either end, and returns them. */
 	List<WireConnection> removeAttachedTo(Collection<Integer> ids) {
-		Set<Long> doomed = new java.util.LinkedHashSet<>();
+		Set<Long> doomed = new LinkedHashSet<>();
 		for (int id : ids) {
 			List<Long> keys = keysAt.get(id);
 			if (keys != null) doomed.addAll(keys);
 		}
 
+		return remove(doomed);
+	}
+
+	/**
+	 * Takes out every span with an end that is one of these ids <em>at {@code pos}</em>, and returns them.  A span that
+	 * names one of the ids at another position belongs to another machine (a copy that came with the same ids) and stays.
+	 */
+	List<WireConnection> removeAttachedAt(BlockPos pos, Collection<Integer> ids) {
+		Set<Long> doomed = new LinkedHashSet<>();
+		for (int id : ids) {
+			List<Long> keys = keysAt.get(id);
+			if (keys == null) continue;
+
+			for (long key : keys) {
+				WireConnection span = spans.get(key);
+				if (span != null && endsAt(span, id, pos)) doomed.add(key);
+			}
+		}
+
+		return remove(doomed);
+	}
+
+	/** Every block position a span puts fitting {@code id} at: one, unless two machines have claimed it. */
+	Set<BlockPos> endsOf(int id) {
+		List<Long> keys = keysAt.get(id);
+		if (keys == null) return Set.of();
+
+		Set<BlockPos> ends = new LinkedHashSet<>();
+		for (long key : keys) {
+			WireConnection span = spans.get(key);
+			if (span == null) continue;
+
+			if (span.startInsulatorId() == id) ends.add(span.startBlockPos());
+			if (span.endInsulatorId() == id) ends.add(span.endBlockPos());
+		}
+
+		return ends;
+	}
+
+	private static boolean endsAt(WireConnection span, int id, BlockPos pos) {
+		return (span.startInsulatorId() == id && span.startBlockPos().equals(pos))
+				|| (span.endInsulatorId() == id && span.endBlockPos().equals(pos));
+	}
+
+	private List<WireConnection> remove(Set<Long> doomed) {
 		List<WireConnection> removed = new ArrayList<>(doomed.size());
 		for (long key : doomed) {
 			WireConnection span = spans.remove(key);
