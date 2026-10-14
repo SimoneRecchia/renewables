@@ -101,6 +101,7 @@ public final class ServerEvents {
 	public static void onLevelUnload(LevelEvent.Unload event) {
 		if (event.getLevel() instanceof ServerLevel level) {
 			LevelWeather.remove(level);
+			TowerCollapse.forget(level);
 			Grid.forget(level);
 		}
 	}

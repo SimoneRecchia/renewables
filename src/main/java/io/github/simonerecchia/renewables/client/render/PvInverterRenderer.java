@@ -3,6 +3,7 @@ package io.github.simonerecchia.renewables.client.render;
 import io.github.simonerecchia.renewables.api.power.InverterSpec;
 import io.github.simonerecchia.renewables.block.PvInverterBlock;
 import io.github.simonerecchia.renewables.block.PvInverterBlockEntity;
+import io.github.simonerecchia.renewables.client.model.GroupPoses;
 import io.github.simonerecchia.renewables.client.model.MeshModel;
 import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
@@ -63,8 +64,7 @@ public class PvInverterRenderer extends MachineRenderer {
 			if (groupName.startsWith("blank") && section) continue;
 
 			poseStack.pushPose();
-			// the whole machine scales about the middle of its own footprint
-			if (!groupName.startsWith("entry")) poseStack.scale(scale, scale, scale);
+			poseStack.mulPoseMatrix(cabinet(groupName, scale));
 
 			// Each roof fan turns about its own hub, and about the vertical.
 			if (groupName.startsWith("rotate_fan")) {
@@ -82,6 +82,14 @@ public class PvInverterRenderer extends MachineRenderer {
 		renderGrouped(context, poses);
 	}
 
+	/**
+	 * The whole machine scales about the middle of its own footprint, except the cable entries, which meet a cable at
+	 * the edge of the block whatever the cabinet's size.  The picker reads the same ({@link #init}).
+	 */
+	public static Matrix4f cabinet(String groupName, float scale) {
+		return groupName.startsWith("entry") ? new Matrix4f() : new Matrix4f().scaling(scale);
+	}
+
 	/** Turns the fan on by the cabinet temperature, and keeps the angle between frames. */
 	private static float advanceFan(BlockPos pos, double cabinetTempC, InverterSpec.Cooling cooling) {
 		float current = FAN_ANGLE.getOrDefault(pos, 0.0f);
@@ -95,5 +103,10 @@ public class PvInverterRenderer extends MachineRenderer {
 
 	public static void init() {
 		ModelBindings.registerAll(ModBlocks.PV_INVERTERS);
+		// what is pointed at is the cabinet as drawn: a string inverter's fitting is at 0.62 of the model's
+		GroupPoses.register(PvInverterBlockEntity.class, (inverter, model) -> {
+			float scale = (float) inverter.spec().renderScale();
+			return groupName -> cabinet(groupName, scale);
+		});
 	}
 }

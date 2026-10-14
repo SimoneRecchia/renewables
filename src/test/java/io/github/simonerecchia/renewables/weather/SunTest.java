@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 /** The sun the mod works with is the one Minecraft draws, and a dimension with no sky has none. */
 class SunTest {
-	private static final SiteConditions GRASS = new SiteConditions(0.03, 0.4, 0.8, 0.22, Double.NaN);
+	private static final SiteConditions GRASS = new SiteConditions(0.03, 0.4, 0.8, 0.22, 70.0, Double.NaN);
 
 	private static SunPosition sunAt(long dayTime) {
 		return Atmosphere.sunPosition(Atmosphere.sunPhase(Atmosphere.celestialAngle(dayTime)));
@@ -41,9 +41,9 @@ class SunTest {
 	@Test
 	void aDimensionWithNoSkyIsDarkAtNoon() {
 		WeatherSnapshot lit = WeatherSampler.sample(new WeatherSampler.Input(1L, 0, 0, 70, 63, 1, 6000L, 6000L,
-				false, false, GRASS, true));
+				6000L, false, false, GRASS, true));
 		WeatherSnapshot roofed = WeatherSampler.sample(new WeatherSampler.Input(1L, 0, 0, 70, 63, 1, 6000L, 6000L,
-				false, false, GRASS, true, Double.NaN));
+				6000L, false, false, GRASS, true, Double.NaN));
 
 		assertTrue(lit.sky().sun().up());
 		assertTrue(lit.sky().globalHorizontal() > 0.0);

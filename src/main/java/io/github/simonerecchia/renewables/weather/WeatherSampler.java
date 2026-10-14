@@ -5,8 +5,8 @@ import io.github.simonerecchia.renewables.api.WorldConditions;
 /**
  * The weather at the top of a mast, worked out from numbers alone.
  *
- * {@link LevelWeather} gathers what only a level can say (the seed, the clock, whether it is raining on the
- * spot, what the ground is) and hands it here, so the procedure itself - the one that turns a pressure field
+ * {@link LevelWeather} gathers what only a level can say (the seed, the clocks, whether it is raining in the
+ * region, what the ground is) and hands it here, so the procedure itself - the one that turns a pressure field
  * and a patch of ground into a wind at a hub height - runs without a game and can be checked against its own
  * formulas.
  */
@@ -23,9 +23,11 @@ public final class WeatherSampler {
 	 * @param groundY      the block at the foot of the mast: the machine's own block lowered by the mast's height
 	 * @param seaLevel     the sea level of the level's terrain generator, in blocks (a flat world's is -63)
 	 * @param mastBlocks   how many blocks of mast the instrument stands on; 1 for a ground instrument
-	 * @param dayTime      the day clock, in ticks
-	 * @param gameTime     the game clock, in ticks, which the gusts run on
-	 * @param raining      whether it is raining on the machine
+	 * @param dayTime      the day clock, in ticks, which the sun and the daily cycle of the air run on
+	 * @param gameTime     the game clock, in ticks, which the gusts and the drift of the cumulus run on
+	 * @param weatherTime  the clock the pressure systems run on (see {@link LevelWeather#weatherClock}): it never jumps,
+	 *                     so neither {@code /time set} nor a night slept through moves the weather
+	 * @param raining      whether rain or snow is falling on the region
 	 * @param thundering   whether there is a thunderstorm (only meaningful with rain)
 	 * @param site         the ground around the mast
 	 * @param withSky      whether the caller wants the sky (cloud cover, irradiance); a wind-only caller can skip it
@@ -33,11 +35,11 @@ public final class WeatherSampler {
 	 *                     dimension with no sky, where there is no sun to sample
 	 */
 	public record Input(long seed, int x, int z, int groundY, int seaLevel, int mastBlocks, long dayTime, long gameTime,
-			boolean raining, boolean thundering, SiteConditions site, boolean withSky, double sunPhase) {
+			long weatherTime, boolean raining, boolean thundering, SiteConditions site, boolean withSky, double sunPhase) {
 		/** An Overworld sky, whose sun follows the day clock through vanilla's own easing. */
 		public Input(long seed, int x, int z, int groundY, int seaLevel, int mastBlocks, long dayTime, long gameTime,
-				boolean raining, boolean thundering, SiteConditions site, boolean withSky) {
-			this(seed, x, z, groundY, seaLevel, mastBlocks, dayTime, gameTime, raining, thundering, site, withSky,
+				long weatherTime, boolean raining, boolean thundering, SiteConditions site, boolean withSky) {
+			this(seed, x, z, groundY, seaLevel, mastBlocks, dayTime, gameTime, weatherTime, raining, thundering, site, withSky,
 					Atmosphere.sunPhase(Atmosphere.celestialAngle(dayTime)));
 		}
 	}
@@ -71,8 +73,8 @@ public final class WeatherSampler {
 		// below the sea is the floor of a sea or a cave; the air above it starts at the surface
 		double elevationM = Math.max(0, in.groundY() - in.seaLevel()) * WorldConditions.METRES_PER_BLOCK + heightM;
 
-		Atmosphere.Flow aloft = Atmosphere.geostrophicWind(in.seed(), in.x(), in.z(), in.dayTime());
-		double windAloft = aloft.speed() * (1.0 + site.exposure(in.groundY()));
+		Atmosphere.Flow aloft = Atmosphere.geostrophicWind(in.seed(), in.x(), in.z(), in.weatherTime());
+		double windAloft = aloft.speed() * (1.0 + site.exposure());
 
 		double meanWind = Atmosphere.windAtHeight(windAloft, heightM, site.roughness(), stability);
 		double turbulence = Atmosphere.turbulenceIntensity(heightM, site.roughness(), stability, in.raining(), thundering);
@@ -83,7 +85,7 @@ public final class WeatherSampler {
 		float direction = Atmosphere.wrapDegrees(aloft.direction() - (float) Atmosphere.frictionTurn(site.roughness(), stability));
 
 		double temperature = Atmosphere.temperatureAt(site.biomeTemperature(), site.downfall(), elevationM, dayPhase, in.raining(), thundering);
-		double seaLevelPressure = Atmosphere.pressureAt(in.seed(), in.x(), in.z(), in.dayTime());
+		double seaLevelPressure = Atmosphere.pressureAt(in.seed(), in.x(), in.z(), in.weatherTime());
 		double pressure = Atmosphere.stationPressure(seaLevelPressure, elevationM, temperature);
 		double density = Atmosphere.airDensity(temperature, pressure);
 		double shear = Atmosphere.profileExponent(site.roughness(), stability);
@@ -95,7 +97,7 @@ public final class WeatherSampler {
 
 	private static SkyConditions skyAt(Input in, SiteConditions site, double pressure, double temperature,
 			double windSpeed, boolean thundering) {
-		double cover = Atmosphere.cloudCover(in.seed(), in.x(), in.z(), in.dayTime(), in.gameTime(), site.downfall(),
+		double cover = Atmosphere.cloudCover(in.seed(), in.x(), in.z(), in.weatherTime(), in.gameTime(), site.downfall(),
 				in.raining(), thundering);
 
 		// the sun the player sees, not the day clock read as a straight line: they are twelve degrees apart at dawn
