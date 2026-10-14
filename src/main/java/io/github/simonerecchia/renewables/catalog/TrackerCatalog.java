@@ -12,7 +12,10 @@ public final class TrackerCatalog {
 	public static final String MANUFACTURER = "Meridian";
 
 
-	/** Horizontal single axis, one drive per row, self-powered. */
+	/**
+	 * Horizontal single axis, one drive per row, self-powered: ±60° as a Nextracker NX Horizon, and a flat stow at
+	 * 20 m/s, inside the 12 to 22 m/s the trackers on the market stow at.
+	 */
 	public static final TrackerSpec HORIZON_R = new TrackerSpec(
 			id("tracker_horizon_r"), "Horizon R", 1,
 			60.0, 0.0,
@@ -21,7 +24,7 @@ public final class TrackerCatalog {
 			20.0, 0.04,
 			true, 120.0);
 
-	/** Azimuth-elevation dual axis on a pedestal. */
+	/** Azimuth-elevation dual axis on a pedestal: down to a 10° sun, as a Mechatron M18's 0-80° zenith range. */
 	public static final TrackerSpec ZENITH_AE = new TrackerSpec(
 			id("tracker_zenith_ae"), "Zenith AE", 2,
 			80.0, 10.0,

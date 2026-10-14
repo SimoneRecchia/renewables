@@ -50,12 +50,14 @@ class TurbineSpecTest {
 
 	@Test
 	void gearboxAndHubHeights() {
-		assertEquals(7.2, TurbineCatalog.SW_10.gearboxRatio(), 0.05);
-		assertEquals(57.3, TurbineCatalog.C52_085.gearboxRatio(), 0.05);
-		assertEquals(94.7, TurbineCatalog.C80_20.gearboxRatio(), 0.05);
-		assertEquals(97.8, TurbineCatalog.C90_30.gearboxRatio(), 0.05);
-		assertEquals(101.7, TurbineCatalog.C112_30.gearboxRatio(), 0.05);
-		assertEquals(128.6, TurbineCatalog.C130_40.gearboxRatio(), 0.05);
+		// a 10 kW machine is direct drive: its alternator turns with the rotor
+		assertEquals(1.0, TurbineCatalog.SW_10.gearboxRatio(), 0.0);
+		// 1680 rpm at the rated rotor speed: the V80's 1:100.5 and the V90's 1:104.5 come out as they are built
+		assertEquals(64.6, TurbineCatalog.C52_085.gearboxRatio(), 0.05);
+		assertEquals(100.6, TurbineCatalog.C80_20.gearboxRatio(), 0.05);
+		assertEquals(104.3, TurbineCatalog.C90_30.gearboxRatio(), 0.05);
+		assertEquals(131.25, TurbineCatalog.C112_30.gearboxRatio(), 0.05);
+		assertEquals(133.3, TurbineCatalog.C130_40.gearboxRatio(), 0.05);
 
 		assertEquals(20.0, TurbineCatalog.SW_10.hubHeightM(2), 1e-9);
 		assertEquals(40.0, TurbineCatalog.SW_10.hubHeightM(4), 1e-9);
@@ -124,9 +126,30 @@ class TurbineSpecTest {
 	@Test
 	void drawnRotorAtRatedSpeedIsSevenPointTwoDegreesPerTick() {
 		for (TurbineSpec spec : TurbineCatalog.all()) {
-			double atRatedRpm = spec.maxRotorRpm() * TurbineSpec.DEGREES_PER_TICK_PER_RPM;
+			double atRatedRpm = spec.ratedRotorRpm() * TurbineSpec.DEGREES_PER_TICK_PER_RPM;
 			assertEquals(7.2, spec.drawnRotation(atRatedRpm), 1e-9, spec.displayName());
 			assertEquals(3.6, spec.drawnRotation(atRatedRpm / 2.0), 1e-9, spec.displayName());
+		}
+	}
+
+	/** At the rated rotor speed the utility machines' tips run at 70-86 m/s, as onshore machines do (V90 76, N131 86). */
+	@Test
+	void ratedTipSpeedsAreThoseOfRealMachines() {
+		assertEquals(70.8, TurbineCatalog.C52_085.ratedTipSpeed(), 0.1);
+		assertEquals(70.0, TurbineCatalog.C80_20.ratedTipSpeed(), 0.1);
+		assertEquals(75.9, TurbineCatalog.C90_30.ratedTipSpeed(), 0.1);
+		assertEquals(75.1, TurbineCatalog.C112_30.ratedTipSpeed(), 0.1);
+		assertEquals(85.8, TurbineCatalog.C130_40.ratedTipSpeed(), 0.1);
+	}
+
+	/** In steady running the generator's torque never limits the curve: only a rotor still spinning up is held back. */
+	@Test
+	void theRatedTorqueNeverClipsTheSteadyCurve() {
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			for (double v = spec.cutInSpeed(); v < spec.stormOnsetSpeed(); v += 0.25) {
+				double curve = spec.powerWhileRunningKw(v, RHO);
+				assertTrue(curve <= spec.torqueCeilingKw(spec.rotorRpmAt(v)) + 1e-9, spec.displayName() + " at " + v);
+			}
 		}
 	}
 }

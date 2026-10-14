@@ -377,16 +377,17 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		yawing = yaw.yawing();
 		cableTwist += yaw.twist();
 
-		alignedWind = instantWind * TurbineDynamics.alignment(TurbineDynamics.shortestAngle(windDirection, yawWind));
+		alignedWind = TurbineDynamics.effectiveWind(instantWind, TurbineDynamics.shortestAngle(windDirection, yawWind));
 		cutOut = TurbineDynamics.updateCutOut(cutOut, meanWind, gustWind, spec);
 		pollRedstone();
 
-		// the power first and then the speed, because the speed reads the limit against what the wind offers now
+		// what the wind offers, then the speed (which reads the limit against that offer), and only then the power,
+		// because the generator can take no more than its rated torque times the speed the rotor has actually reached
 		boolean braked = isBraked();
 		uncappedKw = TurbineDynamics.uncappedKw(braked, alignedWind, airDensity, spec);
-		producedKw = TurbineDynamics.producedKw(braked, uncappedKw, activePowerLimitKw);
 		rotorSpeed = TurbineDynamics.lagSpeed(rotorSpeed,
 				TurbineDynamics.targetDegreesPerTick(isParked(), cutOut, alignedWind, activePowerLimitKw, uncappedKw, spec));
+		producedKw = TurbineDynamics.producedKw(braked, uncappedKw, activePowerLimitKw, TurbineDynamics.rpmOf(rotorSpeed), spec);
 
 		budget.open(producedKw, spec.ratedPowerKw());
 		EnergyBridge.emit(this, this, footPos(), energyFaces());

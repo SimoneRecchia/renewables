@@ -109,7 +109,7 @@ public final class TurbineDynamics {
 	}
 
 	/**
-	 * How much of the wind a rotor that is {@code misalignment} degrees off the wind still catches: cos cubed,
+	 * How much of its power a rotor that is {@code misalignment} degrees off the wind still makes: cos cubed,
 	 * and none at all from side on.
 	 */
 	public static double alignment(double misalignment) {
@@ -118,6 +118,18 @@ public final class TurbineDynamics {
 
 		double cosine = Math.cos(Math.toRadians(off));
 		return cosine * cosine * cosine;
+	}
+
+	/**
+	 * The wind a rotor {@code misalignment} degrees off it actually works with: the component square to the rotor
+	 * disc, {@code v cos(gamma)}.  The power curve cubes it, which is where {@link #alignment}'s cos cubed comes from;
+	 * cubing an already-cubed factor would charge the dead band 7 % instead of 2.5.
+	 */
+	public static double effectiveWind(double wind, double misalignment) {
+		double off = Math.abs(misalignment);
+		if (off >= 90.0) return 0.0;
+
+		return Math.max(0.0, wind) * Math.cos(Math.toRadians(off));
 	}
 
 	// ---- wind cut-out ----
@@ -131,12 +143,15 @@ public final class TurbineDynamics {
 	 * The cut-out latch after this tick.
 	 *
 	 * Trips on a mean at or over the cut-out, or on a three-second gust 1.2 times over it; once tripped it holds
-	 * until the mean is down to {@link #cutOutReleaseSpeed}.  The trip is judged first, every tick, so a gust that
-	 * is still too high puts the latch straight back after a release that the mean alone would have allowed.
+	 * until the mean is down to {@link #cutOutReleaseSpeed} <em>and</em> the gust is down to 1.2 times that.  The gust
+	 * needs its own band: with the release on the mean alone, a turbulent wind whose gust sits on the trip level while
+	 * its mean is under the release would stop and restart the machine tick after tick.
 	 */
 	public static boolean updateCutOut(boolean latched, double meanWind, double gust, TurbineSpec spec) {
 		if (meanWind >= spec.cutOutSpeed() || gust >= WorldConditions.GUST_TRIP_RATIO * spec.cutOutSpeed()) return true;
-		if (latched && meanWind <= cutOutReleaseSpeed(spec)) return false;
+
+		double release = cutOutReleaseSpeed(spec);
+		if (latched && meanWind <= release && gust < WorldConditions.GUST_TRIP_RATIO * release) return false;
 
 		return latched;
 	}
@@ -158,6 +173,15 @@ public final class TurbineDynamics {
 		if (braked) return 0.0;
 
 		return Math.min(uncappedKw, Math.max(0.0, limitKw));
+	}
+
+	/**
+	 * The same, held also to what the generator's rated torque can take out of the rotor at the speed it is actually
+	 * turning ({@link TurbineSpec#torqueCeilingKw}): a rotor just released from the brake makes little until it has
+	 * spun up, instead of its full output at a twentieth of its speed.
+	 */
+	public static double producedKw(boolean braked, double uncappedKw, double limitKw, double rotorRpm, TurbineSpec spec) {
+		return Math.min(producedKw(braked, uncappedKw, limitKw), spec.torqueCeilingKw(rotorRpm));
 	}
 
 	/**

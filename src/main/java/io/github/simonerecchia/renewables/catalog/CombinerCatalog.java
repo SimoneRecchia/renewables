@@ -14,13 +14,13 @@ import net.minecraft.resources.ResourceLocation;
 public final class CombinerCatalog {
 	private static final Catalogue<CombinerSpec> COMBINERS = new Catalogue<>(CombinerSpec::id);
 
-	/** Six ways, 1000 volts, twenty amp holders. */
+	/** Six ways, 1000 volts, 10x38 holders: a gPV fuse of that size goes up to 30 A at 1000 V. */
 	public static final CombinerSpec CB_6 = COMBINERS.register(new CombinerSpec(
 			id("pv_combiner_6"), "CB-6",
-			6, 1000.0, 20.0, 125.0,
+			6, 1000.0, 30.0, 125.0,
 			true, false, "IP65", 0.5));
 
-	/** Sixteen ways, 1500 volts, thirty amp holders, four hundred amp output. */
+	/** Sixteen ways, 1500 volts, 10x85 holders to 30 A, four hundred amp output, as a FIMER SB 1615. */
 	public static final CombinerSpec CB_16 = COMBINERS.register(new CombinerSpec(
 			id("pv_combiner_16"), "CB-16",
 			16, 1500.0, 30.0, 400.0,

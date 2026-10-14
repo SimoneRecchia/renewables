@@ -12,17 +12,19 @@ class SwitchLogicTest {
 
 	@Test
 	void loadIsTwoPercentOfTheRating() {
-		assertEquals(26_000.0, RATED, 1e-9);
-		// 520 kW exactly is not yet load; above it is
-		assertFalse(SwitchLogic.underLoad(520.0, RATED));
-		assertTrue(SwitchLogic.underLoad(520.1, RATED));
+		// root three times 33 kV times 630 A
+		assertEquals(36_000.0, RATED, 1e-9);
+		assertEquals(Math.sqrt(3.0) * 33.0 * 630.0, RATED, 15.0);
+		// 720 kW exactly is not yet load; above it is
+		assertFalse(SwitchLogic.underLoad(720.0, RATED));
+		assertTrue(SwitchLogic.underLoad(720.1, RATED));
 		assertFalse(SwitchLogic.underLoad(0.0, RATED));
 	}
 
 	@Test
 	void aBreakerTripsAboveItsRatingAndNotAt() {
-		assertFalse(SwitchLogic.overRated(26_000.0, RATED));
-		assertTrue(SwitchLogic.overRated(26_000.5, RATED));
+		assertFalse(SwitchLogic.overRated(36_000.0, RATED));
+		assertTrue(SwitchLogic.overRated(36_000.5, RATED));
 	}
 
 	@Test
