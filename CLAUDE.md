@@ -327,7 +327,8 @@ python3 tools/gen_cab_models.py         # the substation cabin
 python3 tools/gen_cable_models.py       # the string cable (--java prints the shape tables)
 python3 tools/gen_trunk_models.py       # the trunk, on the same framework and its own fittings
 python3 tools/gen_crafting.py           # recipes, part item models, language entries
-python3 tools/gen_insulators.py         # patches the one insulator into the machines that carry it
+python3 tools/gen_turbine_models.py     # the wind turbine, one mesh for all six (--java prints its hitbox tables)
+python3 tools/gen_turbine_textures.py   # its textures
 python3 tools/gen_tower_models.py       # the three lattice towers (--java prints the cell tables)
 python3 tools/gen_transformer_models.py # the two transformers
 python3 tools/gen_switch_models.py      # the disconnector and the breaker
@@ -343,6 +344,7 @@ python3 tools/gen_example_site.py       # the whole site: two solar parks, a win
 python3 tools/check_hitboxes.py         # "the models and the tables agree, to a hundredth of a pixel"
 python3 tools/check_winding.py          # "every face is wound the way its normal points"
 python3 tools/check_obj_loading.py      # "every part these models author is a part the game loads"
+python3 tools/check_turbine.py          # "the turbine is what its contract says"
 python3 tools/check_holes.py            # "no connection pattern of either gauge shows its inside"
 python3 tools/check_row_cabling.py      # "nothing a row draws passes through anything else it draws"
 python3 tools/check_switch_travel.py    # "the blade grips its contact and clears everything else"
