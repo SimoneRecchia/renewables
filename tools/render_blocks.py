@@ -927,7 +927,163 @@ def scene_ground_conductor():
     return triangles, (1.2, 2.4, -2.2), (4.0, 0.1, 3.0)
 
 
+def subdivided(corners, longest):
+    """A triangle cut along its longest edge until none is longer than ``longest``.
+
+    render() drops a triangle with any vertex behind the eye, so a thirteen block tower seen from its foot
+    would vanish whole; cut into one-block pieces, only the ones really behind the camera do.
+    """
+    (a, ta), (b, tb), (c, tc) = corners
+    edges = [(math.dist(a, b), 0), (math.dist(b, c), 1), (math.dist(c, a), 2)]
+    length, which = max(edges)
+    if length <= longest:
+        return [corners]
+
+    def middle(p, q, tp, tq):
+        return (tuple((p[i] + q[i]) / 2.0 for i in range(3)), ((tp[0] + tq[0]) / 2.0, (tp[1] + tq[1]) / 2.0))
+
+    if which == 0:
+        m = middle(a, b, ta, tb)
+        halves = [((a, ta), m, (c, tc)), (m, (b, tb), (c, tc))]
+    elif which == 1:
+        m = middle(b, c, tb, tc)
+        halves = [((a, ta), (b, tb), m), ((a, ta), m, (c, tc))]
+    else:
+        m = middle(c, a, tc, ta)
+        halves = [((a, ta), (b, tb), m), (m, (b, tb), (c, tc))]
+    return [piece for half in halves for piece in subdivided(half, longest)]
+
+
+def turbine_triangles(model='c130_40', n=13, rotor=0.0, yaw=0.0, at=(0, 0, 0)):
+    """The turbine as the renderer poses it: the figures from the catalogue, the transform from the generator.
+
+    gen_turbine_models.group_matrix is the one statement of how each group moves, so this draws the contract
+    and not a second reading of it.
+    """
+    import gen_turbine_models as turbine
+
+    row = next(r for r in turbine.CATALOGUE if r[0] == model)
+    rotor_scale, nacelle_scale = turbine.scales(row[1], row[2], small=model == 'sw_10')
+    path = os.path.join(MODELS, 'wind_turbine', 'wind_turbine.obj')
+    hub, floor = turbine.hub_and_floor(path)
+    out = []
+    for group, texture, corners, normal, shade, cull in read_obj(path, {}, flip_v=True, cull=False,
+                                                                 forge_groups=False):
+        if group.startswith('pivot_'):
+            continue
+        move = turbine.group_matrix(group, n, rotor_scale, nacelle_scale, hub, floor, rotor, yaw)
+        moved = tuple(((move(p)[0] + 0.5 + at[0], move(p)[1] + at[1], move(p)[2] + 0.5 + at[2]), uv)
+                      for p, uv in corners)
+        for piece in (subdivided(moved, 1.0) if group.startswith('pole') else [moved]):
+            out.append((group, texture, piece, normal, shade, cull))
+    return out
+
+
+def scene_turbine():
+    """The C130-4.0 as built: thirteen blocks of tower, the rotor a hundred and thirty metres across."""
+    triangles = ground(-12, -12, 14, 14, SAND)
+    triangles += turbine_triangles()
+    return triangles, (-13.0, 10.5, 30.0), (0.5, 9.5, 0.8)
+
+
+def scene_turbine_front():
+    """Square on to the rotor, from where it faces: the three blades, their taper and the spinner."""
+    triangles = ground(-12, -12, 14, 14, SAND)
+    triangles += turbine_triangles()
+    return triangles, (0.5, 13.3, 34.0), (0.5, 13.0, 0.8)
+
+
+def scene_turbine_head():
+    """The nacelle from a quarter, at the height of a player standing on a neighbouring tower."""
+    triangles = ground(-12, -12, 14, 14, SAND)
+    triangles += turbine_triangles()
+    return triangles, (-3.4, 15.2, 5.2), (0.5, 13.5, 0.8)
+
+
+def scene_turbine_rear():
+    """The back of the nacelle: the cooler, the sensors, the exhaust grille."""
+    triangles = ground(-12, -12, 14, 14, SAND)
+    triangles += turbine_triangles()
+    return triangles, (3.0, 15.6, -3.6), (0.5, 13.6, -0.1)
+
+
+def scene_turbine_foot():
+    """The tower's foot: plinth, flange, door, plates, and the insulator a wire is hung on."""
+    triangles = ground(-4, -4, 6, 6, SAND)
+    triangles += turbine_triangles()
+    return triangles, (1.9, 0.75, 2.3), (0.55, 0.25, 0.8)
+
+
+def scene_turbine_small():
+    """The SW-10 on two segments: the same mesh at a quarter size, and the insulator which does not shrink."""
+    triangles = ground(-4, -4, 6, 6, SAND)
+    triangles += turbine_triangles('sw_10', 2)
+    return triangles, (-1.8, 2.6, 4.8), (0.5, 2.3, 0.6)
+
+
+def scene_turbine_hitbox():
+    """The tower's collision, block by block, over the drawn shaft: F3+B for a tower of thirteen."""
+    import gen_turbine_models as turbine
+
+    triangles = ground(-4, -4, 6, 6, SAND)
+    triangles += turbine_triangles()
+    edges = []
+    for index in range(13):
+        radius = turbine.tower_radius(index, 13, 1.0)
+        boxes = [((-w, index, -h), (w, index + 1, h)) for w, h in turbine.tower_boxes(radius)]
+        boxes += [((-h, index, -w), (h, index + 1, w)) for w, h in turbine.tower_boxes(radius)]
+        edges += outline([((lo[0] + 0.5, lo[1], lo[2] + 0.5), (hi[0] + 0.5, hi[1], hi[2] + 0.5))
+                          for lo, hi in boxes])
+    return triangles, (2.4, 1.6, 3.6), (0.5, 1.3, 0.5), edges
+
+
+def scene_turbine_nose():
+    """Head on, close: the spinner, the three seals and the nacelle behind them."""
+    triangles = ground(-12, -12, 14, 14, SAND)
+    triangles += turbine_triangles()
+    return triangles, (1.7, 14.2, 9.0), (0.5, 13.5, 1.5)
+
+
+def scene_turbine_under():
+    """From the ground under the nacelle, which is where a player at the foot of a tower looks up at it."""
+    triangles = ground(-12, -12, 14, 14, SAND)
+    triangles += turbine_triangles()
+    return triangles, (-2.5, 7.0, 6.5), (0.5, 13.2, 0.8)
+
+
+def scene_turbine_root():
+    """A blade root: the seal, the round section turning into an airfoil, the spinner it comes out of."""
+    triangles = ground(-12, -12, 14, 14, SAND)
+    triangles += turbine_triangles()
+    return triangles, (-2.6, 15.8, 3.8), (0.5, 15.0, 1.4)
+
+
+def scene_turbine_twist():
+    """Down the blade from beyond its tip: every section stacked, so the twist and the taper are a profile."""
+    triangles = turbine_triangles()
+    return triangles, (0.5, 28.0, 1.4), (0.5, 13.3, 1.4), (), (0.0, 0.0, -1.0)
+
+
+def scene_turbine_small_head():
+    """The SW-10's nacelle close: the same decals and louvres at a quarter size."""
+    triangles = ground(-4, -4, 6, 6, SAND)
+    triangles += turbine_triangles('sw_10', 2)
+    return triangles, (-0.55, 2.45, 0.95), (0.5, 2.15, 0.55)
+
+
 SCENES = {
+    'turbine_small_head': scene_turbine_small_head,
+    'turbine_nose': scene_turbine_nose,
+    'turbine_under': scene_turbine_under,
+    'turbine_root': scene_turbine_root,
+    'turbine_twist': scene_turbine_twist,
+    'turbine': scene_turbine,
+    'turbine_front': scene_turbine_front,
+    'turbine_head': scene_turbine_head,
+    'turbine_rear': scene_turbine_rear,
+    'turbine_foot': scene_turbine_foot,
+    'turbine_small': scene_turbine_small,
+    'turbine_hitbox': scene_turbine_hitbox,
     'ground_conductor': scene_ground_conductor,
     'tx_machine': scene_tx_machine,
     'tx_substation': scene_tx_substation,
@@ -975,8 +1131,9 @@ def main():
         scene = SCENES[name]()
         triangles, eye, target = scene[:3]
         edges = scene[3] if len(scene) > 3 else ()
+        up = scene[4] if len(scene) > 4 else (0.0, 1.0, 0.0)
         path = render(triangles, eye, target, os.path.join(OUT, name + '.png'), size=size,
-                      edges=edges)
+                      edges=edges, up=up)
         print('%-16s %6d triangles  %s' % (name, len(triangles), path))
 
 

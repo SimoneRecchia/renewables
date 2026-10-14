@@ -31,7 +31,7 @@ TEXTURES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'tex
 OURS = ('pv_flat', 'pv_tilt', 'pv_track', 'pv_dual', 'pv_inverter', 'pv_combiner', 'met_mast',
         'utility_pole', 'power_box', 'tx_machine', 'tx_substation',
         'lattice_suspension', 'lattice_tension', 'lattice_terminal', 'electric_cab',
-        'mv_disconnector', 'mv_breaker')
+        'mv_disconnector', 'mv_breaker', 'wind_turbine')
 
 # How much of a face has to overlap another coplanar face before it is worth reporting.
 OVERLAP = 1e-4
@@ -129,30 +129,35 @@ def png_pixels(path):
 ROUND_PRIMITIVES = {'aa_disc', 'disc', 'dome', 'screw', 'hex_head', 'warning_triangle'}
 
 
+# The generators whose tile drawings are read for round primitives: one per family of textures.
+TEXTURE_GENERATORS = ('gen_block_textures.py', 'gen_turbine_textures.py')
+
+
 @functools.lru_cache(maxsize=None)
 def round_textures():
-    """Which generated textures have something round on them, read out of the generator's own source."""
-    source = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gen_block_textures.py')
-    tree = ast.parse(open(source).read())
-
+    """Which generated textures have something round on them, read out of the generators' own source."""
     calls, builders = {}, {}
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef):
-            calls[node.name] = {inner.func.id for inner in ast.walk(node)
-                                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)} | \
-                               {inner.func.attr for inner in ast.walk(node)
-                                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)}
+    for generator in TEXTURE_GENERATORS:
+        source = os.path.join(os.path.dirname(os.path.abspath(__file__)), generator)
+        tree = ast.parse(open(source).read())
 
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
-            continue
-        for key, value in zip(node.value.keys, node.value.values):
-            if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef):
+                calls[node.name] = {inner.func.id for inner in ast.walk(node)
+                                    if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)} | \
+                                   {inner.func.attr for inner in ast.walk(node)
+                                    if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute)}
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
                 continue
-            named = value.body.func if isinstance(value, ast.Lambda) and isinstance(value.body, ast.Call) \
-                else value
-            if isinstance(named, ast.Name):
-                builders[key.value + '.png'] = named.id
+            for key, value in zip(node.value.keys, node.value.values):
+                if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+                    continue
+                named = value.body.func if isinstance(value, ast.Lambda) and isinstance(value.body, ast.Call) \
+                    else value
+                if isinstance(named, ast.Name):
+                    builders[key.value + '.png'] = named.id
 
     def reaches(name, seen=None):
         seen = seen or set()
@@ -434,6 +439,10 @@ def main():
     wanted = sys.argv[1:] or OURS
     total = 0
     for name in wanted:
+        stem = OBJ_NAME.get(name, name)
+        if not os.path.exists(os.path.join(MODELS, name, stem + '.obj')):
+            print('=== %s: skipped, no model on disk yet (docs/spec/QUESTIONS.md)' % name)
+            continue
         total += report(name)
 
     print('\n%s' % ('nothing mechanical left to find' if total == 0 else '%d problem(s)' % total))
