@@ -4,9 +4,11 @@ import io.github.simonerecchia.renewables.api.power.CombinerSpec;
 import io.github.simonerecchia.renewables.api.power.ConductorSpec;
 import io.github.simonerecchia.renewables.api.power.Dispatchable;
 import io.github.simonerecchia.renewables.api.power.InverterSpec;
+import io.github.simonerecchia.renewables.api.power.MpptInputs;
 import io.github.simonerecchia.renewables.api.power.PvArraySpec;
 import io.github.simonerecchia.renewables.api.power.PvModuleSpec;
 import io.github.simonerecchia.renewables.api.power.RedstoneMode;
+import io.github.simonerecchia.renewables.api.power.StringCurve;
 import io.github.simonerecchia.renewables.api.power.Telemetry;
 import io.github.simonerecchia.renewables.catalog.CableCatalog;
 import io.github.simonerecchia.renewables.catalog.CombinerCatalog;
@@ -70,6 +72,16 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 	private int stringsConnected = 0;
 	/** Direct-current input the machine has left, in amps. */
 	private double stringCurrentHeadroom = 0.0;
+	/** Why the last array or box was turned away, for the panel to name. */
+	private Refusal refusal = Refusal.NONE;
+	/** Nameplate of everything wired in, arrays and boxes alike, kW. */
+	private double dcNameplateKw = 0.0;
+	/** Held under what it could make by somebody else's limit, rather than by its own ceiling. */
+	private boolean curtailed = false;
+	/** The knee of the biggest source the MPPT window is holding off its maximum, volts. */
+	private double outOfWindowVolts = 0.0;
+	/** The arrays as of the last scan, published whole for a computer's thread to read. */
+	private volatile List<BlockPos> publishedArrays = List.of();
 
 	private double energyTodayKwh = 0.0;
 	private double energyLifetimeKwh = 0.0;
@@ -92,6 +104,47 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 	/** The reference array's readings, which are the plant's as far as its SCADA is concerned. */
 	private double referenceIrradiance = 0.0;
 	private double referenceModuleTempC = 15.0;
+
+	/** What turned an array or a box away from this machine, most informative first. */
+	public enum Refusal {
+		NONE,
+		/** Its cold-morning open-circuit voltage is over the machine's input rating. */
+		INPUT_VOLTAGE,
+		/** The fitted box is not insulated for it. */
+		INSULATION,
+		/** No fuse the fitted box holds, or none the module allows, protects its strings. */
+		FUSE,
+		/** Every string terminal, or every way of the fitted box, is taken. */
+		TERMINALS,
+		/** The direct-current power rating is used up. */
+		DC_POWER,
+		/** No tracker has the current left for one of its strings, or the busbars for its trunk. */
+		CURRENT;
+
+		static Refusal of(CombinerSpec.Refusal box) {
+			return switch (box) {
+				case NONE -> NONE;
+				case INSULATION -> INSULATION;
+				case FUSE -> FUSE;
+				case WAYS -> TERMINALS;
+				case OUTPUT_CURRENT -> CURRENT;
+			};
+		}
+
+		static Refusal worse(Refusal current, Refusal candidate) {
+			if (current == NONE) return candidate;
+
+			return current.ordinal() <= candidate.ordinal() ? current : candidate;
+		}
+
+		static Refusal byName(String name) {
+			for (Refusal candidate : values()) {
+				if (candidate.name().equals(name)) return candidate;
+			}
+
+			return NONE;
+		}
+	}
 
 	public PvInverterBlockEntity(BlockPos pos, BlockState state) {
 		super(ModBlockEntities.PV_INVERTER.get(), pos, state);
@@ -147,10 +200,7 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 
 	/** Works out what the plant is doing and pushes the operating point back to the arrays. */
 	private void gatherAndConvert(ServerLevel serverLevel, InverterSpec spec) {
-		availableDcKw = 0.0;
-		double highestStringVoltage = 0.0;
 		List<PvArrayBlockEntity> live = new ArrayList<>();
-
 		for (BlockPos pos : arrays) {
 			PvArrayBlockEntity array = LoadedBlockEntities.find(serverLevel, pos, PvArrayBlockEntity.class);
 			// an array whose ground has gone out of memory is a part of the plant that is not there for
@@ -161,17 +211,6 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 			if (!worldPosition.equals(array.collectorPos())) continue;
 
 			live.add(array);
-			// what arrives, not what the modules made: the difference is burnt in the run, and on a long
-			// home run it is a real percent or two rather than a rounding error
-			availableDcKw += array.offeredDcKw();
-			highestStringVoltage = Math.max(highestStringVoltage, array.stringVoltageAtCollector());
-		}
-
-		// the first array in the list is the nearest, because that is the order the scan claimed them
-		// in - which makes it the one a real plant would have bolted its reference instruments to
-		if (!live.isEmpty()) {
-			referenceIrradiance = live.get(0).poaFront();
-			referenceModuleTempC = live.get(0).moduleTempC();
 		}
 
 		List<PvCombinerBlockEntity> liveBoxes = new ArrayList<>();
@@ -181,28 +220,74 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 			if (!worldPosition.equals(box.inverterPos())) continue;
 
 			liveBoxes.add(box);
-			availableDcKw += box.offeredDcKw();
-			highestStringVoltage = Math.max(highestStringVoltage, box.busVoltageAtInverter());
 		}
 
-		boolean allowed = isRunning();
-		// below the startup voltage there is nothing to track: the strings are lit but not lit enough,
-		boolean trackable = highestStringVoltage >= spec.startupVolts() && spec.withinMpptWindow(highestStringVoltage);
-		stringsOutOfWindow = availableDcKw > 0.0 && highestStringVoltage > 0.0 && !trackable;
-		boolean awake = allowed && trackable && availableDcKw > 0.0;
+		// the first array in the list is the nearest, because that is the order the scan claimed them
+		// in - which makes it the one a real plant would have bolted its reference instruments to
+		if (!live.isEmpty()) {
+			referenceIrradiance = live.get(0).poaFront();
+			referenceModuleTempC = live.get(0).moduleTempC();
+		} else if (!liveBoxes.isEmpty() && liveBoxes.get(0).hasReference()) {
+			referenceIrradiance = liveBoxes.get(0).referenceIrradiance();
+			referenceModuleTempC = liveBoxes.get(0).referenceModuleTempC();
+		}
+
+		// every array and every box is one source: its knee, its open-circuit voltage and what it offers at the
+		// cabinet - what arrives, not what the modules made, since the difference is burnt in the run
+		int count = live.size() + liveBoxes.size();
+		double[] knee = new double[count];
+		double[] open = new double[count];
+		double[] offered = new double[count];
+		for (int i = 0; i < live.size(); i++) {
+			knee[i] = live.get(i).stringVoltageAtCollector();
+			open[i] = live.get(i).stringOpenCircuitVoltage();
+			offered[i] = live.get(i).offeredDcKw();
+		}
+
+		for (int i = 0; i < liveBoxes.size(); i++) {
+			knee[live.size() + i] = liveBoxes.get(i).busVoltageAtInverter();
+			open[live.size() + i] = liveBoxes.get(i).openCircuitVolts();
+			offered[live.size() + i] = liveBoxes.get(i).offeredDcKw();
+		}
+
+		// where the trackers hold each source, and what it gives there
+		double[] volts = new double[count];
+		double[] held = new double[count];
+		holdSources(spec, knee, open, offered, volts, held);
+
+		double highestKnee = 0.0;
+		double worstOffered = 0.0;
+		availableDcKw = 0.0;
+		stringsOutOfWindow = false;
+		outOfWindowVolts = 0.0;
+		for (int i = 0; i < count; i++) {
+			highestKnee = Math.max(highestKnee, knee[i]);
+			availableDcKw += offered[i] * held[i];
+			// named on the panel, because it is the one mismatch a player cannot see: the biggest source held off
+			if (offered[i] > 0.0 && knee[i] > 0.0 && !spec.withinMpptWindow(knee[i]) && offered[i] > worstOffered) {
+				stringsOutOfWindow = true;
+				outOfWindowVolts = knee[i];
+				worstOffered = offered[i];
+			}
+		}
+
+		// below the startup voltage there is nothing to wake up for: the strings are lit but not lit enough
+		boolean awake = isRunning() && highestKnee >= spec.startupVolts() && availableDcKw > 0.0;
 
 		// the bridge is rated in kVA: at a power factor under one the reactive part takes its share of the current
-		double ceiling = Math.min(Math.min(spec.thermalLimitKw(ambientTempC), Math.max(0.0, activePowerLimitKw)),
-				spec.activePowerCeilingKw(powerFactorSetpoint));
+		double ownCeiling = Math.min(spec.thermalLimitKw(ambientTempC), spec.activePowerCeilingKw(powerFactorSetpoint));
+		double limit = Math.max(0.0, activePowerLimitKw);
+		double ceiling = Math.min(ownCeiling, limit);
 		derating = spec.derating(ambientTempC);
 
 		if (!awake) {
 			dcPowerKw = 0.0;
-			// the night draw, reported as a negative output.
+			// the night draw, reported as a negative output: a reading only, the grid does not charge it
 			acPowerKw = -spec.nightDrawKw();
 			efficiency = 0.0;
 			clipping = false;
-			dcVoltage = highestStringVoltage;
+			curtailed = false;
+			dcVoltage = highestKnee;
 			dcCurrent = 0.0;
 			for (PvArrayBlockEntity array : live) {
 				array.setMpptFraction(0.0);
@@ -216,27 +301,60 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 			return;
 		}
 
-		clipping = spec.clipping(availableDcKw, ceiling);
+		// clipping is the machine's own ceiling binding, curtailment somebody else's limit binding below it
+		double unclipped = spec.unclippedAcKw(availableDcKw);
+		clipping = unclipped > ownCeiling + 1.0e-6 && ownCeiling <= limit + 1.0e-6;
+		curtailed = unclipped > limit + 1.0e-6 && limit < ownCeiling - 1.0e-6;
+
 		double wantedAc = spec.acPowerFromDcKw(availableDcKw, ceiling);
 		// the direct current the machine actually pulls: what it needs to make that output.
-		efficiency = availableDcKw <= 0.0 ? 0.0 : Math.max(0.01, spec.efficiencyAt(wantedAc / spec.acPowerKw()));
-		dcPowerKw = Math.min(availableDcKw, wantedAc / efficiency);
+		efficiency = wantedAc <= 0.0 ? 0.0 : spec.efficiencyAt(wantedAc / spec.acPowerKw());
+		dcPowerKw = wantedAc <= 0.0 ? 0.0 : Math.min(availableDcKw, wantedAc + spec.lossKwAt(wantedAc));
 		acPowerKw = wantedAc;
 
+		// held back for the ceiling, every source moves off its knee by the same share
 		double fraction = availableDcKw <= 0.0 ? 0.0 : Mth.clamp(dcPowerKw / availableDcKw, 0.0, 1.0);
-		for (PvArrayBlockEntity array : live) {
-			array.setMpptFraction(fraction);
+		for (int i = 0; i < live.size(); i++) {
+			live.get(i).setMpptFraction(held[i] * fraction);
 		}
 
-		// the boxes get the same fraction and hand it on to their own strings
-		// visible in the current reading of every module behind every box
-		for (PvCombinerBlockEntity box : liveBoxes) {
-			box.setMpptFraction(fraction);
+		// the boxes hand it on to their own strings, visible in the current of every module behind them
+		for (int i = 0; i < liveBoxes.size(); i++) {
+			liveBoxes.get(i).setMpptFraction(held[live.size() + i] * fraction);
 		}
 
-		dcVoltage = highestStringVoltage;
-		dcCurrent = dcVoltage <= 0.0 ? 0.0 : dcPowerKw * 1000.0 / dcVoltage;
+		double weighted = 0.0;
+		dcCurrent = 0.0;
+		for (int i = 0; i < count; i++) {
+			double kw = offered[i] * held[i] * fraction;
+			weighted += kw * volts[i];
+			if (volts[i] > 0.0) dcCurrent += kw * 1000.0 / volts[i];
+		}
+
+		dcVoltage = dcPowerKw <= 0.0 ? highestKnee : weighted / dcPowerKw;
 		cabinetTempC = spec.cabinetTemperature(ambientTempC, acPowerKw / spec.acPowerKw());
+	}
+
+	/**
+	 * Where the trackers hold each source and what share of its maximum it gives there.  A machine with one tracker
+	 * holds every source on one bus, at whatever voltage makes the most between them; a machine with several gives
+	 * each its own, held inside the window.
+	 */
+	private static void holdSources(InverterSpec spec, double[] knee, double[] open, double[] offered, double[] volts, double[] held) {
+		if (spec.mpptCount() == 1) {
+			double bus = StringCurve.bestBusVoltage(knee, open, offered, spec.mpptMinVolts(), spec.mpptMaxVolts());
+			for (int i = 0; i < knee.length; i++) {
+				volts[i] = bus;
+				held[i] = StringCurve.powerFraction(bus, knee[i], open[i]);
+			}
+
+			return;
+		}
+
+		for (int i = 0; i < knee.length; i++) {
+			volts[i] = StringCurve.ownTrackerVolts(knee[i], spec.mpptMinVolts(), spec.mpptMaxVolts());
+			held[i] = StringCurve.powerFraction(volts[i], knee[i], open[i]);
+		}
 	}
 
 	/** Finds the arrays this inverter is wired to, by following the cable. */
@@ -245,10 +363,12 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		arrays.clear();
 		combiners.clear();
 		stringsConnected = 0;
+		refusal = Refusal.NONE;
 
-		// two limits, and which one binds depends on what the modules are.
-		double currentCeiling = spec.mpptCount() * spec.maxCurrentPerMppt();
-		double currentConnected = 0.0;
+		// the trackers' terminals and currents, string by string; the fitted box's ways, and the machine's own total
+		MpptInputs inputs = new MpptInputs(spec);
+		int directStrings = 0;
+		double directCurrent = 0.0;
 		double dcConnected = 0.0;
 
 		for (DcNetwork.Reach reach : reachableArrays(serverLevel, spec)) {
@@ -257,53 +377,78 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 
 			PvArraySpec wanted = array.spec();
 			int strings = wanted.strings();
-			double current = wanted.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE) * strings;
+			double perString = wanted.stringCurrent(PvModuleSpec.STC_IRRADIANCE, PvModuleSpec.STC_TEMPERATURE);
 
-			// four limits off the same datasheet, and any of them can be the one that bites; the first is the one
-			// that would wreck the input stage, a string whose cold-morning open-circuit voltage is over its rating
-			if (wanted.stringOpenCircuitVoltage(PvArraySpec.COLDEST_DESIGN_CELL_C) > spec.maxDcVolts()) continue;
-			if (stringsConnected + strings > stringInputs(spec)) continue;
-			if (currentConnected + current > currentCeiling) continue;
-			if (dcConnected + wanted.dcPowerKw() > spec.maxDcPowerKw()) continue;
-			// and the fitted box's own four
-			if (integrated != null
-					&& integrated.accepts(wanted, stringsConnected, currentConnected, integrated.outputAmps()) != CombinerSpec.Refusal.NONE) {
+			Refusal why = refuseStrings(spec, wanted, directStrings, directCurrent, dcConnected);
+			MpptInputs landed = inputs.copy();
+			if (why == Refusal.NONE && !landed.landStrings(strings, perString)) why = Refusal.CURRENT;
+			if (why != Refusal.NONE) {
+				refusal = Refusal.worse(refusal, why);
 				continue;
 			}
 
 			if (!array.claim(worldPosition, reach, CableCatalog.STRING_6)) continue;
 
+			inputs = landed;
 			arrays.add(array.getBlockPos().immutable());
 			stringsConnected += strings;
-			currentConnected += current;
+			directStrings += strings;
+			directCurrent += perString * strings;
 			dcConnected += wanted.dcPowerKw();
 		}
 
-		// then the boxes, on the other cable.
-		// a terminal count on a central machine means: strings arriving through combiner boxes
+		// then the boxes, on the other cable: their trunks go on the busbars, not on a string terminal's fuse
 		for (DcNetwork.Reach reach : reachableCombiners(serverLevel, spec)) {
 			PvCombinerBlockEntity box = LoadedBlockEntities.find(serverLevel, reach.pos(), PvCombinerBlockEntity.class);
 			if (box == null) continue;
 
-			if (stringsConnected + box.stringsConnected() > stringInputs(spec)) continue;
-			if (currentConnected + box.designAmps() > currentCeiling) continue;
-			if (dcConnected + box.nameplateDcKw() > spec.maxDcPowerKw()) continue;
+			Refusal why = Refusal.NONE;
+			if (box.coldOpenCircuitVolts() > spec.maxDcVolts()) {
+				why = Refusal.INPUT_VOLTAGE;
+			} else if (stringsConnected + box.stringsConnected() > spec.stringInputs()) {
+				why = Refusal.TERMINALS;
+			} else if (dcConnected + box.nameplateDcKw() > spec.maxDcPowerKw()) {
+				why = Refusal.DC_POWER;
+			}
+
+			MpptInputs landed = inputs.copy();
+			if (why == Refusal.NONE && !landed.landTrunk(box.designAmps())) why = Refusal.CURRENT;
+			if (why != Refusal.NONE) {
+				refusal = Refusal.worse(refusal, why);
+				continue;
+			}
+
 			if (!box.claim(worldPosition, reach, CableCatalog.TRUNK_240)) continue;
 
+			inputs = landed;
 			combiners.add(box.getBlockPos().immutable());
 			stringsConnected += box.stringsConnected();
-			currentConnected += box.designAmps();
 			dcConnected += box.nameplateDcKw();
 		}
 
-		stringCurrentHeadroom = currentCeiling - currentConnected;
+		stringCurrentHeadroom = inputs.freeAmps();
+		dcNameplateKw = dcConnected;
+		publishedArrays = List.copyOf(arrays);
 	}
 
-	/** String terminals the machine has to offer. */
-	private int stringInputs(InverterSpec spec) {
-		if (spec.stringTerminals() || integrated == null) return spec.stringInputs();
+	/**
+	 * Why one array's strings would not go on this machine's own terminals, or NONE.  The first check is the one
+	 * that would wreck the input stage: a string whose cold-morning open-circuit voltage is over the rating.  The
+	 * trackers' currents are checked by the caller, string by string.
+	 */
+	private Refusal refuseStrings(InverterSpec spec, PvArraySpec wanted, int directStrings, double directCurrent, double dcConnected) {
+		if (wanted.stringOpenCircuitVoltage(PvArraySpec.COLDEST_DESIGN_CELL_C) > spec.maxDcVolts()) return Refusal.INPUT_VOLTAGE;
 
-		return Math.min(spec.stringInputs(), integrated.fusedInputs());
+		// the fitted box's own four limit only what is wired into it; the cabinet's total is the cabinet's
+		if (integrated != null) {
+			Refusal box = Refusal.of(integrated.accepts(wanted, directStrings, directCurrent, integrated.outputAmps()));
+			if (box != Refusal.NONE) return box;
+		}
+
+		if (stringsConnected + wanted.strings() > spec.stringInputs()) return Refusal.TERMINALS;
+		if (dcConnected + wanted.dcPowerKw() > spec.maxDcPowerKw()) return Refusal.DC_POWER;
+
+		return Refusal.NONE;
 	}
 
 	/** Every set of leads a run of string cable reaches from this cabinet */
@@ -424,19 +569,39 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		return stringsOutOfWindow;
 	}
 
+	/** The voltage of the biggest source the window is holding off its knee, for the panel to name. */
+	public double outOfWindowVolts() {
+		return outOfWindowVolts;
+	}
+
+	/** Whether a limit set from outside, rather than the machine's own ceiling, is what it is held to. */
+	public boolean curtailed() {
+		return curtailed;
+	}
+
+	/** Why the last array or box was turned away, or NONE. */
+	public Refusal refusal() {
+		return refusal;
+	}
+
+	public int combinersConnected() {
+		return combiners.size();
+	}
+
 	public int arraysConnected() {
 		return arrays.size();
 	}
 
-	/** Where the arrays this inverter is wired to are. */
+	/** Where the arrays this inverter is wired to are, as of the last scan: safe to read from any thread. */
 	public List<BlockPos> arrayPositions() {
-		return List.copyOf(arrays);
+		return publishedArrays;
 	}
 
 	public int stringsConnected() {
 		return stringsConnected;
 	}
 
+	/** Strings the cabinet takes in all, through its own terminals, a fitted box and the boxes on its trunk together. */
 	public int stringCapacity() {
 		return spec().stringInputs();
 	}
@@ -449,19 +614,9 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		return energyLifetimeKwh;
 	}
 
-	/** DC nameplate of everything wired in over the AC nameplate: the plant's own loading ratio. */
+	/** DC nameplate of everything wired in, through boxes too, over the AC nameplate: the plant's own loading ratio. */
 	public double dcAcRatio() {
-		if (level == null) return 0.0;
-
-		double dcNameplate = 0.0;
-		for (BlockPos pos : arrays) {
-			PvArrayBlockEntity array = LoadedBlockEntities.find(level, pos, PvArrayBlockEntity.class);
-			if (array != null) {
-				dcNameplate += array.spec().dcPowerKw();
-			}
-		}
-
-		return spec().acPowerKw() <= 0.0 ? 0.0 : dcNameplate / spec().acPowerKw();
+		return spec().acPowerKw() <= 0.0 ? 0.0 : dcNameplateKw / spec().acPowerKw();
 	}
 
 	public double apparentKva() {
@@ -638,6 +793,11 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		tag.putBoolean("derating", derating);
 		tag.putBoolean("stringsOutOfWindow", stringsOutOfWindow);
 		tag.putInt("stringsConnected", stringsConnected);
+		tag.putDouble("headroom", stringCurrentHeadroom);
+		tag.putString("refusal", refusal.name());
+		tag.putDouble("dcNameplate", dcNameplateKw);
+		tag.putBoolean("curtailed", curtailed);
+		tag.putDouble("outOfWindowVolts", outOfWindowVolts);
 
 		tag.putBoolean("stoppedByComputer", stoppedByComputer);
 		tag.putBoolean("stoppedByPlayer", stoppedByPlayer);
@@ -681,6 +841,11 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		derating = tag.getBoolean("derating");
 		stringsOutOfWindow = tag.getBoolean("stringsOutOfWindow");
 		stringsConnected = tag.getInt("stringsConnected");
+		stringCurrentHeadroom = tag.getDouble("headroom");
+		refusal = Refusal.byName(tag.getString("refusal"));
+		dcNameplateKw = tag.getDouble("dcNameplate");
+		curtailed = tag.getBoolean("curtailed");
+		outOfWindowVolts = tag.getDouble("outOfWindowVolts");
 
 		stoppedByComputer = tag.getBoolean("stoppedByComputer");
 		stoppedByPlayer = tag.getBoolean("stoppedByPlayer");
@@ -695,6 +860,8 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		for (int i = 0; i < positions.size(); i++) {
 			arrays.add(BlockPos.of(((LongTag) positions.get(i)).getAsLong()));
 		}
+
+		publishedArrays = List.copyOf(arrays);
 
 		combiners.clear();
 		for (long packed : tag.getLongArray("combiners")) {
