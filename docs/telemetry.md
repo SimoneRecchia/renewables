@@ -19,8 +19,13 @@ had, so programs written against that still find it and all nine of its methods 
 tower answers on behalf of the machine it carries — so a computer or a Wired Modem
 against **any block of the tower**, the foot included, reaches the same turbine. That is
 deliberate: a real turbine gathers its cables at the tower base, which is where you will
-build. Two modems on one structure resolve to one peripheral. The photovoltaic blocks each
-answer on their own block.
+build. When the turbine is broken the peripheral goes with it, and one placed on the same
+tower appears in its place, on every block of it. A computer touching the tower on several
+sides still sees one turbine per side, and on a wired network every modem is a name of its
+own, so two modems on one tower make `peripheral.find` return the turbine twice: put one
+modem on a structure, or tell them apart with `getPosition()` (the machine's own block,
+the same from every block of its tower), as the farm program in section 6 does. The
+photovoltaic blocks each answer on their own block.
 
 **Which one to talk to.** The **inverter**, for almost everything. It is where a real plant's
 SCADA lives and it is the only part of a plant a program can usefully change — an array has no
@@ -29,8 +34,12 @@ factor and the stop. Read the arrays when you want to know *why*.
 
 **Threading.** Reads come off the computer thread and never block. The telemetry —
 `getTelemetry()`, `getTelemetryKinds()` and every generated `get<Tag>()` — is served from an
-immutable snapshot the machine publishes once per tick, so it can never mix values from two
-different ticks; the other read methods read the machine's current state. Methods that
+immutable snapshot the machine publishes whole, so it can never mix values from two
+different ticks. Nobody reading it, it is worked out once a second; from the first read on it
+is worked out every tick for the next five seconds, so a program polling it sees every tick and
+an unread farm costs nothing. The energy readings (`getProductionRate`, `getEnergy`,
+`getMaxOutput`, `isRunning`) come from one record the turbine publishes at the end of its own
+tick, never half from one tick and half from the next. Methods that
 *change* the machine run on the server thread instead, because they mark the block entity
 dirty and push state to clients.
 
@@ -65,6 +74,7 @@ Mekanism's default 2.5 J per FE, so every part of the mod agrees on the scale.
 | `isStopped()` | boolean | true only if *this program* stopped it |
 | `isRunning()` | boolean | true if nothing at all is holding it off load |
 | `isWindCutOut()` | boolean | the machine shut itself down for the weather |
+| `getPosition()` | table | `{x, y, z}` of the machine block, the same from every block of its tower |
 | `isStoppedByRedstone()` | boolean | the mode and the signal are holding it down |
 | `getRedstoneMode()` | string | `DISABLED`, `HIGH` or `LOW` |
 | `setRedstoneMode(mode)` | — | throws on anything else |
@@ -83,9 +93,11 @@ there. Ask `isRunning()` for the fact and the three `stoppedBy*` tags for the re
 grid: a machine told to export nothing disconnects and lets its rotor idle. It does not
 brake, because it has to be able to come back in seconds, and because standing still is
 what harms a main bearing. Only `stop()`, a player at the panel, redstone and a storm
-shutdown put the brake on, and only a braked machine feathers its blades to 90°. A partly curtailed machine also visibly slows — curtailment is
-done by pitching, and power goes with the cube, so half output is four fifths of the
-speed rather than half.
+shutdown put the brake on; a machine held to nothing feathers its blades to 90° and idles
+unbraked. A partly curtailed machine pitches its blades to shed what it is not allowed to
+make — the same pitch the regulating band uses to shed the same share — and also visibly
+slows, because power goes with the cube, so half output is four fifths of the speed rather
+than half.
 
 ### 1.3 Reading the instruments
 
@@ -149,9 +161,10 @@ anything past 0.20 is rough air. It used to run to 1.0 and mean nothing in parti
 | `f` | Hz | 50, wandering ±0.04 |
 | `v12` `v23` `v31` | V | 690 line-to-line, −1.2% at full load, never perfectly balanced |
 | `i1` `i2` `i3` | A | `S / (√3 · V)`, ±0.5% between phases |
-| `bladePitchAngle` | ° 0–90 | collective |
+| `bladePitchAngle` | ° 0–90 | collective, the angle the blades are drawn at |
 | `bladePitchAngle1..3` | ° 0–90 | collective ±0.25, clamped to the mechanical travel |
 | `airPressure` | hPa | **the weather model's own field**, at this site's elevation |
+| `rotorExposure` | 0–1 | the share of the rotor's disc in open air; `0` when no air reaches it at all (see 4.5) |
 
 The relations are exact. The constants inside them — 690 V, 50 Hz, a generator at 1800
 rpm — are chosen rather than modelled, but they are the usual ones for a machine of this
@@ -159,8 +172,12 @@ size, and the gear ratio is derived per model so a slow wide rotor gets a taller
 
 **Pitch** is 0° from cut-in to the rated wind, ramps to 25° across the regulating band,
 carries on to 60° through storm control, and sits at 90° — full feather — whenever the
-machine is braked: a storm shutdown, `stop()`, a player at the panel or redstone. A machine
-curtailed to nothing is not braked, and reports the pitch its wind calls for.
+machine is braked: a storm shutdown, `stop()`, a player at the panel or redstone. Under a
+curtailment it is never less than the pitch that sheds what the setpoint does not allow, on
+the regulating band's own scale (at a wind *v* over rated, flat blades would take
+(*v*/rated)³ of the rating, and the band's pitch there is the pitch for keeping that share):
+a C130 at 9 m/s held to 1000 of its 2642 kW reports about 13.7°. Held to nothing, it is
+feathered and idles.
 
 **`airPressure` is a cause now, not a decoration.** It used to be worked backwards from
 the wind speed. It is read from the pressure map the wind is *computed from*, so a station
@@ -193,7 +210,7 @@ ambient on a freshly loaded turbine and warms up.
 | `mainBearTemp1` | °C | ambient + 15 + 30 × load |
 | `generatorL1Temp` `L2Temp` `L3Temp` | °C | ambient + 30 + ~78 × **copper loss** |
 | `genCWTempGenInlt` | °C | ambient + 8 + 15 × load |
-| `genCWTempGenOutlt` | °C | inlet + 6 + 14 × load |
+| `genCWTempGenOutlt` | °C | inlet + a rise of 6 + 14 × load; the rise is what lags, so the outlet is never colder than the inlet |
 | `nacelleTemp` | °C | ambient + 8 + 12 × load |
 | `hydOilTemp` | °C | ambient + 10 + 20 × load |
 | `airTempCtrlCab` | °C | ambient + 6 + 10 × load |
@@ -206,9 +223,9 @@ ambient on a freshly loaded turbine and warms up.
 | `gearBoxOilPress` | bar | 2.0 + 1.5 × load; **0 with the rotor stopped** |
 | `gearBoxOilPressPmp` | bar | 4.5 + 2.0 × load; 0 stopped |
 | `hydrSystemPress` | bar | 190 + 20 × load |
-| `hydrMainBrakesPressure` | bar | 178 with the brake on, 4 off |
+| `hydrMainBrakesPressure` | bar | 178 with the parking brake on, 4 off. It goes on once a machine held by `stop()`, a player or redstone has run down under 1 rpm; a machine cut out in a gale is feathered and idles, and its brake is off |
 | `yawHAccuPress` | bar | 148 + 6 × load |
-| `yawHydrBrkPress` | bar | 58 while yawing, 12 at rest |
+| `yawHydrBrkPress` | bar | 140 at rest, the brakes clamping the nacelle; 25 while yawing, let down to a residual drag |
 | `vibYDirection` | mm/s | 0.4 + 1.8 × load + 2.5 × turbulence |
 | `vibZDirection` | mm/s | 0.3 + 1.5 × load + 2.0 × turbulence |
 
@@ -338,7 +355,17 @@ All measured on a C90-3.0 against a reference of 11 blocks of tower on flat plai
 
 **Siting beats everything.** A ridge is worth more than three extra blocks of tower and
 more than any biome. Walk the high ground first — that is what a wind developer does, and
-the answer does not change from one day to the next.
+the answer does not change from one day to the next. The ridge is the land as the world
+made it, read from the terrain generator: a tower stood on a pillar or a building gains
+nothing from what is under its foot, and a tower founds only on solid ground, never on
+another machine.
+
+**The rotor has to be out in the air.** Nothing solid or wet over the nacelle — a cave, a
+roof, the sea — and no block in the hub: then no wind reaches it, the panel says *rotor
+obstructed* and `rotorExposure` reads `0`, and the item refuses to place a turbine there in
+the first place. Blocks in the disc the blades sweep — trees, a wall, the next turbine's
+tower — take their share of it: a rotor half behind a hillside makes half. A tower founded
+in the sea measures its wind from the water's surface, not from the sea floor.
 
 **Height is the dependable one.** One more block is about 3% on plains, and considerably
 more over rough ground where the profile is steeper. The panel quotes the figure for
@@ -514,7 +541,13 @@ end
 Curtail a farm to a target, and let it back up again:
 
 ```lua
-local turbines = { peripheral.find("renewables_wind_turbine") }
+-- one entry per machine, however many modems reach it
+local turbines, seen = {}, {}
+for _, t in ipairs({ peripheral.find("renewables_wind_turbine") }) do
+  local p = t.getPosition()
+  local key = p.x .. "," .. p.y .. "," .. p.z
+  if not seen[key] then seen[key] = true; table.insert(turbines, t) end
+end
 
 local function curtail(targetKw)
   local share = targetKw / #turbines

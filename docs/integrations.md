@@ -111,8 +111,9 @@ print(t.getActivePower() .. " kW")
 
 ### What a turbine reports
 
-64 signals modelled on real turbine SCADA tags — power, wind, yaw, rotor and generator speed, phase voltages
-and currents, blade pitch, gearbox and bearing temperatures, hydraulic pressures, vibration.
+65 signals: 64 modelled on real turbine SCADA tags — power, wind, yaw, rotor and generator speed, phase voltages
+and currents, blade pitch, gearbox and bearing temperatures, hydraulic pressures, vibration — and the share of the
+rotor's disc that is out in the air.
 
 They are not all equal, and `getTelemetryKinds()` says which is which:
 

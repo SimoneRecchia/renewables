@@ -32,18 +32,23 @@ public class TurbineTowerBlockEntity extends BlockEntity {
 		return super.getCapability(cap, side);
 	}
 
-	/** The machine this block carries the cables for, or null if it carries none. */
+	/**
+	 * The machine this block carries the cables for, or null if it carries none.  The remembered position is only
+	 * believed while the turbine there still has this block for its foot: a turbine there is not enough, because the
+	 * pile under it may have been rebuilt to another height, and the foot of one pile would then be offering the cables
+	 * the energy of a machine standing on another.
+	 */
 	@Nullable
 	private WindTurbineBlockEntity machine() {
-		if (level == null || TurbineTowerBlock.countBelow(level, worldPosition) != 0) return null;
+		if (level == null || !TurbineTowerBlock.isFoot(level, worldPosition)) return null;
 
-		if (machinePos == null || !(level.getBlockState(machinePos).getBlock() instanceof WindTurbineBlock)) {
+		WindTurbineBlockEntity turbine = machinePos != null && level.getBlockEntity(machinePos) instanceof WindTurbineBlockEntity at ? at : null;
+		if (turbine == null || !TurbineTowerBlock.footBelow(level, machinePos).equals(worldPosition)) {
 			machinePos = TurbineTowerBlock.findTurbineAbove(level, worldPosition);
+			turbine = machinePos != null && level.getBlockEntity(machinePos) instanceof WindTurbineBlockEntity at ? at : null;
 		}
 
-		if (machinePos == null) return null;
-
-		return level.getBlockEntity(machinePos) instanceof WindTurbineBlockEntity turbine ? turbine : null;
+		return turbine;
 	}
 
 	@Override
