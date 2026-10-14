@@ -7,7 +7,7 @@ e `tools/gen_turbine_models.py --java`, e i checker le rimisurano a ogni giro: s
 fallisce finché questo file non è aggiornato.
 
 ```bash
-python3 tools/gen_turbine_models.py        # models/wind_turbine/wind_turbine.{obj,mtl}   (1.4 MB, 11 778 facce)
+python3 tools/gen_turbine_models.py        # models/wind_turbine/wind_turbine.{obj,mtl}   (1.4 MB, 11 942 facce)
 python3 tools/gen_turbine_textures.py      # le undici texture turbine_*.png
 python3 tools/check_turbine.py [--table]   # il contratto, la chiusura delle superfici, i margini di ogni macchina
 python3 tools/check_hitboxes.py [--java]   # torre conica e navicella contro il modello
@@ -47,6 +47,7 @@ la stessa faccia delle altre (raffreddatore, plance, sensori in scala 0.25), che
 | navicella (`motor`) | 0.558 x 0.600 x 1.548 | 5.6 x 6.0 x 15.5 m | z da -0.888 a +0.660; poggia a y = 13.0; asse del rotore a **metà altezza** (13.30) |
 | raffreddatore sul tetto | 0.38 x 0.18 x 0.46 | | feritoie su tre lati, due ventole; più i sensori: vento a coppe, banderuola, parafulmine |
 | mozzo / spinner (`rotate_2`) | raggio 0.270, lungo 0.720 (z da 0.680 a 1.400) | 5.4 m | solido di rivoluzione a 80 lati, tre gusci con tre giunti meridiani |
+| flangia dell'albero lento (`motor_shaft`) | raggio 0.100, z da 0.650 a 0.710 | 2.0 m | esce dal supporto del cuscinetto (`motor`, fino a z 0.660) ed entra nello spinner (da z 0.680): senza, il rotore stava 0.02 davanti alla navicella senza toccarla |
 | pale (`rotate_1`) | lunghe 6.33 (dalla radice), raggio in punta **6.500** dal punto H | 63 m, rotore 130 m | corda 0.30 alla radice, 0.415 al massimo (r = 1.8), 0.06 in punta; svergolamento 20° → 0.2° |
 | isolatore | porcellana ⌀ 0.18, alta 0.14 | 1.8 m | non scalato; par. 6 |
 
@@ -69,10 +70,11 @@ Il renderer chiama gruppo la coppia **oggetto + "_" + materiale** (`models.md` p
 | `pole` | `pole_tower` → `turbine_tower`, `pole_flange` → `turbine_flange` | scala (s_n, n / **13.0**, s_n) dal piede. **Altezza authored = 13.0** (il riquadro del gruppo è y 0..13.0): era 12.43 |
 | `pole_base` | `pole_base_concrete` → `pole_concrete`, `_flange` → `turbine_flange`, `_door` → `turbine_door`, `_plate` → `turbine_plate` | **scala uniforme s_n dal piede**, mai stirata (par. 4.1) |
 | `motor` | `motor_nacelle` → `turbine_nacelle`, `motor_flange`, `motor_vent` → `turbine_louvre`, `motor_plate` → `turbine_plate` | traslazione a y = n, scala uniforme s_n, traslazione di -b. **b = 13.0** (minimo y di tutti i gruppi `motor*`, ed è anche il minimo del solo `motor_nacelle`) |
-| `motor_hatch`, `motor_cooler`, `motor_sensors`, `motor_beacon` | `_nacelle`, `_flange`, `_vent`, `_sensor` → `turbine_sensor`, `_beacon` → `turbine_beacon` | come la navicella (qualunque nome che non cominci per `pole`, `insulator`, `rotate_1`, `rotate_2`, `pivot_`) |
+| `motor_shaft`, `motor_hatch`, `motor_cooler`, `motor_sensors`, `motor_beacon` | `_flange`, `_nacelle`, `_vent`, `_sensor` → `turbine_sensor`, `_beacon` → `turbine_beacon` | come la navicella (qualunque nome che non cominci per `pole`, `insulator`, `rotate_1`, `rotate_2`, `pivot_`). `motor_shaft` è un solido di rivoluzione attorno all'asse del rotore, quindi non serve ruotarlo |
 | `rotate_2` | `rotate_2_hub` → `turbine_hub` | traslazione all'hub, scala uniforme **s_n**, rotazione attorno a z, traslazione di -H |
 | `rotate_1` | `rotate_1_blade` → `turbine_blade`, `rotate_1_seal` → `turbine_seal` | traslazione all'hub, scala uniforme **s_r**, rotazione attorno a z, traslazione di -H |
 | `insulator` | `insulator_insulator_porcelain` → `porcelain_brown`, `insulator_insulator_steel` → `pv_steel` | **nessuna** matrice: resta com'è authored, al piede |
+| `insulator_duct` | `insulator_duct_concrete` → `pole_concrete` | **nessuna** matrice, come `insulator` (il prefisso basta): il cunicolo dal palo dell'isolatore all'asse della torre (par. 6) |
 | `pivot_rotor` | `pivot_rotor_flange` (tre vertici coincidenti, non si disegna) | nessuna; segna H, per gli strumenti |
 
 **Pivot dei gruppi rotanti: H = (0.000, 13.300, 1.040)**, centro del riquadro di `rotate_2`; **asse = la retta parallela a
@@ -136,8 +138,19 @@ Nel frame del modello (y dal piede della torre, x e z dall'asse):
 | piastra di base (acciaio) | raggio 0.10, spessa 0.012, centrata in (0.375, 0.375) | |
 
 * **Non si scala con `s_n`**: ⌀ 0.18 (2.9 px) e posizione fissi per tutte e sei le macchine. Scalato sulla SW-10
-  sarebbe 0.05 (mezzo pixel, impuntabile). Sulla SW-10 il palo sta a 0.53 dall'asse mentre la torre ha raggio 0.085:
-  è un palo di derivazione del cavo, in piedi per conto suo; sulla C130 sta a 0.01 dallo zoccolo.
+  sarebbe 0.05 (mezzo pixel, impuntabile). Sulla SW-10 il palo sta a 0.53 dall'asse mentre la torre ha raggio 0.085.
+* **Il cunicolo (`insulator_duct`) lo lega alla torre a ogni scala.** Il palo era un oggetto a sé appoggiato al suolo:
+  sulla C130 a 0.01 dallo zoccolo, sulle altre cinque staccato dalla torre (sulla SW-10 di 0.33 blocchi), e
+  `check_connectivity.py` lo segnala come DETACHED in ogni posa che non è la C130. La soluzione è geometrica e non
+  chiede nulla al renderer: un cunicolo prefabbricato in calcestruzzo a filo del suolo, largo 0.05 e alto 0.016, dal
+  bordo della piastra del palo fino all'asse della torre (lungo la diagonale, lontano dalla porta). Non è scalato, come
+  l'isolatore, quindi qualunque sia la scala del piede entra nello zoccolo: sulla C130 ne resta in vista un centimetro,
+  sulla SW-10 è ciò che porta il cavo dalla torre al palo. L'altezza 0.016 non coincide con la cima dello zoccolo
+  (0.045 · s_n) né con quella della flangia (0.075 · s_n) per nessuna delle sei scale, quindi nessuna faccia è
+  complanare. Il renderer deve solo continuare a disegnare **tutti** i gruppi `insulator*` senza matrice (è già la
+  regola del par. 4); la torre nuda (`TurbineTowerRenderer`, solo `pole*`) non lo disegna, come non disegna l'isolatore.
+* Il collisore dell'isolatore (par. 7) è il riquadro del solo oggetto `insulator`: il cunicolo è alto un quarto di
+  pixel e non collide.
 * **Non ruota con lo yaw** (par. 4.1) **ma ruota col facing del blocco** (`ModelFacing`, come tutto il modello): il
   punto sta dentro il blocco (|x|, |z| < 0.5), quindi resta nella cella del piede.
 * **Raggiungibile**: porcellana da y = 0.25, cioè 4 px sopra il suolo, e fuori dal fusto (0.53 dall'asse contro 0.42
@@ -211,9 +224,14 @@ OVAL, ALLSIDES; `check_generated_assets.py`: un generatore per file, nessun file
 
 ## 9. Quanto costa
 
-11 379 vertici, 11 778 facce (pale e anelli di tenuta 6 375, spinner 2 400, fusto 478, basamento 868, navicella e suoi
-accessori 1 212, isolatore 444). `ROUND` = 80 lati per fusto, flangia, zoccolo, spinner, anelli di tenuta; `FITTING` =
-16 per isolatore, collari, alberi, ventole; `HEX` = 6 per i dadi.
+11 547 vertici, 11 942 facce (pale e anelli di tenuta 6 375, spinner 2 400, fusto 478, basamento 868, navicella e suoi
+accessori 1 212, flangia dell'albero 158, isolatore 444, cunicolo 6). `ROUND` = 80 lati per fusto, flangia, zoccolo,
+spinner, anelli di tenuta, albero; `FITTING` = 16 per isolatore, collari, alberi, ventole; `HEX` = 6 per i dadi.
+
+**Normali per vertice.** Prima di scrivere, `Mesh.smooth()` dà a ogni faccia una normale per angolo: la media delle
+facce attorno a quel vertice che piegano meno di 40° (`modellib.CREASE`). Il caricatore della mod legge la normale per
+angolo e illumina ogni vertice con essa, quindi pale, spinner, fusto e navicella si sfumano invece di mostrare le bande
+delle sezioni; il bordo d'uscita della pala, i tappi e i dadi esagonali restano spigoli. La geometria è invariata.
 
 ## 10. Cosa ho cambiato fuori dal modello
 
