@@ -1,7 +1,10 @@
 package io.github.simonerecchia.renewables.grid;
 
 import io.github.simonerecchia.renewables.api.power.ConductorSpec;
+import io.github.simonerecchia.renewables.api.power.Dispatchable;
+import io.github.simonerecchia.renewables.api.power.PowerDeliveryEvent;
 
+import javax.annotation.Nullable;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -75,6 +78,35 @@ public interface InsulatorHost {
 
 	/** What the network delivered here, for a machine that shows a reading. */
 	default void deliverPower(double power) {
+	}
+
+	/**
+	 * The disturbance that came with the power {@link #deliverPower} has just been given: a surge, a brownout or a
+	 * drop-out, or {@link PowerDeliveryEvent#NONE}.  Called straight after it, every time.  Only the end of a line
+	 * (the power box) does anything with it; every other machine may ignore it.
+	 */
+	default void deliverEvent(PowerDeliveryEvent event) {
+	}
+
+	/**
+	 * What this machine puts onto the wire network this tick, in kW: what it makes less whatever other mods' cables
+	 * took from its energy budget.  Zero for a machine that makes nothing, which is all but a turbine and an inverter.
+	 *
+	 * A {@link Dispatchable} that does not override this is read from what that contract exposes (see
+	 * {@link EnergyBudgets#netKw(Dispatchable)}); one that has a figure of its own overrides it.  It is read once per
+	 * calculation, after the machine has opened its budget for the tick.
+	 */
+	default double getGeneratedPower() {
+		return this instanceof Dispatchable generator ? EnergyBudgets.netKw(generator) : 0.0;
+	}
+
+	/**
+	 * The wind a generator stands in, when it is one that can disturb the network with gusts; null for every other
+	 * machine, and for a generator the weather does not reach.  Only turbines have an answer.
+	 */
+	@Nullable
+	default WindSample windSample() {
+		return null;
 	}
 
 	/**

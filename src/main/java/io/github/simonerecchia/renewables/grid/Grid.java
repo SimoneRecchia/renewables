@@ -1,29 +1,73 @@
 package io.github.simonerecchia.renewables.grid;
 
+import io.github.simonerecchia.renewables.Renewables;
+
+import java.util.HashMap;
+import java.util.Map;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 
 /**
- * The power-flow simulation, one per server level.
+ * The power-flow simulation, one network per server level.
  *
- * STUB: owner G.  {@link #tick} is called once per level at the end of every server tick, after the block
- * entities have run; {@link #recalcNow} is what a switch calls when it changes state.
+ * {@link #tick} is called once per level at the end of every server tick, after the block entities have run, so
+ * every generator has already opened its energy budget for the tick and the network sees only the residue.
+ * {@link #recalcNow} is what a switch calls when it changes state, so that it reads as changed before the player lets
+ * go of the button.  What each level's network remembers is in {@link LevelGrid}; this class only owns them, and
+ * {@link #clear} empties them all.
+ *
+ * Server thread only.
  */
 public final class Grid {
+	private static final Map<ResourceKey<Level>, LevelGrid> GRIDS = new HashMap<>();
+
+	/** A faulty machine must not take the server down, and must not flood the log either. */
+	private static int errorsLogged;
+
 	private Grid() {
 	}
 
 	/** Rebuilds and solves the level's network at the end of the server tick. */
 	public static void tick(ServerLevel level) {
-		// STUB: owner G
+		run(level, false);
 	}
 
 	/** Solves the level's network now instead of waiting for the next tick, e.g. after a switch moved. */
 	public static void recalcNow(ServerLevel level) {
-		// STUB: owner G
+		run(level, true);
 	}
 
 	/** The server is shutting down: drop every per-level state so a world loaded next in this JVM starts clean. */
 	public static void clear() {
-		// STUB: owner G
+		GRIDS.clear();
+		errorsLogged = 0;
+		InsulatorIds.reset();
+	}
+
+	/** A level has been unloaded: its network goes with it. */
+	public static void forget(ServerLevel level) {
+		GRIDS.remove(level.dimension());
+	}
+
+	private static void run(ServerLevel level, boolean immediate) {
+		LevelGrid grid = GRIDS.get(level.dimension());
+
+		// a level with no spans and nothing left to tell anyone costs one lookup a tick
+		if (grid == null) {
+			if (WireLedger.size(level) == 0) return;
+
+			grid = new LevelGrid();
+			GRIDS.put(level.dimension(), grid);
+		}
+
+		try {
+			grid.solve(level);
+		} catch (RuntimeException e) {
+			if (errorsLogged++ < 5) Renewables.LOGGER.error("The grid of {} failed to {}", level.dimension().location(),
+					immediate ? "recalculate" : "tick", e);
+		}
+
+		if (grid.idle() && WireLedger.size(level) == 0) GRIDS.remove(level.dimension());
 	}
 }
