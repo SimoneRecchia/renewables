@@ -35,12 +35,17 @@ public final class TowerCollapse {
 		this.firstBreakerId = firstBreakerId;
 	}
 
-	/** Starts a tower failing, from its foot upward. */
-	public static void begin(ServerLevel level, BlockPos foot, int height) {
-		if (height <= 0) return;
+	/**
+	 * Starts a tower failing, from its foot upward.
+	 *
+	 * @return whether a collapse was started: false for an empty tower and for one that is already coming down, so
+	 *         that whatever is standing on it does not announce the same failure on every tick
+	 */
+	public static boolean begin(ServerLevel level, BlockPos foot, int height) {
+		if (height <= 0) return false;
 
 		for (TowerCollapse collapse : ACTIVE) {
-			if (collapse.level == level && collapse.segments.contains(foot)) return;
+			if (collapse.level == level && collapse.segments.contains(foot)) return false;
 		}
 
 		List<BlockPos> segments = new ArrayList<>(height);
@@ -58,6 +63,7 @@ public final class TowerCollapse {
 		// the groan of steel giving way, at the top where the failure starts
 		BlockPos top = foot.above(height - 1);
 		level.playSound(null, top, SoundEvents.IRON_GOLEM_DAMAGE, SoundSource.BLOCKS, 1.2f, 0.6f);
+		return true;
 	}
 
 	/** Advances every collapse in progress. */
