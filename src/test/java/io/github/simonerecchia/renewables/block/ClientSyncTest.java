@@ -7,8 +7,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 
-/** A row tells its clients only what moved past a deadband, and a client rebuilds the whole state from that. */
+/**
+ * The throttle's gates: a look every half second, nothing sent that the clients already have, and for a row only what
+ * moved - a state at once, a reading past its deadband at most once a second - which a client rebuilds the whole from.
+ */
 class ClientSyncTest {
+	private static CompoundTag tag(double angle) {
+		CompoundTag tag = new CompoundTag();
+		tag.putDouble("angle", angle);
+		tag.putString("mode", "track");
+		return tag;
+	}
+
 	private static CompoundTag reading(double poa, double rotation, String mode) {
 		CompoundTag tag = new CompoundTag();
 		tag.putDouble("poaBeam", poa);
@@ -17,6 +27,30 @@ class ClientSyncTest {
 		tag.putLong("collector", 42L);
 		return tag;
 	}
+
+	// ---- the gates every machine has
+
+	@Test
+	void aLookIsDueEveryTenTicks() {
+		ClientSync sync = new ClientSync();
+		assertTrue(sync.due(100));
+		assertFalse(sync.due(105));
+		assertFalse(sync.due(109));
+		assertTrue(sync.due(110));
+	}
+
+	/** A machine standing still was sent, and its chunk marked dirty, twice a second for ever; now once. */
+	@Test
+	void aStateThatHasNotMovedIsNotSentAgain() {
+		ClientSync sync = new ClientSync();
+		assertTrue(sync.changed(tag(12.5)));
+		assertFalse(sync.changed(tag(12.5)));
+		assertFalse(sync.changed(tag(12.5)));
+		assertTrue(sync.changed(tag(13.0)));
+		assertFalse(sync.changed(tag(13.0)));
+	}
+
+	// ---- a row: only what moved
 
 	/** The first update is the whole tag, which the client takes as it is. */
 	@Test
@@ -44,6 +78,26 @@ class ClientSyncTest {
 		assertFalse(moved.contains("collector"));
 	}
 
+	/** A reading that moved waits for its second; a state that changed goes at the next look, readings riding with it. */
+	@Test
+	void statesGoAtOnceReadingsAtMostOnceASecond() {
+		ClientSync server = ClientSync.deltas();
+		server.changes(reading(800.0, 10.0, "AUTO"), ClientSync.DEADBAND);
+
+		assertTrue(server.changes(reading(850.0, 10.0, "AUTO"), ClientSync.DEADBAND, false).isEmpty());
+
+		CompoundTag stowed = server.changes(reading(850.0, 10.0, "STOW"), ClientSync.DEADBAND, false);
+		assertEquals("STOW", stowed.getString("trackerMode"));
+		assertEquals(850.0, stowed.getDouble("poaBeam"), 0.0);
+
+		// and the second itself: readings are due again only a second after a delta that carried them
+		assertTrue(server.readingsDue(1000L));
+		server.readingsSent(1000L);
+		assertFalse(server.readingsDue(1010L));
+		assertFalse(server.readingsDue(1019L));
+		assertTrue(server.readingsDue(1020L));
+	}
+
 	/** A setting is sent the moment it changes, and an exact update sends any change at all. */
 	@Test
 	void settingsAndExactUpdatesGoAtOnce() {
@@ -66,7 +120,7 @@ class ClientSyncTest {
 
 		CompoundTag unwired = reading(800.0, 10.0, "AUTO");
 		unwired.remove("collector");
-		CompoundTag whole = client.heard(server.changes(unwired, ClientSync.DEADBAND));
+		CompoundTag whole = client.heard(server.changes(unwired, ClientSync.DEADBAND, false));
 		assertFalse(whole.contains("collector"));
 		assertEquals(800.0, whole.getDouble("poaBeam"), 0.0);
 		assertEquals("AUTO", whole.getString("trackerMode"));
