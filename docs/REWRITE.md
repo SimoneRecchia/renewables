@@ -32,9 +32,9 @@ Audio: **nessun file audio** nel progetto, niente da togliere.
 | `models/utility_pole/utility_pole.obj` | oggi 13 righe su 9 379 ancora sue: già rifatto |
 | `models/electric_cab/cab.obj` | oggi 1 riga su 7 616: già rifatto |
 | `models/power_box/power_box.obj` | oggi 2 righe su 2 084: già rifatto |
-| `models/wind_turbine/wind_turbine.obj` | **3 305 righe su 23 381 ancora sue**: da rifare (nuova turbina) |
+| `models/wind_turbine/wind_turbine.obj` | **rifatto da zero**: `tools/gen_turbine_models.py`, vedi `docs/turbine-model.md` |
 | `textures/item/` cab, circuit_board, cpu, insulator, metal_casing, motor_core, power_box, screen, utility_pole, wind_turbine | icone d'inventario: da rifare |
-| `textures/block/plastic2.png` | da rifare |
+| `textures/block/plastic2.png` | **eliminata**: la turbina ha le sue (`tools/gen_turbine_textures.py`) |
 | `icon.png` | da rifare |
 | 46 file `.mtl` | compagni degli OBJ: si rigenerano con i modelli |
 
