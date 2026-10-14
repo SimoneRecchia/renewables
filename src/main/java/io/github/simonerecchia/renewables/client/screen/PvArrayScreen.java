@@ -143,6 +143,10 @@ public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 		} else if (array.effectiveIrradiance() <= 1.0) {
 			key = "screen.renewables.pv_array.state.dark";
 			colour = FAINT_COLOUR | 0xFF000000;
+		} else if (array.deliveredDcKw() < 0.01 * array.availableDcKw()) {
+			// lit and wired, but the box is open, the inverter stopped or out of its window: nothing is taken
+			key = "screen.renewables.pv_array.state.standby";
+			colour = AMBER;
 		} else if (array.backtracking()) {
 			key = "screen.renewables.pv_array.state.backtracking";
 			colour = BLUE;
