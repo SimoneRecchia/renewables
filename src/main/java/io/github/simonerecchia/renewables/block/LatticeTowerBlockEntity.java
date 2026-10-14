@@ -53,6 +53,27 @@ public class LatticeTowerBlockEntity extends MachineBlockEntity {
 		};
 	}
 
+	/**
+	 * A tension tower's clamp group spans both dead-ends of a phase, and the anchor is its middle; a span ends at the
+	 * dead-end on its own side, the nearer of the group's two ends to where it goes, so it does not run on along the
+	 * string to the middle of the arm.
+	 */
+	@Nullable
+	@Override
+	public Vec3 getWirePosition(int index, Vec3 toward) {
+		Vec3 middle = getWirePosition(index);
+		if (middle == null || spec().duty() != TowerSpec.Duty.TENSION) return middle;
+
+		PartBox clamps = PartBoxes.box(getBlockState().getBlock(), "clamp_" + (index + 1) + "_fitting");
+		if (clamps == null) return middle;
+
+		double x = (clamps.min().x() + clamps.max().x()) * 0.5;
+		double y = (clamps.min().y() + clamps.max().y()) * 0.5;
+		Vec3 back = modelToWorld(new Vec3(x, y, clamps.min().z()));
+		Vec3 front = modelToWorld(new Vec3(x, y, clamps.max().z()));
+		return back.distanceToSqr(toward) <= front.distanceToSqr(toward) ? back : front;
+	}
+
 	@Override
 	public String fittingType() {
 		return FittingTypes.LATTICE_TOWER;

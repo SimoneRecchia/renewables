@@ -29,16 +29,37 @@ public final class MeshModel {
 
 	private final Map<String, PartBox> boxes;
 	private final List<String> warnings;
+	private final float radius;
 
 	MeshModel(Map<String, Group> groups, List<String> warnings) {
 		this.groups = Collections.unmodifiableMap(groups);
 		this.warnings = List.copyOf(warnings);
 
 		Map<String, PartBox> computed = new LinkedHashMap<>();
+		float reach = 0.0f;
 		for (Group group : groups.values()) {
-			if (group.box != null) computed.put(group.name, group.box);
+			if (group.box == null) continue;
+
+			computed.put(group.name, group.box);
+			if (!group.isMarker()) reach = Math.max(reach, farthestCorner(group.box));
 		}
 		this.boxes = Collections.unmodifiableMap(computed);
+		this.radius = reach;
+	}
+
+	/**
+	 * How far from the model's origin anything drawn reaches, measured to the corners of the groups' boxes, so never
+	 * less than the truth.  What a renderer culls with.
+	 */
+	public float radius() {
+		return radius;
+	}
+
+	private static float farthestCorner(PartBox box) {
+		float x = Math.max(Math.abs(box.min().x()), Math.abs(box.max().x()));
+		float y = Math.max(Math.abs(box.min().y()), Math.abs(box.max().y()));
+		float z = Math.max(Math.abs(box.min().z()), Math.abs(box.max().z()));
+		return (float) Math.sqrt(x * x + y * y + z * z);
 	}
 
 	/** The group names, in file order. */
