@@ -16,6 +16,7 @@ import java.util.Map;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
@@ -39,7 +40,7 @@ public class TurbineTowerRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		drawAll(event, TurbineTowerBlockEntity.class, MAX_RENDER_DISTANCE_SQ, null, null,
-				TurbineTowerRenderer::render, TurbineTowerRenderer::isBareFoot);
+				TurbineTowerRenderer::render, TurbineTowerRenderer::isBareFoot, TurbineTowerRenderer::bounds);
 	}
 
 	/** Only the foot of a column, and only when no turbine is seated on it. */
@@ -82,6 +83,13 @@ public class TurbineTowerRenderer extends MachineRenderer {
 			pose.scale(width, height / WindTurbineRenderer.authoredTowerHeight(model), width);
 		}
 		return true;
+	}
+
+	/** The column from its foot to its top, as wide as the widest a bare tower is drawn. */
+	private static AABB bounds(TurbineTowerBlockEntity tower, MeshModel model) {
+		BlockPos pos = tower.getBlockPos();
+		int height = tower.getLevel() == null ? 1 : 1 + segmentsAbove(tower.getLevel(), pos);
+		return new AABB(pos.getX() - 1.0, pos.getY() - 0.5, pos.getZ() - 1.0, pos.getX() + 2.0, pos.getY() + height + 0.5, pos.getZ() + 2.0);
 	}
 
 	/** Tower blocks directly above {@code pos}. */
