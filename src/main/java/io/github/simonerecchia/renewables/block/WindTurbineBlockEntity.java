@@ -198,16 +198,16 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	}
 
 	/**
-	 * How far the rotor has turned, in degrees in [0, 360), to give the model about its own +Z axis.  Seen from in
-	 * front a real rotor turns clockwise, which is a negative rotation about +Z, so this runs backwards: the number
-	 * falls as the rotor spins.
+	 * How far the rotor has turned in its direction of travel, in degrees in [0, 360), interpolated for the frame.  It
+	 * only ever grows (and wraps): a real rotor turns clockwise seen from the front, which is a <em>negative</em> turn
+	 * about the model's +Z axis, so the renderer gives the model the negative of this.
 	 */
 	public float rotorAngleDegrees(float partialTick) {
 		if (level == null || !level.isClientSide()) return 0.0f;
 
 		ensureDrawn();
 		double progress = rotorProgressBefore + (rotorProgress - rotorProgressBefore) * partialTick;
-		return (float) TurbineDynamics.wrapCompass(-progress);
+		return (float) TurbineDynamics.wrapCompass(progress);
 	}
 
 	/** How far the blades are feathered, in degrees: 0 working, 90 edge on to the wind. */
