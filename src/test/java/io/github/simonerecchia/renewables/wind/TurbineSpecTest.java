@@ -50,7 +50,8 @@ class TurbineSpecTest {
 
 	@Test
 	void gearboxAndHubHeights() {
-		assertEquals(7.2, TurbineCatalog.SW_10.gearboxRatio(), 0.05);
+		// a 10 kW machine is direct drive: its alternator turns with the rotor
+		assertEquals(1.0, TurbineCatalog.SW_10.gearboxRatio(), 0.0);
 		assertEquals(57.3, TurbineCatalog.C52_085.gearboxRatio(), 0.05);
 		assertEquals(94.7, TurbineCatalog.C80_20.gearboxRatio(), 0.05);
 		assertEquals(97.8, TurbineCatalog.C90_30.gearboxRatio(), 0.05);
