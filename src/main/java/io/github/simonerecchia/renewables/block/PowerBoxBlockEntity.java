@@ -57,6 +57,8 @@ import net.minecraftforge.energy.IEnergyStorage;
 public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose {
 	/** Below this much delivered power (kW) the field is off. */
 	public static final double FIELD_THRESHOLD_KW = 0.1;
+	/** How often a box with the field off tries again to put back what it lit in a chunk that was not loaded, in ticks. */
+	private static final int RELEASE_RETRY_TICKS = 20;
 
 	/** The six sides in the order they are offered Forge Energy: down, up, north, south, west, east. */
 	private static final Direction[] PUSH_ORDER = {Direction.DOWN, Direction.UP, Direction.NORTH, Direction.SOUTH,
@@ -253,6 +255,8 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 			}
 		} else if (fieldOn) {
 			fieldOff(level);
+		} else if (!claimed.isEmpty() && level.getGameTime() % RELEASE_RETRY_TICKS == 0) {
+			releaseClaimed(level);
 		}
 
 		// whatever the field left - a trickle too small to light it as well - is banked, and leaves the flow
@@ -345,7 +349,11 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 				chunkKey = key;
 				chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
 			}
-			if (chunk == null) continue;
+			if (chunk == null) {
+				// not loaded: what this box lit there is still its own to put back
+				if (claimed.contains(pos.asLong())) lit.add(pos.asLong());
+				continue;
+			}
 
 			BlockState state = chunk.getBlockState(pos);
 			if (state.isAir()) continue;
@@ -381,26 +389,41 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 	 * Called when the power drops below the threshold and when the block is taken away.
 	 */
 	public void fieldOff(ServerLevel level) {
-		if (!claimed.isEmpty()) {
-			for (long packed : claimed) {
-				BlockPos pos = BlockPos.of(packed);
-				LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
-				if (chunk == null) continue;
-
-				BlockState state = chunk.getBlockState(pos);
-				BooleanProperty property = FieldSwitch.of(state);
-				if (property != null && state.getValue(property)) level.setBlock(pos, state.setValue(property, false), Block.UPDATE_ALL);
-			}
-		}
+		releaseClaimed(level);
 
 		for (Consumer entry : consumers) {
 			if (!entry.owner().isRemoved()) entry.consumer().onPowerSupplied(0.0, false, PowerDeliveryEvent.NONE);
 		}
 
-		claimed = new LongOpenHashSet();
 		consumers = new ArrayList<>();
 		fieldOn = false;
 		setChanged();
+	}
+
+	/**
+	 * Puts back what this box lit where it can reach.  A block in a chunk that is not loaded is not forgotten - it used
+	 * to be, and a lamp out there stayed lit for good - but kept, saved, and tried again while the field is off; a box
+	 * that is broken meanwhile cannot load a chunk to finish the job.
+	 */
+	private void releaseClaimed(ServerLevel level) {
+		if (claimed.isEmpty()) return;
+
+		LongSet unreached = new LongOpenHashSet();
+		for (long packed : claimed) {
+			BlockPos pos = BlockPos.of(packed);
+			LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+			if (chunk == null) {
+				unreached.add(packed);
+				continue;
+			}
+
+			BlockState state = chunk.getBlockState(pos);
+			BooleanProperty property = FieldSwitch.of(state);
+			if (property != null && state.getValue(property)) level.setBlock(pos, state.setValue(property, false), Block.UPDATE_ALL);
+		}
+
+		if (unreached.size() != claimed.size()) dirty = true;
+		claimed = unreached;
 	}
 
 	/** Banks what nothing used this tick; see {@link KioskEnergy#bankRest}. */
