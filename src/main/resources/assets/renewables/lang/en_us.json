@@ -180,6 +180,8 @@
   "screen.renewables.utility_pole_config.offset_z": "Offset Z:",
   "screen.renewables.utility_pole_config.yaw": "Yaw (deg):",
   "screen.renewables.utility_pole_config.pitch": "Pitch (deg):",
+  "screen.renewables.utility_pole_config.range": "\u00b1%s",
+  "screen.renewables.utility_pole_config.range_degrees": "\u00b1%s\u00b0",
   "screen.renewables.wind_turbine.title": "Turbine Control",
   "screen.renewables.wind_turbine.iec": "IEC %s",
   "screen.renewables.wind_turbine.geometry": "Rotor \u2300 %s m \u00b7 hub %s m \u00b7 3 blades",

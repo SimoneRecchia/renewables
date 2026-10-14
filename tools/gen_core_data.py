@@ -222,6 +222,8 @@ LANG_ENTRIES = [
     ("screen.renewables.utility_pole_config.offset_z", "Offset Z:"),
     ("screen.renewables.utility_pole_config.yaw", "Yaw (deg):"),
     ("screen.renewables.utility_pole_config.pitch", "Pitch (deg):"),
+    ("screen.renewables.utility_pole_config.range", "±%s"),
+    ("screen.renewables.utility_pole_config.range_degrees", "±%s°"),
     ("screen.renewables.wind_turbine.title", "Turbine Control"),
     ("screen.renewables.wind_turbine.iec", "IEC %s"),
     ("screen.renewables.wind_turbine.geometry", "Rotor ⌀ %s m · hub %s m · 3 blades"),
