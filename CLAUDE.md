@@ -344,8 +344,8 @@ python3 tools/gen_grid_models.py        # the pole and the pad-mount kiosk
 python3 tools/gen_cab_models.py         # the substation cabin
 python3 tools/gen_cable_models.py       # the string cable (--java prints the shape tables)
 python3 tools/gen_trunk_models.py       # the trunk, on the same framework and its own fittings
-python3 tools/gen_core_data.py          # the language file, core item models and recipes: run before gen_crafting
-python3 tools/gen_crafting.py           # recipes, part item models, blockstates, loot, tags; merges its language keys
+python3 tools/gen_core_data.py          # the language file (the only writer: its keys and gen_crafting's), core item models and recipes
+python3 tools/gen_crafting.py           # recipes, part item models, blockstates, loot, tags
 python3 tools/gen_turbine_models.py     # the wind turbine, one mesh for all six (--java prints its hitbox tables)
 python3 tools/gen_turbine_textures.py   # its textures
 python3 tools/gen_tower_models.py       # the three lattice towers (--java prints the cell tables)

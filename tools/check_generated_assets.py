@@ -241,10 +241,20 @@ def panels(measured):
     return problems
 
 
+def language_writers():
+    """The generators that write the language file.  Two of them wrote it, each its own copy of ninety keys."""
+    return sorted(name for name in os.listdir(TOOLS) if name.startswith('gen_') and name.endswith('.py')
+                  and "'en_us.json'" in open(os.path.join(TOOLS, name)).read())
+
+
 def main():
     problems = []
     claimed, used, measured = outputs(), referenced(), sizes()
     problems.extend(panels(measured))
+    writers = language_writers()
+    if len(writers) != 1:
+        problems.append('lang/en_us.json is written by %s - it must have exactly one writer'
+                        % (' and '.join(writers) or 'nothing'))
 
     for path, tools in sorted(claimed.items()):
         if len(tools) > 1:

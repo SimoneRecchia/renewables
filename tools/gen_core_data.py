@@ -10,13 +10,20 @@ the power box, the turbine tower, the wind turbine and the machine shell.  gen_c
 every machine the mod draws itself, and check_generated_assets.py fails a file with two writers.  This file
 owns the rest.
 
-The language file is written complete from the table below, in the order the specification lists it.
-gen_crafting.py then merges its own keys (the parts, the block tooltips, the messages) into it, which are the
-same strings: running the two in either order and again leaves the file as it was.
+The language file has one writer, this file, and every key in it one owner: LANG_ENTRIES below, or
+gen_crafting.lang_entries() (the parts out of PartCatalog, BLOCK_NAMES, MESSAGES).  A key in both tables, a name
+or a grey line for something the mod does not register, an item with no name and a literal key the Java asks
+for and the file lacks all stop it before it writes.
 """
 
 import json
 import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import gen_crafting                                                             # noqa: E402
 
 RESOURCES = os.path.join('src', 'main', 'resources')
 ASSETS = os.path.join(RESOURCES, 'assets', 'renewables')
@@ -43,38 +50,6 @@ LANG_ENTRIES = [
     ("item.renewables.insulator", "Insulator"),
     ("item.renewables.metal_casing", "Metal Casing"),
     ("item.renewables.motor_core", "Motor Core"),
-    ("item.renewables.steel_plate", "Steel Plate"),
-    ("item.renewables.steel_section", "Steel Section"),
-    ("item.renewables.tempered_glass", "Tempered Glass"),
-    ("item.renewables.resin", "Encapsulant Resin"),
-    ("item.renewables.copper_coil", "Copper Coil"),
-    ("item.renewables.silicon_ingot", "Silicon Ingot"),
-    ("item.renewables.silicon_wafer", "Silicon Wafer"),
-    ("item.renewables.busbar", "Copper Busbar"),
-    ("item.renewables.solar_cell", "Solar Cell"),
-    ("item.renewables.bypass_diode", "Bypass Diode"),
-    ("item.renewables.mc4_connector", "DC Connector"),
-    ("item.renewables.junction_box", "Junction Box"),
-    ("item.renewables.power_module", "Power Module"),
-    ("item.renewables.capacitor_bank", "Capacitor Bank"),
-    ("item.renewables.magnetic_core", "Magnetic Core"),
-    ("item.renewables.control_board", "Control Board"),
-    ("item.renewables.bearing", "Bearing"),
-    ("item.renewables.gear_set", "Gear Set"),
-    ("item.renewables.gpv_fuse", "gPV Fuse"),
-    ("item.renewables.load_break_switch", "DC Load-Break Switch"),
-    ("item.renewables.sensor_head", "Sensor Head"),
-    ("item.renewables.pv_laminate", "PV Laminate"),
-    ("item.renewables.enclosure", "Weatherproof Enclosure"),
-    ("item.renewables.dc_section", "DC Section"),
-    ("item.renewables.inverter_bridge", "Inverter Bridge"),
-    ("item.renewables.mounting_rack", "Mounting Rack"),
-    ("item.renewables.torque_tube", "Torque Tube"),
-    ("item.renewables.slew_drive", "Slew Drive"),
-    ("item.renewables.generator_set", "Generator Set"),
-    ("item.renewables.gearbox", "Gearbox"),
-    ("item.renewables.turbine_blade", "Turbine Blade"),
-    ("item.renewables.long_blade", "Long Turbine Blade"),
     ("item.renewables.abc_conductor", "Aerial Bundled Cable"),
     ("item.renewables.mv_conductor", "Medium-Voltage Conductor"),
     ("item.renewables.hv_conductor", "High-Voltage Conductor"),
@@ -120,54 +95,11 @@ LANG_ENTRIES = [
     ("tooltip.renewables.combiner.output", "%s A load-break switch · %s"),
     ("tooltip.renewables.combiner.monitoring", "Per-string current monitoring."),
     ("tooltip.renewables.combiner.use", "On a post, or right-click a central inverter to fit it inside. Empty hand throws the switch."),
-    ("tooltip.renewables.steel_plate", "Rolled sheet. The body of every cabinet and the web of every frame."),
-    ("tooltip.renewables.steel_section", "Structural angle and tube. What a rack, a mast and a spar are built from."),
-    ("tooltip.renewables.tempered_glass", "Heat-treated low-iron glass. A module's front sheet, and the fibre in a blade."),
-    ("tooltip.renewables.resin", "Polymer film and epoxy. Laminates a module and binds a blade's fibre."),
-    ("tooltip.renewables.copper_coil", "Enamelled magnet wire, wound. Every winding in the mod starts here."),
-    ("tooltip.renewables.silicon_ingot", "Quartz reduced and cast. One step from sand to a solar cell."),
-    ("tooltip.renewables.silicon_wafer", "Sawn from an ingot. The blank a cell is made on and a die is cut from."),
-    ("tooltip.renewables.busbar", "Solid drawn bar. Carries the current a cable could not."),
-    ("tooltip.renewables.solar_cell", "A doped wafer with its fingers printed. Sixty of these make a module."),
-    ("tooltip.renewables.bypass_diode", "Carries a shaded substring's current so it does not become a heater."),
-    ("tooltip.renewables.mc4_connector", "The touch-proof plug and socket every string is joined with."),
-    ("tooltip.renewables.junction_box", "Bonded to a module's back: three bypass diodes and the leads out."),
-    ("tooltip.renewables.power_module", "Switching dies on a substrate. What actually turns direct current into alternating."),
-    ("tooltip.renewables.capacitor_bank", "The DC link. Holds the voltage steady between switching and the grid."),
-    ("tooltip.renewables.magnetic_core", "Laminated iron and a winding: the choke that smooths what switching leaves behind."),
-    ("tooltip.renewables.control_board", "The processor that tracks the maximum power point and answers the panel."),
-    ("tooltip.renewables.bearing", "Races and rollers. Everything in this mod that turns, turns on one."),
-    ("tooltip.renewables.gear_set", "Cut gears and a pinion, for a gearbox or a slew drive."),
-    ("tooltip.renewables.gpv_fuse", "A photovoltaic fuse: one per pole per string, and it breaks direct current."),
-    ("tooltip.renewables.load_break_switch", "Opens a live direct-current circuit without leaving an arc behind."),
-    ("tooltip.renewables.sensor_head", "A glass-domed element on a machined body: what a met station measures with."),
-    ("tooltip.renewables.pv_laminate", "Glass, film, cells and frame, cured into one piece. A module, ready to mount."),
-    ("tooltip.renewables.enclosure", "A sealed sheet-steel cabinet. What keeps the rain off the electronics."),
-    ("tooltip.renewables.dc_section", "Fuse ways, busbar and a load-break switch: the front end of a big machine."),
-    ("tooltip.renewables.inverter_bridge", "Power modules, DC link and magnetics on one busbar. One MPPT channel's worth."),
-    ("tooltip.renewables.mounting_rack", "Purlins, rails and clamps. What a fixed array is bolted to."),
-    ("tooltip.renewables.torque_tube", "The shaft a tracked row turns on, in its bearings."),
-    ("tooltip.renewables.slew_drive", "A geared bearing with a motor on it: what turns a tracker, a yaw deck or a pitch hub."),
-    ("tooltip.renewables.generator_set", "Stator windings round a rotor. Turns a shaft into three-phase current."),
-    ("tooltip.renewables.gearbox", "Three stages of gearing: takes a rotor's fifteen revolutions to a generator's fifteen hundred."),
-    ("tooltip.renewables.turbine_blade", "Glass fibre in resin over a steel spar. One of the three."),
-    ("tooltip.renewables.long_blade", "A blade extended: more fibre, a stronger spar, and the rotor that reaches low wind."),
     ("tooltip.renewables.abc_conductor", "NFA2X 4x70. Four insulated cores on a messenger, 1 kV. Poles and street lines."),
     ("tooltip.renewables.mv_conductor", "Aster 228 bare alloy conductor, 33 kV. One per phase, on pin insulators."),
     ("tooltip.renewables.hv_conductor", "Curlew ACSR in a quad bundle, 420 kV. Four sub-conductors on spacers, for lattice towers."),
     ("tooltip.renewables.conductor.reach", "%s blocks a reel, %s blocks a span at most"),
-    ("tooltip.renewables.lattice_suspension", "Holds a 400 kV line up. Nine towers in ten are one."),
-    ("tooltip.renewables.lattice_tension", "Takes the difference between the pulls either side of it."),
-    ("tooltip.renewables.lattice_terminal", "Takes the whole pull of a line, and is stayed back for it."),
-    ("tooltip.renewables.tx_machine", "Steps a machine’s 800 V up to 33 kV. Every generator on a plant needs one."),
-    ("tooltip.renewables.tx_substation", "Steps 33 kV up to 400 kV. The transmission line starts here."),
     ("tooltip.renewables.transformer.reading", "Ratio %s  in %s kW  loss %s kW"),
-    ("tooltip.renewables.abc_conductor_run", "Aerial bundled cable, laid along the ground."),
-    ("tooltip.renewables.mv_conductor_run", "Bare all-aluminium-alloy conductor, laid along the ground."),
-    ("tooltip.renewables.hv_conductor_run", "A quad ACSR bundle on spacers, laid along the ground."),
-    ("tooltip.renewables.mv_disconnector", "Makes a gap in a 33 kV line that you can see. Will not open under load: open the breaker first."),
-    ("tooltip.renewables.mv_breaker", "Breaks a 33 kV line under load, and trips itself above 36 MW. Its contacts are in a vacuum, so all it shows is a flag."),
-    ("tooltip.renewables.plant_controller", "Holds every turbine and inverter within 64 blocks to one setpoint, shared out by rating. A comparator on it reads how loaded the plant is."),
 
     # ---- block names (their items use them too)
     ("block.renewables.utility_pole", "Utility Pole"),
@@ -197,17 +129,6 @@ LANG_ENTRIES = [
     ("block.renewables.pv_combiner_16", "Volterra CB-16"),
     ("block.renewables.pv_combiner_32", "Volterra CB-32"),
     ("block.renewables.machine_shell", "Machine Shell"),
-    ("block.renewables.lattice_suspension", "Suspension Tower"),
-    ("block.renewables.lattice_tension", "Tension Tower"),
-    ("block.renewables.lattice_terminal", "Terminal Tower"),
-    ("block.renewables.tx_machine", "Machine Transformer"),
-    ("block.renewables.tx_substation", "Substation Transformer"),
-    ("block.renewables.abc_conductor_run", "Bundle Run"),
-    ("block.renewables.mv_conductor_run", "Medium-Voltage Run"),
-    ("block.renewables.hv_conductor_run", "Transmission Run"),
-    ("block.renewables.mv_disconnector", "Disconnector"),
-    ("block.renewables.mv_breaker", "Circuit Breaker"),
-    ("block.renewables.plant_controller", "Plant Controller"),
 
     # ---- screens
     ("screen.renewables.power_info.title", "Power Diagnostics"),
@@ -375,10 +296,6 @@ LANG_ENTRIES = [
     ("message.renewables.combiner.already_fitted", "This cabinet already has a DC section fitted."),
     ("message.renewables.wire.not_enough", "Not enough conductor: this span needs %s of %s"),
     ("message.renewables.wire.already_connected", "Those two fittings are already joined"),
-    ("message.renewables.switch.under_load", "There is load on it. A disconnector cannot break current — open the breaker first."),
-    ("message.renewables.switch.opened", "Open. The gap is visible from the outside."),
-    ("message.renewables.switch.closed", "Closed."),
-    ("message.renewables.wire.wrong_class", "Neither of those fittings is built for %s. Match the conductor to the voltage."),
     ("message.renewables.wire.no_conductor", "Hold a reel of conductor to string a span."),
     ("message.renewables.wire.aim_at_insulator", "Aim at an insulator."),
     ("message.renewables.wire.out_of_reach", "Too far away to string that."),
@@ -468,13 +385,70 @@ def write(path, data):
         f.write('\n')
 
 
-def lang():
-    keys = [key for key, _ in LANG_ENTRIES]
-    if len(keys) != len(set(keys)):
-        raise SystemExit('gen_core_data: a language key is listed twice')
+def lang_table():
+    """Every key of the language file with its owner: (table, problems)."""
+    table, owner, problems = {}, {}, []
+    for source, entries in (('gen_core_data.LANG_ENTRIES', LANG_ENTRIES),
+                            ('gen_crafting.lang_entries()', gen_crafting.lang_entries())):
+        for key, text in entries:
+            if key in owner:
+                problems.append('%s is written by %s and by %s' % (key, owner[key], source))
+            owner[key] = source
+            table[key] = text
 
-    write(LANG, dict(LANG_ENTRIES))
-    return len(keys)
+    return table, problems
+
+
+# The keys that name one registered thing: <kind>.renewables.<registry id>.
+NAMED = re.compile(r'(item|block|tooltip)\.renewables\.([a-z0-9_]+)$')
+
+
+def lang_problems(table):
+    """Keys nothing reads, and things with no key."""
+    items, blocks = gen_crafting.registered()
+    java = gen_crafting.java_source()
+    problems = []
+    for key in table:
+        match = NAMED.match(key)
+        if match is None:
+            continue
+        kind, name = match.groups()
+        # a block's item takes the block's name, so item.<id> of a block item is never read
+        if kind == 'item' and (name not in items or name in blocks):
+            problems.append('%s names no item that reads it' % key)
+        elif kind == 'block' and name not in blocks:
+            problems.append('%s names no block' % key)
+        elif kind == 'tooltip' and not items.get(name) and '"%s"' % key not in java:
+            problems.append('%s is a grey line no item shows' % key)
+
+    for name, reads_tooltip in items.items():
+        key = ('block.renewables.' if name in blocks else 'item.renewables.') + name
+        if key not in table:
+            problems.append('%s has no name: %s' % (name, key))
+        if reads_tooltip and 'tooltip.renewables.' + name not in table:
+            problems.append('%s shows tooltip.renewables.%s, which is not written' % (name, name))
+    for name in blocks:
+        if 'block.renewables.' + name not in table:
+            problems.append('block %s has no name' % name)
+
+    # a key spelled out whole in the Java; a prefix ending in a dot is completed at run time
+    for key in sorted(set(re.findall(r'"((?:item|block|tooltip|screen|message|mounting|cooling|itemGroup)'
+                                     r'\.renewables\.[a-z0-9_.]*[a-z0-9_])"', java))):
+        if key not in table:
+            problems.append('the Java asks for %s and the language file lacks it' % key)
+    return problems
+
+
+def lang():
+    table, problems = lang_table()
+    problems += lang_problems(table)
+    if problems:
+        for line in problems:
+            print('    PROBLEM %s' % line)
+        raise SystemExit('gen_core_data: %d problem(s) in the language file, nothing written' % len(problems))
+
+    write(LANG, table)
+    return len(table)
 
 
 def item_models():
