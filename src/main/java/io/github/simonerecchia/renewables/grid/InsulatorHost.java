@@ -57,7 +57,8 @@ public interface InsulatorHost {
 	 * a transformer a transformer. A switch is the exception: its line side is bus 0 and its load side bus 1, and
 	 * the grid solver joins the two through the contacts only while it is {@link #closed}. Without this a switch
 	 * could not stop anything, because a cluster is keyed on the block - nor tell the power crossing it from the
-	 * power that merely meets at one of its terminals.
+	 * power that merely meets at one of its terminals. A transformer whose protection has tripped is the other
+	 * exception: every bushing a bus of its own, so nothing crosses the tank.
 	 */
 	default int busOf(int index) {
 		return 0;
