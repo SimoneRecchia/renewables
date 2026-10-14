@@ -161,7 +161,7 @@ public final class ModBlocks {
 		return machine(hardness, resistance).sound(SoundType.GLASS);
 	}
 
-	/** A machine that a pickaxe of any tier takes apart (the heavy ones also need iron: see the tags). */
+	/** A light machine: a stone pickaxe and up takes it apart (needs_stone_tool, written by tools/gen_crafting.py). */
 	private static BlockBehaviour.Properties light(float hardness, float resistance) {
 		return machine(hardness, resistance).sound(SoundType.METAL);
 	}

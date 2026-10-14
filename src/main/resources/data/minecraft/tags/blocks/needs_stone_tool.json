@@ -1,0 +1,20 @@
+{
+  "replace": false,
+  "values": [
+    "renewables:inverter_10",
+    "renewables:inverter_110",
+    "renewables:inverter_2500",
+    "renewables:inverter_350",
+    "renewables:met_station",
+    "renewables:plant_controller",
+    "renewables:pv_combiner_16",
+    "renewables:pv_combiner_32",
+    "renewables:pv_combiner_6",
+    "renewables:pv_dual_440",
+    "renewables:pv_flat_430",
+    "renewables:pv_tilt_530",
+    "renewables:pv_tilt_580",
+    "renewables:pv_track_700",
+    "renewables:solar_panel"
+  ]
+}

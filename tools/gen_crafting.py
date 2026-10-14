@@ -416,9 +416,9 @@ BLOCK_NAMES = {
 }
 
 
-# Which machines need iron and up rather than stone: the heavy steel. Panels, inverters, combiners and the
-# met mast come away with a stone pickaxe; a tower, a transformer, a switch and every machine that was already
-# here do not.
+# Which machines need iron and up: the heavy steel - a tower, a transformer, a switch and every machine that was
+# already here.  Every other machine (arrays, inverters, combiners, the met mast, the controller) needs stone and
+# up, as docs/GUIDA.md section 9 tells a player: without needs_stone_tool a wooden pickaxe was enough.
 NEEDS_IRON = ('utility_pole', 'electric_cabin', 'power_box', 'turbine_tower',
               'sw_10', 'c52_085', 'c80_20', 'c90_30', 'c112_30', 'wind_turbine',
               'lattice_suspension', 'lattice_tension', 'lattice_terminal',
@@ -503,7 +503,14 @@ def tool_tags():
     write(os.path.join(TAGS, 'mineable', 'pickaxe.json'), {'replace': False, 'values': mineable})
     write(os.path.join(TAGS, 'needs_iron_tool.json'),
           {'replace': False, 'values': sorted('renewables:' + name for name in NEEDS_IRON + ('machine_shell',))})
+    write(os.path.join(TAGS, 'needs_stone_tool.json'),
+          {'replace': False, 'values': sorted('renewables:' + name for name in needs_stone())})
     return len(mineable)
+
+
+def needs_stone():
+    """Every machine not in NEEDS_IRON: the shell is iron-tier with the machines that fill cells."""
+    return [name for name in MACHINES if name not in NEEDS_IRON and name != 'machine_shell']
 
 
 def machine_assets():
