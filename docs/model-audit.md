@@ -239,7 +239,7 @@ python3 tools/gen_pv_textures.py        # item sprites and GUI panels
 python3 tools/gen_pv_models.py          # the arrays, the inverter, the combiner, the mast
 python3 tools/gen_grid_models.py        # the pole and the kiosk
 python3 tools/gen_tower_models.py       # the three lattice towers
-python3 tools/gen_insulators.py         # the one insulator, into the two inherited models
+python3 tools/gen_turbine_models.py     # the wind turbine and its insulator, one mesh for all six machines
 python3 tools/gen_cable_models.py       # the cables (--java prints the shape tables)
 python3 tools/gen_crafting.py           # recipes, part item models, language entries
 ```
