@@ -369,7 +369,7 @@ LANG_ENTRIES = [
 
     # ---- chat and action-bar messages
     ("message.renewables.wire.failed_insulator", "Failed to resolve one of the insulators."),
-    ("message.renewables.wire.too_far", "Those insulators are too far apart (%s m > %s m)."),
+    ("message.renewables.wire.too_far", "Those insulators are too far apart (%s blocks > %s blocks)."),
     ("message.renewables.wire.connected", "Connected insulators %s <-> %s."),
     ("message.renewables.wire.chunk_unloaded", "Chunk at (%s, %s, %s) is not loaded."),
     ("message.renewables.wire.no_permission", "You cannot interact with (%s, %s, %s)."),
