@@ -43,9 +43,12 @@ import org.joml.Vector3f;
  *     without a server ever naming a client class.</li>
  * </ul>
  *
- * A machine overrides {@link #computeAnchor} when its anchor is not "the top of the fitting's porcelain, turned
- * with the block" (towers hang their chains; the pole may be offset and tilted), and adds its own state on top
- * of {@link #saveAdditional} / {@link #load}.
+ * Every block entity that carries a fitting extends this, from the pole to a length of ground-laid conductor, so
+ * none of them keeps arrays of its own.  A machine says where on its own model a wire lands by overriding
+ * {@link #localAnchor} (a tower hangs its chains from the bottom of the string, the inverter's cabinet is drawn
+ * smaller than authored, a ground run has no model at all) and leaves the turn onto the world to
+ * {@link #computeAnchor}, which is the renderer's own transform; it adds its state on top of
+ * {@link #saveAdditional} / {@link #load}.
  */
 public abstract class MachineBlockEntity extends BlockEntity implements InsulatorHost {
 	private int[] insulatorIds = new int[0];
@@ -129,23 +132,47 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 	/**
 	 * Where fitting {@code index} ends a wire, in the world.
 	 *
-	 * The default is the middle of the top of the fitting's box, in the model's frame, put through the one
-	 * transform the renderer draws with ({@link ExtraPose#toWorld}): turned onto the block's facing, set on the
-	 * block, and - for a machine that is also an {@link ExtraPose} (the pole's arms, a wall-mounted kiosk) -
-	 * moved by what that says.  Null when the fittings table has no box for it.
+	 * The point {@link #localAnchor} names on the model, put through the one transform the renderer draws with
+	 * ({@link ExtraPose#toWorld}): turned onto the block's facing, set on the block, and - for a machine that is
+	 * also an {@link ExtraPose} (the pole's arms, a wall-mounted kiosk, a turbine lowered onto its tower) - moved
+	 * by what that says.  Null when there is no such point.
 	 */
 	@Nullable
 	protected Vec3 computeAnchor(int index) {
-		ModelDefinition definition = ModelDefinitions.of(getBlockState().getBlock());
-		String group = FittingTypes.nameOf(definition, index);
-		if (group == null) return null;
+		Vec3 local = localAnchor(index);
+		if (local == null) return null;
 
-		PartBox box = PartBoxes.box(getBlockState().getBlock(), group);
+		Direction authored = authored();
+		return ExtraPose.toWorld(local, getBlockPos(), authored, facing(authored), this instanceof ExtraPose pose ? pose : null);
+	}
+
+	/**
+	 * Where fitting {@code index} ends a wire on the model, in the model's own frame (blocks; x and z about the
+	 * block's vertical axis, y up from its floor, facing as authored); null when the machine cannot say.
+	 *
+	 * The default is the middle of the top of the fitting's box, which is where a conductor rests on a vertical
+	 * insulator or bushing.
+	 */
+	@Nullable
+	protected Vec3 localAnchor(int index) {
+		PartBox box = fittingBox(index);
 		if (box == null) return null;
 
 		Vector3f top = box.top();
-		return ExtraPose.toWorld(new Vec3(top.x(), top.y(), top.z()), getBlockPos(), definition.authored(),
-				facing(definition.authored()), this instanceof ExtraPose pose ? pose : null);
+		return new Vec3(top.x(), top.y(), top.z());
+	}
+
+	/** The box of fitting {@code index} in the shared fittings table, or null if the table has none. */
+	@Nullable
+	protected PartBox fittingBox(int index) {
+		String group = FittingTypes.nameOf(ModelDefinitions.of(getBlockState().getBlock()), index);
+		return group == null ? null : PartBoxes.box(getBlockState().getBlock(), group);
+	}
+
+	/** The facing the model was drawn at; one with no model is taken as drawn facing north. */
+	protected Direction authored() {
+		ModelDefinition definition = ModelDefinitions.of(getBlockState().getBlock());
+		return definition == null ? Direction.NORTH : definition.authored();
 	}
 
 	/** Which way the block is turned; a machine with no facing is as it was authored. */
