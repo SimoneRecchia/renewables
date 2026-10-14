@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+
+  # note: dependabot does not track the forge version, since it is assembled
+  # from the minecraft_version/forge_version properties in gradle.properties.
+  # bump those by hand; this entry covers any normal dependency added later.
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+    open-pull-requests-limit: 5

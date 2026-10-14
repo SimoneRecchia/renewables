@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " Z ",
+    "BCB",
+    " P "
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "C": {
+      "item": "renewables:circuit_board"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "Z": {
+      "item": "renewables:silicon_wafer"
+    }
+  },
+  "result": {
+    "item": "renewables:power_module"
+  }
+}

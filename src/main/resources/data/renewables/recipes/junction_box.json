@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " d ",
+    "dMd",
+    " j "
+  ],
+  "key": {
+    "M": {
+      "item": "renewables:metal_casing"
+    },
+    "d": {
+      "item": "renewables:bypass_diode"
+    },
+    "j": {
+      "item": "renewables:mc4_connector"
+    }
+  },
+  "result": {
+    "item": "renewables:junction_box"
+  }
+}

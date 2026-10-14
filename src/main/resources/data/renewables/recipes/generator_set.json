@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "OOO",
+    "ele",
+    "SSS"
+  ],
+  "key": {
+    "O": {
+      "item": "renewables:copper_coil"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "e": {
+      "item": "renewables:magnetic_core"
+    },
+    "l": {
+      "item": "minecraft:iron_block"
+    }
+  },
+  "result": {
+    "item": "renewables:generator_set"
+  }
+}

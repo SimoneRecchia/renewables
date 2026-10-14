@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "BSB",
+    "SSS"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    }
+  },
+  "result": {
+    "item": "renewables:mv_disconnector"
+  }
+}

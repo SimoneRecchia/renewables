@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "yay",
+    " B "
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "a": {
+      "item": "minecraft:sand"
+    },
+    "y": {
+      "item": "minecraft:glass_pane"
+    }
+  },
+  "result": {
+    "item": "renewables:gpv_fuse",
+    "count": 4
+  }
+}

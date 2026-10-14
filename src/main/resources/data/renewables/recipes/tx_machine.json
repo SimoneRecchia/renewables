@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "OeO",
+    "PPP"
+  ],
+  "key": {
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "O": {
+      "item": "renewables:copper_coil"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "e": {
+      "item": "renewables:magnetic_core"
+    }
+  },
+  "result": {
+    "item": "renewables:tx_machine"
+  }
+}

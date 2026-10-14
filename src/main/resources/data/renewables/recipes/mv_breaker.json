@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "QQQ",
+    "PbP"
+  ],
+  "key": {
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "Q": {
+      "item": "renewables:load_break_switch"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    }
+  },
+  "result": {
+    "item": "renewables:mv_breaker"
+  }
+}

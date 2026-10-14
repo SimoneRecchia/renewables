@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "uSu",
+    "jbj"
+  ],
+  "key": {
+    "L": {
+      "item": "renewables:pv_laminate"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    },
+    "j": {
+      "item": "renewables:mc4_connector"
+    },
+    "u": {
+      "item": "renewables:slew_drive"
+    }
+  },
+  "result": {
+    "item": "renewables:pv_dual_440"
+  }
+}

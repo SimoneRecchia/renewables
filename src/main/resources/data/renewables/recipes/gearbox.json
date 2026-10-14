@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "HHH",
+    "YPY",
+    "PPP"
+  ],
+  "key": {
+    "H": {
+      "item": "renewables:gear_set"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "Y": {
+      "item": "renewables:bearing"
+    }
+  },
+  "result": {
+    "item": "renewables:gearbox"
+  }
+}

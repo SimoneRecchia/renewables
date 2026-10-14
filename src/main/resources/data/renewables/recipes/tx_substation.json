@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "III",
+    "ete",
+    "PQP"
+  ],
+  "key": {
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "Q": {
+      "item": "renewables:load_break_switch"
+    },
+    "e": {
+      "item": "renewables:magnetic_core"
+    },
+    "t": {
+      "item": "renewables:torque_tube"
+    }
+  },
+  "result": {
+    "item": "renewables:tx_substation"
+  }
+}

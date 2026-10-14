@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "YPY"
+  ],
+  "key": {
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "Y": {
+      "item": "renewables:bearing"
+    }
+  },
+  "result": {
+    "item": "renewables:torque_tube"
+  }
+}

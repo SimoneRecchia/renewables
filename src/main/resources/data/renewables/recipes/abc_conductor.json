@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "BBB",
+    "FFF",
+    "SSS"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "F": {
+      "item": "renewables:resin"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    }
+  },
+  "result": {
+    "item": "renewables:abc_conductor",
+    "count": 8
+  }
+}

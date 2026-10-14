@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SIS",
+    "PPP",
+    "SPS"
+  ],
+  "key": {
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    }
+  },
+  "result": {
+    "item": "renewables:lattice_terminal"
+  }
+}

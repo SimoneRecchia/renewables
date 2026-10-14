@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "ZZZ",
+    " r ",
+    "BBB"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "Z": {
+      "item": "renewables:silicon_wafer"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "item": "renewables:solar_cell",
+    "count": 3
+  }
+}

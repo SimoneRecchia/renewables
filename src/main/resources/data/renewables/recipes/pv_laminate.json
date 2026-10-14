@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "AFA",
+    "VVV",
+    "SJS"
+  ],
+  "key": {
+    "A": {
+      "item": "renewables:tempered_glass"
+    },
+    "F": {
+      "item": "renewables:resin"
+    },
+    "J": {
+      "item": "renewables:junction_box"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "V": {
+      "item": "renewables:solar_cell"
+    }
+  },
+  "result": {
+    "item": "renewables:pv_laminate"
+  }
+}

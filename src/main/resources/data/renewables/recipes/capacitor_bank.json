@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "FrF",
+    "FrF",
+    "PPP"
+  ],
+  "key": {
+    "F": {
+      "item": "renewables:resin"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "result": {
+    "item": "renewables:capacitor_bank"
+  }
+}

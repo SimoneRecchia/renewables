@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " A ",
+    "CBC"
+  ],
+  "key": {
+    "A": {
+      "item": "renewables:tempered_glass"
+    },
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "C": {
+      "item": "renewables:circuit_board"
+    }
+  },
+  "result": {
+    "item": "renewables:sensor_head",
+    "count": 2
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "fff",
+    "BQB",
+    "PPP"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "Q": {
+      "item": "renewables:load_break_switch"
+    },
+    "f": {
+      "item": "renewables:gpv_fuse"
+    }
+  },
+  "result": {
+    "item": "renewables:dc_section"
+  }
+}

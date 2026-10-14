@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "PTP",
+    "jSj"
+  ],
+  "key": {
+    "L": {
+      "item": "renewables:pv_laminate"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "T": {
+      "item": "renewables:mounting_rack"
+    },
+    "j": {
+      "item": "renewables:mc4_connector"
+    }
+  },
+  "result": {
+    "item": "renewables:pv_flat_430"
+  }
+}

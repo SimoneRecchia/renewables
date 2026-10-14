@@ -1,0 +1,13 @@
+{
+  "loader": "forge:obj",
+  "model": "renewables:models/mv_conductor_run/line.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": false,
+  "textures": {
+    "conductor": "renewables:block/line_alu",
+    "fitting": "renewables:block/line_fitting",
+    "spacer": "renewables:block/line_fitting",
+    "particle": "renewables:block/line_alu"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " U ",
+    "CBC"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "C": {
+      "item": "renewables:circuit_board"
+    },
+    "U": {
+      "item": "renewables:cpu"
+    }
+  },
+  "result": {
+    "item": "renewables:control_board"
+  }
+}

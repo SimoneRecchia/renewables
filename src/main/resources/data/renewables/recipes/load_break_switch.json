@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " I ",
+    "BSB",
+    " H "
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "H": {
+      "item": "renewables:gear_set"
+    },
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    }
+  },
+  "result": {
+    "item": "renewables:load_break_switch"
+  }
+}

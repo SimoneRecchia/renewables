@@ -1,0 +1,494 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "none",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_loose"
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "side|up",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_end",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_bend",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_tee",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "side|up",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_line",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "none",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_end"
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_bend"
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_tee"
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_cross"
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_tee",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "none",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_line"
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "none",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_tee",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up",
+        "east": "none",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_bend",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "none",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_end",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "none",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_bend",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "none",
+        "east": "none",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_end",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "north": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_arm"
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "east": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_arm",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "south": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_arm",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "false",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_arm",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "buried": "true"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_bed"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "none",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_loose"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "side|up",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_end",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_bend",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_tee",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "side|up",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_line",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "none",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_end"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "none",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_bend"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_tee"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_cross"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "side|up",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_tee",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "none",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_line"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "none",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_tee",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up",
+        "east": "none",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_bend",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "none",
+        "south": "side|up",
+        "west": "none"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_end",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "none",
+        "south": "side|up",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_bend",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "none",
+        "east": "none",
+        "south": "none",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_end",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "north": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_arm"
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "east": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_arm",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "south": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_arm",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "buried": "true",
+        "west": "side|up"
+      },
+      "apply": {
+        "model": "renewables:block/dc_trunk_cable_trench_arm",
+        "y": 270
+      }
+    }
+  ]
+}
