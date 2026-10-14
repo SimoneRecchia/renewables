@@ -86,6 +86,12 @@ public class LatticeTowerBlockEntity extends MachineBlockEntity {
 				|| other instanceof TransformerBlockEntity;
 	}
 
+	/** The duty's ruling span: a suspension tower holds a shorter one than a tension or terminal tower. */
+	@Override
+	public double maxSpanBlocks() {
+		return spec().maxSpan();
+	}
+
 	/** Transmission only. */
 	@Override
 	public boolean takesConductor(ConductorSpec conductor, int index) {

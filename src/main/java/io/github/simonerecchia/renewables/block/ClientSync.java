@@ -19,17 +19,20 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
- * Publishes a machine's state to the clients watching it, no more often than it is worth.
+ * Publishes a machine's state to the clients watching it, no more often than it is worth: it looks every
+ * {@value #INTERVAL_TICKS} ticks and sends only what has moved.  Sending the whole tag twice a second regardless cost
+ * a park of arrays a thousand packets a second per player, and marked every chunk of it to be saved.
  *
- * Two ways.  A machine there are few of sends its whole update tag every half second.  A machine there are
- * thousands of - a row - sends only what has moved, a SCADA's report by exception: a reading goes again once it has
- * moved half a percent from what the clients were last told, a setting the moment it changes, and nothing at all
- * when nothing has.  The client lays each delta over the whole state it already holds.
+ * Two ways of sending.  A machine there are few of sends its whole update tag, when anything in it has changed.  A
+ * machine there are thousands of - a row - sends only the keys that moved, a SCADA's report by exception: a state (a
+ * mode, a stow, a flag, a position) the first look after it changes, a reading once it is half a percent from what the
+ * clients were last told and at most once a second, and nothing at all when nothing has moved.  The client lays each
+ * delta over the whole state it already holds.  A setting a player changes goes at once either way, through {@link #now}.
  */
 final class ClientSync {
 	private static final int INTERVAL_TICKS = 10;
-	/** How often a delta-synced machine looks for something worth sending, in ticks. */
-	private static final int DELTA_INTERVAL_TICKS = 20;
+	/** The least time between two deltas that carry only readings, in ticks: once a second. */
+	static final int READING_INTERVAL_TICKS = 20;
 	/** Nothing has been sent yet, which is a state and not a time. */
 	private static final long NEVER = Long.MIN_VALUE;
 	/** Marks an update that carries only what changed, to be laid over what the client already has. */
@@ -43,7 +46,12 @@ final class ClientSync {
 
 	private final boolean deltas;
 	private long lastTick = NEVER;
-	/** Server: what the watching clients were last told, key by key; null until they have been told anything. */
+	/** When readings last went out, for the once-a-second ceiling on them. */
+	private long lastReadingTick = NEVER;
+	/**
+	 * Server: what the watching clients were last told.  For a whole-tag machine the tag last sent; for a delta-synced
+	 * one the same thing key by key, kept up to date by every delta.  Null until they have been told anything.
+	 */
 	@Nullable
 	private CompoundTag told;
 	/** Client: everything the server has said, each delta laid over the last whole tag. */
@@ -63,23 +71,25 @@ final class ClientSync {
 		return new ClientSync(true);
 	}
 
-	/** Sends now if the gate is open and, for a delta-synced machine, anything has moved; answers whether it went. */
+	/** Sends now if the gate is open and something has moved, and answers whether it went. */
 	boolean throttled(BlockEntity blockEntity) {
 		Level level = blockEntity.getLevel();
 		if (level == null || level.isClientSide()) return false;
 
 		long now = level.getGameTime();
-		int interval = deltas ? DELTA_INTERVAL_TICKS : INTERVAL_TICKS;
-		if (lastTick != NEVER && now - lastTick < interval) return false;
+		if (!due(now)) return false;
 
-		lastTick = now;
 		if (!deltas) {
+			if (!changed(blockEntity.getUpdateTag())) return false;
+
 			now(blockEntity);
 			return true;
 		}
 
-		CompoundTag delta = changes(blockEntity.getUpdateTag(), DEADBAND);
+		CompoundTag delta = changes(blockEntity.getUpdateTag(), DEADBAND, readingsDue(now));
 		if (delta.isEmpty()) return false;
+
+		readingsSent(now);
 
 		// what moved is state, and the chunk has to be saved with it; what did not move does not dirty the chunk
 		blockEntity.setChanged();
@@ -90,6 +100,32 @@ final class ClientSync {
 			}
 		}
 
+		return true;
+	}
+
+	/** Whether the interval has run since the last look, which then starts it again. */
+	boolean due(long now) {
+		if (lastTick != NEVER && now - lastTick < INTERVAL_TICKS) return false;
+
+		lastTick = now;
+		return true;
+	}
+
+	/** Records a delta going out: whatever went carried every reading past its band, so their second starts again. */
+	void readingsSent(long now) {
+		lastReadingTick = now;
+	}
+
+	/** Whether readings may go out at this tick: a second after the last delta that carried them. */
+	boolean readingsDue(long now) {
+		return lastReadingTick == NEVER || now - lastReadingTick >= READING_INTERVAL_TICKS;
+	}
+
+	/** Whole-tag machines: whether this tag differs from the last one sent, which it then becomes. */
+	boolean changed(CompoundTag tag) {
+		if (tag.equals(told)) return false;
+
+		told = tag;
 		return true;
 	}
 
@@ -109,21 +145,29 @@ final class ClientSync {
 	 */
 	@Nullable
 	Packet<ClientGamePacketListener> exactUpdate(BlockEntity blockEntity) {
-		CompoundTag delta = changes(blockEntity.getUpdateTag(), 0.0);
+		CompoundTag delta = changes(blockEntity.getUpdateTag(), 0.0, true);
 		return delta.isEmpty() ? null : ClientboundBlockEntityDataPacket.create(blockEntity, entity -> delta);
 	}
 
-	/**
-	 * What to send of a whole update tag, given what the clients were told: every key that moved past the deadband,
-	 * and the keys that are gone.  The first time it is the whole tag, unmarked, which a client takes as it is.
-	 */
+	/** {@link #changes(CompoundTag, double, boolean)} with the readings due. */
 	CompoundTag changes(CompoundTag whole, double deadband) {
+		return changes(whole, deadband, true);
+	}
+
+	/**
+	 * What to send of a whole update tag, given what the clients were told: every state that changed, the keys that
+	 * are gone, and - when they are due, or when a state is going anyway - every reading that moved past the deadband.
+	 * Readings not sent stay as they were told, so a slow creep is sent once it has crept far enough.  The first time it
+	 * is the whole tag, unmarked, which a client takes as it is.
+	 */
+	CompoundTag changes(CompoundTag whole, double deadband, boolean readingsDue) {
 		if (told == null) {
 			told = whole.copy();
 			return whole;
 		}
 
-		CompoundTag delta = new CompoundTag();
+		CompoundTag states = new CompoundTag();
+		CompoundTag readings = new CompoundTag();
 		ListTag removed = new ListTag();
 		for (String key : told.getAllKeys()) {
 			if (!whole.contains(key)) removed.add(StringTag.valueOf(key));
@@ -132,10 +176,24 @@ final class ClientSync {
 		for (String key : whole.getAllKeys()) {
 			Tag value = whole.get(key);
 			Tag had = told.get(key);
-			if (had == null || moved(had, value, deadband)) delta.put(key, value);
+			if (had == null || !isReading(had, value)) {
+				if (had == null || !had.equals(value)) states.put(key, value);
+			} else if (moved(had, value, deadband)) {
+				readings.put(key, value);
+			}
 		}
 
-		if (delta.isEmpty() && removed.isEmpty()) return delta;
+		boolean sending = !states.isEmpty() || !removed.isEmpty() || (readingsDue && !readings.isEmpty());
+		CompoundTag delta = new CompoundTag();
+		if (!sending) return delta;
+
+		for (String key : states.getAllKeys()) {
+			delta.put(key, states.get(key));
+		}
+
+		for (String key : readings.getAllKeys()) {
+			delta.put(key, readings.get(key));
+		}
 
 		for (Tag key : removed) {
 			told.remove(key.getAsString());
@@ -150,10 +208,14 @@ final class ClientSync {
 		return delta;
 	}
 
+	/** A reading is a floating-point value, which wanders; anything else is a state, and is exact. */
+	private static boolean isReading(Tag had, Tag now) {
+		return (had instanceof DoubleTag || had instanceof FloatTag) && had.getId() == now.getId();
+	}
+
 	/** Whether a value has moved enough to send: a reading past its deadband, anything else at all. */
 	static boolean moved(Tag had, Tag now, double deadband) {
-		boolean reading = (had instanceof DoubleTag || had instanceof FloatTag) && had.getId() == now.getId();
-		if (deadband <= 0.0 || !reading) return !had.equals(now);
+		if (deadband <= 0.0 || !isReading(had, now)) return !had.equals(now);
 
 		double before = ((NumericTag) had).getAsDouble();
 		double after = ((NumericTag) now).getAsDouble();
