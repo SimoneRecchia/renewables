@@ -49,23 +49,23 @@ AT** e **1 di BT**.
 
 | | |
 |---|---|
-| Moduli in campo | **578,7 kW** in **59 stringhe** |
+| Moduli in campo | **505,4 kW** in **60 stringhe** |
 | Inverter | **582,0 kW** in alternata, su quattro macchine |
-| Rapporto DC/AC | **0,99** |
-| Produzione letta a mezzogiorno | **447,6 kW** |
+| Rapporto DC/AC | **0,87** |
+| Produzione a mezzogiorno, cielo sereno | circa **390 kW** (stima: 447,6 kW misurati prima che i sottocampi 2–4 fossero ridotti agli ingressi per inseguitore) |
 | Vie fusibilate nei quadri | 48 (un CB-16 pieno e un CB-32 a metà) |
-| Blocchi di cavo | 52 |
+| Blocchi di cavo | 53 |
 | Campate da tirare | 18 |
-| Comandi di costruzione | 127 |
+| Comandi di costruzione | 123 |
 
 I quattro sottocampi, ognuno dimensionato sull'inverter che lo raccoglie:
 
 | # | Prodotto | Blocchi | Stringhe | kW | Quadro | Inverter | DC/AC |
 |---|---|---|---|---|---|---|---|
 | 1 | **TR-580** inclinazione fissa | 32 | 32 | 334,1 | CB-16 + CB-32 | **VX-350K** | 0,95 |
-| 2 | **HX-700** ×12 + **AE-440** ×2 | 14 | 14 | 120,6 | — diretto | **VX-110K** | 1,10 |
-| 3 | **FT-430** tavolo piatto | 6 | 12 | 113,5 | — diretto | **VX-110K** | 1,03 |
-| 4 | **TR-580**, una fila sola | 1 | 1 | 10,4 | — diretto | **VX-10K** | 1,04 |
+| 2 | **HX-700** ×8 + **AE-440** ×2 | 10 | 10 | 84,2 | — diretto | **VX-110K** | 0,77 |
+| 3 | **FT-430** tavolo piatto | 4 | 16 | 75,7 | — diretto | **VX-110K** | 0,69 |
+| 4 | **AE-440**, due file | 2 | 2 | 11,4 | — diretto | **VX-10K** | 1,14 |
 
 ---
 
@@ -86,22 +86,28 @@ quindi un blocco di inseguitori è una **spina est-ovest con una fila sopra e un
 campo sembra cablato e non porta niente.
 
 **3. Un inverter ha un numero di stringhe, non solo dei kW.** Il VX-350K ne prende 32: tre quadri da sedici
-fanno 48 e il terzo lo rifiuta — resta pieno e nessuno lo raccoglie. E oltre alle stringhe c'è un tetto di
-corrente e di potenza continua: se lo superi accetta le file **più vicine** e lascia fuori le altre, in
-silenzio. Ogni sottocampo qui è tagliato sugli ingressi del suo inverter.
+fanno 48 e il terzo lo rifiuta — resta pieno e nessuno lo raccoglie. E oltre alle stringhe c'è la potenza
+continua e **la corrente di ciascun inseguitore**: una stringa entra sui morsetti di un inseguitore solo e
+deve stare sotto i suoi ampere. Un VX-110K ha nove inseguitori da 26 A: una stringa HX-700 da 17,3 A ne
+occupa uno intero, due AE-440 da 10,9 A ne dividono uno. Se superi un limite accetta le file **più vicine**
+e lascia fuori le altre, e il pannello dell'inverter dice quale limite. Ogni sottocampo qui è tagliato
+sugli ingressi del suo inverter.
 
 **4. Un quadro di stringa vuole un inverter con i morsetti per la dorsale**, e i due inverter di stringa
 non li hanno: solo il **VX-350K** e il **VC-2500K**. Un CB-16 davanti a un VX-110K resta pieno e scollegato.
 Per questo i sottocampi 2, 3 e 4 vanno **diretti**, senza quadro: è esattamente cosa vuol dire "inverter di
 stringa".
 
-E una quinta, sulla tensione: il **TR-530** (film sottile) fa tre stringhe da 999 V a fila. Il VX-10K si
-ferma a 980 e le rifiuta tutte — **una sola stringa fuori finestra ferma l'inverter intero**. Vuole il
-cabinet 500–1500 V e tre vie per fila, e per questo su questo impianto non c'è.
+E una quinta, sulla tensione: il **TR-530** (film sottile) mette sei moduli in serie che in una mattina a
+−10 °C aprono a 1493 V, oltre i 1100 V d'ingresso del VX-10K e del VX-110K: lo rifiutano. Vuole il
+cabinet da 1500 V e tre vie per fila, e per questo su questo impianto non c'è. Una stringa che sta fuori
+dalla **finestra MPPT** invece non ferma più l'inverter: il suo inseguitore la tiene al bordo della finestra,
+dove rende meno (o niente, sopra la sua tensione a vuoto), e il pannello lo dice.
 
 **Cosa ombreggia davvero:** non la distanza fra le file (quella dipende dal prodotto, non da come le
-disponi) ma **qualsiasi cosa stia a est o a ovest di una fila**, perché è lì che sta il sole. Per questo
-tutti gli armadi di questo impianto stanno **a nord** del campo che servono.
+disponi) ma **qualsiasi cosa stia a est o a ovest di una fila e sia più alta dei suoi moduli**, perché è lì
+che sta il sole: un blocco, un armadio, un quadro, il palo meteo. Per questo tutti gli armadi di questo
+impianto stanno **a nord** del campo che servono.
 
 ---
 
@@ -116,11 +122,12 @@ Coordinate del mondo `run/impianto`: lo spawn è (0, 56, 0), X cresce verso **es
  z=7    [CB-16]         [CB-32]                 (17)     (20)    (24)    (27)     (31)         (36)
  z=8..15  ████ spina ████    ████ spina ████
           x=0  x=1   x=2     x=5  x=6   x=7      32 × TR-580, sedici per quadro
- z=19   ███████ 6 × HX-700 + 1 × AE-440  (x=0..6)
+ z=19   █████ 4 × HX-700 + 1 × AE-440  (x=0..4)
  z=20   ─────── cavo SC-6 ──────────────► [VX-110K inseguitori] (9,56,20)
- z=21   ███████ 6 × HX-700 + 1 × AE-440
- z=24   ███ 3 × FT-430 (east)  |  x=1 spina |  ███ 3 × FT-430 (west)
- z=25   [TR-580 singolo] (5,56,25) ─ spina x=6 ─► [VX-10K] (6,56,27)
+ z=21   █████ 4 × HX-700 + 1 × AE-440
+ z=24   ██ 2 × FT-430 (east)  |  x=1 spina |  ██ 2 × FT-430 (west)
+ z=25   [AE-440] (5,56,25)  [AE-440] (7,56,25)
+ z=26   ── cavo SC-6 x=5..7 ──► [VX-10K] (6,56,27)
  z=28   [VX-110K tavoli piani] (1,56,28)          [TX-B] (16,56,28)
 ```
 
@@ -143,7 +150,7 @@ Bobina in mano, click destro sul primo isolatore, click destro sul secondo.
 | 1 | MT | inverter VX-350K (tetto) (17, 56, 6) | TX macchina A (isolatore basso) (20, 56, 6) | 3 |
 | 2 | MT | inverter VX-110K inseguitori (tetto) (9, 56, 20) | TX macchina B (isolatore basso) (16, 56, 28) | 11 |
 | 3 | MT | inverter VX-110K tavoli piani (tetto) (1, 56, 28) | TX macchina B (isolatore basso) (16, 56, 28) | 15 |
-| 4 | MT | inverter VX-10K film sottile (tetto) (6, 56, 27) | TX macchina B (isolatore basso) (16, 56, 28) | 10 |
+| 4 | MT | inverter VX-10K biassiali (tetto) (6, 56, 27) | TX macchina B (isolatore basso) (16, 56, 28) | 10 |
 | 5 | MT | TX macchina A (isolatore alto) (20, 56, 6) | interruttore (lato linea) (24, 56, 6) | 4 |
 | 6 | MT | TX macchina B (isolatore alto) (16, 56, 28) | interruttore (lato linea) (24, 56, 6) | 23 |
 | 7 | MT | interruttore (lato carico) (24, 56, 6) | sezionatore (lato linea) (27, 56, 6) | 3 |
@@ -185,7 +192,9 @@ traliccio ──AT──► TX arrivo (isolatori alti)
 ## 6. La messa in servizio, con quello che devi leggere
 
 Chiave inglese in mano, in questo ordine. Se un passo non torna, il guasto è lì e non a valle.
-Le letture qui sotto sono quelle **misurate davvero** su questo impianto a mezzogiorno.
+Le letture qui sotto sono quelle **misurate davvero** su questo impianto a mezzogiorno, tranne le tre
+segnate come stima: i sottocampi 2, 3 e 4 sono stati ridotti agli ingressi per inseguitore e le loro potenze
+sono riscalate sulla targa (il numero di stringhe è invece misurato sul server: 32 / 10 / 16 / 2).
 
 | # | Macchina | Dove | Deve dire |
 |---|---|---|---|
@@ -193,9 +202,9 @@ Le letture qui sotto sono quelle **misurate davvero** su questo impianto a mezzo
 | 2 | CB-16 | (1, 56, 7) | **16 vie su 16**, stato `chiuso` |
 | 3 | CB-32 | (6, 56, 7) | **16 vie su 32** |
 | 4 | VX-350K | (17, 56, 6) | **2 quadri**, **32 stringhe**, ~**250 kW** |
-| 5 | VX-110K inseguitori | (9, 56, 20) | **14 stringhe**, nessun quadro, ~**98 kW** |
-| 6 | VX-110K tavoli piani | (1, 56, 28) | **12 stringhe**, ~**91 kW** |
-| 7 | VX-10K | (6, 56, 27) | **1 stringa**, ~**8,6 kW** |
+| 5 | VX-110K inseguitori | (9, 56, 20) | **10 stringhe**, nessun quadro, circa **68 kW** (stima) |
+| 6 | VX-110K tavoli piani | (1, 56, 28) | **16 stringhe**, circa **61 kW** (stima) |
+| 7 | VX-10K | (6, 56, 27) | **2 stringhe**, circa **9 kW** (stima) |
 | 8 | TX-A e TX-B | (20, 56, 6) e (16, 56, 28) | rapporto, potenza e perdite (click destro a mano vuota) |
 | 9 | interruttore | (24, 56, 6) | si apre e si chiude a mano vuota, e a valle va a zero |
 | 10 | sezionatore | (27, 56, 6) | **rifiuta** di aprirsi sotto carico. Apri prima l'interruttore |
