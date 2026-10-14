@@ -155,14 +155,16 @@ final class LevelGrid {
 		// power ends: the machines that draw it
 		Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
 		Set<Long> loads = new HashSet<>();
+		Map<Long, Boolean> switches = new HashMap<>();
 		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
 			InsulatorHost host = entry.getValue();
 			if (host.losesInPassing()) passages.put(entry.getKey(), host::throughLossKw);
 			if (host.isLoad()) loads.add(entry.getKey());
+			if (host.passesThrough()) switches.put(entry.getKey(), host.closed());
 		}
 
 		List<GridSolver.Source> sources = sources(level, hosts, firstNode);
-		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads);
+		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads, switches);
 		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(nodes.values(), readings);
 
 		deliver(level, hosts, byPosition);

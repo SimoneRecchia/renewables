@@ -52,12 +52,21 @@ public interface InsulatorHost {
 	 * Which internal bus a fitting is bonded to.
 	  *
 	 * Every fitting on one machine shares a bus, so power crosses it - that is what makes a pole a pole and
-	 * a transformer a transformer. A switch is the one machine where it depends: open, its line side and its
-	 * load side are two buses, and the grid solver then has two clusters at one position with nothing joining
-	 * them. Without this a switch could not stop anything, because a cluster is keyed on the block.
+	 * a transformer a transformer. A switch is the exception: its line side is bus 0 and its load side bus 1, and
+	 * the grid solver joins the two through the contacts only while it is {@link #closed}. Without this a switch
+	 * could not stop anything, because a cluster is keyed on the block - nor tell the power crossing it from the
+	 * power that merely meets at one of its terminals.
 	 */
 	default int busOf(int index) {
 		return 0;
+	}
+
+	/**
+	 * Whether a switch's contacts are closed, joining its two buses; asked only of a machine that
+	 * {@link #passesThrough}.  What the grid then delivers to it is the power crossing them.
+	 */
+	default boolean closed() {
+		return true;
 	}
 
 	/**
