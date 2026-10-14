@@ -1,0 +1,59 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_storage_blocks_iron": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/iron"
+          }
+        ]
+      }
+    },
+    "has_insulator": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:insulator"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_section"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:lattice_tension"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_insulator",
+      "has_steel_section",
+      "has_storage_blocks_iron",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:lattice_tension"
+    ]
+  },
+  "sends_telemetry_event": false
+}

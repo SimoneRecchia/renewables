@@ -1,0 +1,87 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_capacitor_bank": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:capacitor_bank"
+            ]
+          }
+        ]
+      }
+    },
+    "has_control_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:control_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_enclosure": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:enclosure"
+            ]
+          }
+        ]
+      }
+    },
+    "has_magnetic_core": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:magnetic_core"
+            ]
+          }
+        ]
+      }
+    },
+    "has_power_module": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:power_module"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:inverter_10"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_capacitor_bank",
+      "has_control_board",
+      "has_enclosure",
+      "has_magnetic_core",
+      "has_power_module",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:inverter_10"
+    ]
+  },
+  "sends_telemetry_event": false
+}

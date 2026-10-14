@@ -1,19 +1,25 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    " G ",
-    " E ",
+    " w ",
+    "kEe",
     " b "
   ],
   "key": {
     "E": {
       "item": "renewables:enclosure"
     },
-    "G": {
-      "item": "renewables:inverter_bridge"
-    },
     "b": {
       "item": "renewables:control_board"
+    },
+    "e": {
+      "item": "renewables:magnetic_core"
+    },
+    "k": {
+      "item": "renewables:capacitor_bank"
+    },
+    "w": {
+      "item": "renewables:power_module"
     }
   },
   "result": {

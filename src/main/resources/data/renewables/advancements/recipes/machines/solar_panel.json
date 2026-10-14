@@ -1,0 +1,61 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_mc4_connector": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:mc4_connector"
+            ]
+          }
+        ]
+      }
+    },
+    "has_pv_laminate": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:pv_laminate"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_section"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:solar_panel"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_mc4_connector",
+      "has_pv_laminate",
+      "has_steel_section",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:solar_panel"
+    ]
+  },
+  "sends_telemetry_event": false
+}

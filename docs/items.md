@@ -4,8 +4,9 @@ Written to answer four questions about the whole of it rather than about one mac
 every item work, does it make sense, is it usable, and does what connects to what match the way a real
 plant is put together. The last section is the one that matters most — what is *missing*.
 
-Seventy-six obtainable things. Every one of them has a recipe, an item model, a sprite and a name, and
-`tools/gen_crafting.py` refuses to write a tree where that is not true.
+Seventy-seven obtainable things. Every one of them has a recipe, an item model, a sprite and a name, and
+`tools/gen_crafting.py` refuses to write a tree where that is not true, and each recipe has the advancement
+that puts it in the recipe book when one of its ingredients is picked up.
 
 ## The two power chains, and where they meet
 
@@ -47,7 +48,7 @@ plant counts. Length costs what copper costs: 200 m of
 three conductors joins two of them, and every server tick the grid (`grid/Grid`, one network per level, solved
 by `GridSolver`) carries what the generators make down the spans to every machine. Which machine may feed
 which is fixed (see [Getting started](getting-started.md#who-feeds-whom)), and each conductor goes on its own
-voltage class: aerial bundled cable at 1 kV, the medium-voltage conductor at 24 kV, the quad bundle at 420 kV.
+voltage class: aerial bundled cable at 1 kV, the medium-voltage conductor at 33 kV, the quad bundle at 420 kV.
 A power box turns what arrives into Forge Energy for anything else in the pack.
 
 **The met station is not in either chain.** It measures and reports — irradiance on three planes, albedo,
@@ -61,7 +62,7 @@ air and module temperature, wind, snow — and one mast serves a whole plant.
 |---|---|
 | Power Wrench | right-click any machine, or point at one up to 16 blocks away, to open its panel — or, for a machine with no panel, a card with the power through it |
 | Aerial Bundled Cable | low voltage: cabin to pole, pole to pole, pole to power box. Four blocks of span per reel, 40 at most |
-| Medium-Voltage Conductor | 24 kV: generators, transformers, cabins, poles and switches. Eight blocks per reel, 90 at most |
+| Medium-Voltage Conductor | 33 kV: generators, transformers, cabins, poles and switches. Eight blocks per reel, 90 at most |
 | High-Voltage Conductor | 420 kV, a quad bundle: substation transformers and lattice towers. Sixteen blocks per reel, 160 at most |
 
 Used on a block that is not a machine, a reel lays a **run** of its conductor on the ground (Bundle Run,
@@ -85,7 +86,7 @@ a real plant: the mounting, and what the modules are.
 |---|---|---|---|
 | FT-415 (`solar_panel`) | flat ballasted table | HP-108-415 | the entry-level table, and the registry name the mod started with |
 | FT-430 | flat ballasted table | HJ-132-430 | ballast trays, a heterojunction module |
-| TR-530 / TR-580 | fixed rack at 25° | HT-268-530 (CdTe) / HN-144-580 | the 580 is the large-format bifacial module, so it takes a fourth laminate of silicon |
+| TR-530 / TR-580 | fixed rack at 25° | HT-268-530 (CdTe) / HN-144-580 | one laminate each against the forty-four-module tables' two: what a block costs follows the glass it really carries |
 | HX-700 | single-axis tracker | HN-132-700 | a torque tube and one slew drive; the tube is forced north-south, because that is the only axis a row can follow the sun from |
 | AE-440 | dual-axis pedestal | HB-066-440 | two slew drives, because it has two axes |
 
@@ -109,9 +110,9 @@ the one thing you cannot see from outside and have to know before laying a metre
 
 | item | what it does |
 |---|---|
-| Turbine Tower | stack it to the height you want; nothing stands above 16 blocks |
+| Turbine Tower | stack it to the height you want; above 16 blocks a bare pile folds under anything that steps on it, and above 20 it folds as it is built |
 | SW-10 | small wind, 10 kW: a tail vane on a small nacelle, and no gearbox or slew drive in its recipe |
-| C52-0.85 … C130-4.0 | the utility line. The letter is the maker and the number is the rotor in metres, exactly as a real datasheet reads. The C112 and the C130 are direct drive, so their recipes take no gearbox |
+| C52-0.85 … C130-4.0 | the utility line. The letter is the maker and the number is the rotor in metres, exactly as a real datasheet reads. All five are geared, as `TurbineSpec` simulates them, and each recipe carries the machine's own tower in `tower_section`s - a turbine_tower block is ten metres of the SW-10's lattice |
 
 The turbine's insulator stands beside the foot of its tower, where a real one gathers its cables, and takes the
 medium-voltage conductor.
@@ -125,8 +126,8 @@ medium-voltage conductor.
 | Power Box | the end of a line: Forge Energy to the six blocks touching it, power to its field. Stands on the ground or hangs on a wall | one on the roof; low voltage only |
 | Machine Transformer | VT-2500 Pad, 2.5 MVA, 800 V to 33 kV, beside a generator; an empty hand reads its ratio, load and loss | three bushings; medium voltage |
 | Substation Transformer | VT-63000 Grid, 63 MVA, 33 kV to 400 kV: where a transmission line starts | six bushings: 1–3 medium, 4–6 high |
-| Disconnector | 24 kV; thrown with an empty hand or by a redstone edge, and refuses to open on load | six: line side 1–3, load side 4–6 |
-| Circuit Breaker | 24 kV; opens on load, and trips by itself above its rating | six, as the disconnector |
+| Disconnector | AB-36/630, on a 33 kV line; thrown with an empty hand or by a redstone edge, and refuses to open on load | six: line side 1–3, load side 4–6 |
+| Circuit Breaker | VB-36/630, on a 33 kV line; opens on load, and trips by itself above 36 MW | six, as the disconnector |
 | Suspension / Tension / Terminal Tower | the three 400 kV lattice towers | six each; high voltage only |
 
 ### Measurement and control
@@ -141,7 +142,7 @@ the low end is physics: the blades would be in the ground.
 
 ### The parts
 
-Thirty-two of them, in three tiers, and none is placeable or usable: they exist to be ingredients.
+Thirty-three of them, in three tiers, and none is placeable or usable: they exist to be ingredients.
 `PartCatalog` is the list and every entry says what it is for, because for a part nobody can hold to any
 purpose that tooltip is the only way to tell what it belongs to.
 
@@ -173,7 +174,8 @@ graph TD
   SWITCH[load-break switch] --> COMBINER
   TG --> BLADE[turbine blade] --> LONG[long blade] --> TURBINE[the turbines]
   GEN[generator set] --> TURBINE
-  GEARBOX[gearbox] -->|C52, C80, C90| TURBINE
+  GEARBOX[gearbox] -->|C52 to C130| TURBINE
+  TOWERSEC[tower section] -->|C80 to C130| TURBINE
   DRIVE[slew drive] --> TURBINE
   DRIVE --> TRACKER[the trackers]
   SENSOR[sensor head] --> MET[met station]
@@ -182,10 +184,17 @@ graph TD
 ## Is it coherent? What the pass found
 
 **Every product of one kind shares a recipe spine, and differs where the machines differ.** That was the
-requirement and it holds: three laminates over a mounting for every array, bridges over an enclosure for
-every inverter, fuse ways over an enclosure for every combiner, three blades over a drivetrain for every
-turbine. A reader can see the difference between two machines by laying their recipes side by side, which
-is the point.
+requirement and it holds: laminates over a mounting for every array, power stages over an enclosure for
+every inverter, fuse ways over an enclosure for every combiner, three blades over a drivetrain and a tower for
+every utility turbine. A reader can see the difference between two machines by laying their recipes side by
+side, which is the point.
+
+**A machine costs what the real one weighs.** Two tonnes of steel, conductor metal, glass or silicon to the
+ingot, held by `gen_crafting.py` to a bill of materials from datasheets and published intensities (the formula
+and the sources are in [data-sources.md](data-sources.md), "Costo delle ricette"; `--costs` prints the table).
+A C130-4.0 and its tower are 273 units, an FT-415 1.3; a megawatt of either is the same order of material, and
+the 2.5 MW central inverter costs more than every string inverter. Below six tonnes a machine is a floor of a
+few units whatever it weighs, because a recipe still has a cabinet and a board in it.
 
 **No two recipes share a grid.** Checked, because the failure is silent: the game indexes whichever it
 read first and the other product simply cannot be made, with nothing in any log.
@@ -214,7 +223,7 @@ These came out of writing the table, and none of them is a bug — they are the 
 3. **The first `solar_panel` and `power_box` predate the catalogue.** They work, and they now sit in
    the same crafting tree as everything else, but the power box converts to Forge Energy at a fixed rate
    with no mention of voltage — where every other machine in the mod is careful about it. It does at least
-   take low voltage only, so a 24 kV line has to come down through a pole first.
+   take low voltage only, so a 33 kV line has to come down through a pole first.
 
 4. **No fault state is repairable.** A machine can degrade and de-rate; nothing brings it back. A
    service action with the wrench — clean the modules, replace a blown fuse — would give the wrench a

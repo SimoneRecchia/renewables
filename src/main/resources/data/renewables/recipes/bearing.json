@@ -10,11 +10,11 @@
       "item": "renewables:steel_plate"
     },
     "n": {
-      "item": "minecraft:iron_nugget"
+      "tag": "forge:nuggets/iron"
     }
   },
   "result": {
     "item": "renewables:bearing",
-    "count": 2
+    "count": 4
   }
 }

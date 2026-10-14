@@ -10,16 +10,17 @@
       "item": "renewables:circuit_board"
     },
     "n": {
-      "item": "minecraft:iron_nugget"
+      "tag": "forge:nuggets/iron"
     },
     "q": {
-      "item": "minecraft:quartz"
+      "tag": "forge:gems/quartz"
     },
     "r": {
-      "item": "minecraft:redstone"
+      "tag": "forge:dusts/redstone"
     }
   },
   "result": {
-    "item": "renewables:cpu"
+    "item": "renewables:cpu",
+    "count": 12
   }
 }

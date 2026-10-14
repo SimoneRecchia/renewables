@@ -1,0 +1,68 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_dusts_redstone": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:dusts/redstone"
+          }
+        ]
+      }
+    },
+    "has_glass_panes_colorless": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:glass_panes/colorless"
+          }
+        ]
+      }
+    },
+    "has_nuggets_iron": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:nuggets/iron"
+          }
+        ]
+      }
+    },
+    "has_circuit_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:circuit_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:screen"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_circuit_board",
+      "has_dusts_redstone",
+      "has_glass_panes_colorless",
+      "has_nuggets_iron",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:screen"
+    ]
+  },
+  "sends_telemetry_event": false
+}

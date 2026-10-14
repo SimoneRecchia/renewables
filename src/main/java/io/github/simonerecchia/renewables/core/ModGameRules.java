@@ -12,6 +12,10 @@ public final class ModGameRules {
 	private ModGameRules() {
 	}
 
+	/**
+	 * Main thread only, from common setup's enqueueWork: GameRules.register writes an unsynchronised static map that a
+	 * mod constructor, on a loading worker, would race another mod for.  A world's saved rules are read after this.
+	 */
 	public static void register() {
 		REAL_TIME_CLOCK = GameRules.register("renewablesRealTimeClock", GameRules.Category.MISC, GameRules.BooleanValue.create(false));
 	}

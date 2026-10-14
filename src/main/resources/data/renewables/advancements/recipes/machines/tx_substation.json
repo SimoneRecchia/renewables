@@ -1,0 +1,70 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_storage_blocks_copper": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/copper"
+          }
+        ]
+      }
+    },
+    "has_storage_blocks_iron": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/iron"
+          }
+        ]
+      }
+    },
+    "has_insulator": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:insulator"
+            ]
+          }
+        ]
+      }
+    },
+    "has_load_break_switch": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:load_break_switch"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:tx_substation"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_insulator",
+      "has_load_break_switch",
+      "has_storage_blocks_copper",
+      "has_storage_blocks_iron",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:tx_substation"
+    ]
+  },
+  "sends_telemetry_event": false
+}

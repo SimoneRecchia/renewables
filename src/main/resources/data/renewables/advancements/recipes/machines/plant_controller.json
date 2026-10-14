@@ -1,0 +1,100 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_busbar": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:busbar"
+            ]
+          }
+        ]
+      }
+    },
+    "has_control_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:control_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_enclosure": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:enclosure"
+            ]
+          }
+        ]
+      }
+    },
+    "has_load_break_switch": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:load_break_switch"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_plate": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_plate"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_section"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:plant_controller"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_busbar",
+      "has_control_board",
+      "has_enclosure",
+      "has_load_break_switch",
+      "has_steel_plate",
+      "has_steel_section",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:plant_controller"
+    ]
+  },
+  "sends_telemetry_event": false
+}

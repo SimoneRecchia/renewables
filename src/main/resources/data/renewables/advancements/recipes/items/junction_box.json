@@ -1,0 +1,61 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_bypass_diode": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:bypass_diode"
+            ]
+          }
+        ]
+      }
+    },
+    "has_mc4_connector": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:mc4_connector"
+            ]
+          }
+        ]
+      }
+    },
+    "has_resin": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:resin"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:junction_box"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_bypass_diode",
+      "has_mc4_connector",
+      "has_resin",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:junction_box"
+    ]
+  },
+  "sends_telemetry_event": false
+}

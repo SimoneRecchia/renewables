@@ -1,0 +1,87 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_junction_box": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:junction_box"
+            ]
+          }
+        ]
+      }
+    },
+    "has_resin": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:resin"
+            ]
+          }
+        ]
+      }
+    },
+    "has_solar_cell": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:solar_cell"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_section"
+            ]
+          }
+        ]
+      }
+    },
+    "has_tempered_glass": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:tempered_glass"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:pv_laminate"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_junction_box",
+      "has_resin",
+      "has_solar_cell",
+      "has_steel_section",
+      "has_tempered_glass",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:pv_laminate"
+    ]
+  },
+  "sends_telemetry_event": false
+}

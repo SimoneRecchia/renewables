@@ -1,0 +1,98 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_storage_blocks_iron": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/iron"
+          }
+        ]
+      }
+    },
+    "has_bearing": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:bearing"
+            ]
+          }
+        ]
+      }
+    },
+    "has_gearbox": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:gearbox"
+            ]
+          }
+        ]
+      }
+    },
+    "has_generator_set": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:generator_set"
+            ]
+          }
+        ]
+      }
+    },
+    "has_slew_drive": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:slew_drive"
+            ]
+          }
+        ]
+      }
+    },
+    "has_turbine_blade": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:turbine_blade"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:c52_085"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_bearing",
+      "has_gearbox",
+      "has_generator_set",
+      "has_slew_drive",
+      "has_storage_blocks_iron",
+      "has_the_recipe",
+      "has_turbine_blade"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:c52_085"
+    ]
+  },
+  "sends_telemetry_event": false
+}

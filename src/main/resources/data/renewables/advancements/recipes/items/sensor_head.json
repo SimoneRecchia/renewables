@@ -1,0 +1,59 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_glass_panes_colorless": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:glass_panes/colorless"
+          }
+        ]
+      }
+    },
+    "has_busbar": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:busbar"
+            ]
+          }
+        ]
+      }
+    },
+    "has_circuit_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:circuit_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:sensor_head"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_busbar",
+      "has_circuit_board",
+      "has_glass_panes_colorless",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:sensor_head"
+    ]
+  },
+  "sends_telemetry_event": false
+}

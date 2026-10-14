@@ -20,6 +20,7 @@
     }
   },
   "result": {
-    "item": "renewables:slew_drive"
+    "item": "renewables:slew_drive",
+    "count": 4
   }
 }

@@ -1,0 +1,83 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_ingots_copper": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:ingots/copper"
+          }
+        ]
+      }
+    },
+    "has_storage_blocks_iron": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/iron"
+          }
+        ]
+      }
+    },
+    "has_copper_coil": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:copper_coil"
+            ]
+          }
+        ]
+      }
+    },
+    "has_magnetic_core": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:magnetic_core"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_section"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:generator_set"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_copper_coil",
+      "has_ingots_copper",
+      "has_magnetic_core",
+      "has_steel_section",
+      "has_storage_blocks_iron",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:generator_set"
+    ]
+  },
+  "sends_telemetry_event": false
+}

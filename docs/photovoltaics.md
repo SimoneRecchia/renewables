@@ -787,5 +787,9 @@ gives up about 8% of the day's light in exchange for shedding snow and washing i
 
 ## 10. Crafting
 
-Not yet. The array that keeps the `solar_panel` name keeps its old recipe; everything else is
-creative-only for now.
+Every array, inverter, combiner and cable has a recipe, and costs what the real one weighs at two tonnes of
+steel, copper, glass or silicon to the ingot: an array is one or two laminates (by the glass its modules really
+carry) over its mounting, about a unit and a half of material; an inverter is its power stages over a cabinet,
+from under one unit for the VX-10K to about four for the VC-2500K. The tree, the formula and the sources are in
+[items.md](items.md) and [data-sources.md](data-sources.md); each recipe enters the recipe book as soon as one of
+its ingredients is picked up.

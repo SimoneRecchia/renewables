@@ -1,0 +1,74 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_bearing": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:bearing"
+            ]
+          }
+        ]
+      }
+    },
+    "has_control_board": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:control_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_gear_set": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:gear_set"
+            ]
+          }
+        ]
+      }
+    },
+    "has_motor_core": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:motor_core"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:slew_drive"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_bearing",
+      "has_control_board",
+      "has_gear_set",
+      "has_motor_core",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:slew_drive"
+    ]
+  },
+  "sends_telemetry_event": false
+}

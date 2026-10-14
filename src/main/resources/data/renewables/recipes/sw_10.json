@@ -1,22 +1,22 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "sss",
-    " x ",
+    "FSF",
+    " K ",
     "SbS"
   ],
   "key": {
+    "F": {
+      "item": "renewables:resin"
+    },
+    "K": {
+      "item": "renewables:motor_core"
+    },
     "S": {
       "item": "renewables:steel_section"
     },
     "b": {
       "item": "renewables:control_board"
-    },
-    "s": {
-      "item": "renewables:turbine_blade"
-    },
-    "x": {
-      "item": "renewables:generator_set"
     }
   },
   "result": {

@@ -1,23 +1,23 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "q",
+    "Z",
     "r",
     "g"
   ],
   "key": {
-    "g": {
-      "item": "minecraft:gold_nugget"
+    "Z": {
+      "item": "renewables:silicon_wafer"
     },
-    "q": {
-      "item": "minecraft:quartz"
+    "g": {
+      "tag": "forge:nuggets/gold"
     },
     "r": {
-      "item": "minecraft:redstone"
+      "tag": "forge:dusts/redstone"
     }
   },
   "result": {
     "item": "renewables:bypass_diode",
-    "count": 2
+    "count": 4
   }
 }

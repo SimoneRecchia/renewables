@@ -1,0 +1,74 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper_coil": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:copper_coil"
+            ]
+          }
+        ]
+      }
+    },
+    "has_insulator": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:insulator"
+            ]
+          }
+        ]
+      }
+    },
+    "has_magnetic_core": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:magnetic_core"
+            ]
+          }
+        ]
+      }
+    },
+    "has_steel_plate": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:steel_plate"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "renewables:tx_machine"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_copper_coil",
+      "has_insulator",
+      "has_magnetic_core",
+      "has_steel_plate",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "renewables:tx_machine"
+    ]
+  },
+  "sends_telemetry_event": false
+}

@@ -1,16 +1,13 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "LLL",
-    "STS",
-    "jSj"
+    "LL",
+    "T ",
+    "jj"
   ],
   "key": {
     "L": {
       "item": "renewables:pv_laminate"
-    },
-    "S": {
-      "item": "renewables:steel_section"
     },
     "T": {
       "item": "renewables:mounting_rack"
