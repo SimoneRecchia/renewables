@@ -173,9 +173,17 @@ public record PvModuleSpec(
 		return voc * (1.0 + vocCoefficient * (cellTemperatureC - STC_TEMPERATURE));
 	}
 
-	/** Voltage at the maximum power point, which falls with temperature at much the same rate as Voc. */
+	/**
+	 * Voltage at the maximum power point.  It falls faster than Voc: power goes with gamma and the current rises with
+	 * alpha, so the voltage has to go with gamma - alpha for V x I to stay the power the module makes.
+	 */
 	public double vmpAt(double cellTemperatureC) {
-		return Math.max(0.0, vmp * (1.0 + vocCoefficient * (cellTemperatureC - STC_TEMPERATURE)));
+		return Math.max(0.0, vmp * (1.0 + vmpCoefficient() * (cellTemperatureC - STC_TEMPERATURE)));
+	}
+
+	/** Temperature coefficient of the maximum power point voltage, per kelvin. */
+	public double vmpCoefficient() {
+		return powerCoefficient - iscCoefficient;
 	}
 
 	/** Current at the maximum power point, at a given light and temperature. */

@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "renewables:pv_dual_440",
+    "renewables:pv_flat_430",
+    "renewables:pv_tilt_530",
+    "renewables:pv_tilt_580",
+    "renewables:pv_track_700",
+    "renewables:solar_panel"
+  ]
+}

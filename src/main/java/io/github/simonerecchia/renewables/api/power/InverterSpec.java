@@ -176,13 +176,29 @@ public record InverterSpec(
 
 	// ---- what comes out ----
 
-	/** What the machine would put out if nothing were holding it back, in kW. */
+	/**
+	 * What the machine would put out if nothing were holding it back, in kW: the output that, with its own losses
+	 * added, is what came in.  At a load L = P / Pn that is {@code p2 L² + (1 + p1) L + p0 - Pdc / Pn = 0}, and on
+	 * less than the no-load loss it has no positive root: a bridge does not start on less than it takes to run.
+	 */
 	public double unclippedAcKw(double dcKw) {
 		if (dcKw <= 0.0) return 0.0;
 
-		double estimate = dcKw * peakEfficiency;
-		double refined = dcKw * efficiencyAt(estimate / acPowerKw);
-		return dcKw * efficiencyAt(refined / acPowerKw);
+		double[] p = lossCoefficients();
+		double offered = dcKw / acPowerKw;
+		if (offered <= p[0]) return 0.0;
+
+		double b = 1.0 + p[1];
+		double c = p[0] - offered;
+		double load = p[2] <= 0.0 ? -c / b : (-b + Math.sqrt(b * b - 4.0 * p[2] * c)) / (2.0 * p[2]);
+		return Math.max(0.0, load) * acPowerKw;
+	}
+
+	/** The losses at an output, in kW, unclamped: what {@link #unclippedAcKw} adds back to find the input. */
+	public double lossKwAt(double acKw) {
+		double load = Math.max(0.0, acKw) / acPowerKw;
+		double[] p = lossCoefficients();
+		return (p[0] + p[1] * load + p[2] * load * load) * acPowerKw;
 	}
 
 	/** Active power at the terminals, held under both the nameplate and whatever the heat allows. */

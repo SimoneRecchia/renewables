@@ -8,6 +8,8 @@ public record SunPosition(double elevationDeg, double azimuthDeg) {
 	public static final double EAST = 0.0;
 	/** Due west: where it is all afternoon. */
 	public static final double WEST = 180.0;
+	/** No sun at all, in a dimension with no sky: the Nether's roof, the End. */
+	public static final SunPosition NONE = new SunPosition(-90.0, EAST);
 
 	public boolean up() {
 		return elevationDeg > 0.0;
