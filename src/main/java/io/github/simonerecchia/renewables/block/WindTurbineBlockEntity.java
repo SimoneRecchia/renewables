@@ -21,6 +21,7 @@ import io.github.simonerecchia.renewables.weather.WeatherSnapshot;
 import io.github.simonerecchia.renewables.wind.TurbineDynamics;
 
 import java.util.List;
+import java.util.function.Function;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
@@ -95,7 +96,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private double airDensity = WorldConditions.REFERENCE_AIR_DENSITY;
 	private double windDirection;
 	private double turbulence;
-	private boolean cutOut;
+	/** Volatile because a computer asks for it from its own thread. */
+	private volatile boolean cutOut;
 	/** Which way the nacelle points, in the wind's system; meaningful once {@link #yawInitialised}. */
 	private double yawWind;
 	private boolean yawInitialised;
@@ -124,6 +126,11 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private final LazyOptional<?> mekanismEnergy = EnergyBridge.createMekanismHandler(this);
 	private final TurbineTelemetrySimulator telemetrySimulator = new TurbineTelemetrySimulator();
 	private volatile Telemetry.Snapshot telemetry = Telemetry.Snapshot.EMPTY;
+	/** What a computer reads besides the telemetry, published whole at the end of each tick. */
+	private volatile Reading reading = Reading.NONE;
+	/** What a computer sees of this machine: one per machine, so it can be withdrawn when the machine goes. */
+	@Nullable
+	private LazyOptional<?> peripheral;
 	/** Set by a read from a computer's thread, taken by the next server tick. */
 	private volatile boolean telemetryRead;
 	private int telemetryWatched;
@@ -438,6 +445,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 
 		budget.open(producedKw, spec.ratedPowerKw());
 		EnergyBridge.emit(this, this, footPos(), energyFaces());
+		reading = new Reading(getGrossJoulesPerTick(), budget.getAvailableJoules(), budget.getMaxJoulesPerTick(), isRunning());
 
 		if (telemetryDue()) publishTelemetry(serverLevel, spec, braked);
 		syncIfDue();
@@ -631,6 +639,12 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		return spec().ratedPowerKw();
 	}
 
+	/** The figures of the last tick, all of a piece, for a computer reading from its own thread. */
+	@Override
+	public Reading reading() {
+		return reading;
+	}
+
 	/** Saves and tells every client at once: somebody changed a setting and is watching for it to take. */
 	private void onControlChanged() {
 		ClientSync.now(this);
@@ -685,6 +699,24 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		super.invalidateCaps();
 		forgeEnergy.invalidate();
 		mekanismEnergy.invalidate();
+		// ComputerCraft listens to this one: a computer against any block of the tower drops the machine when it goes
+		if (peripheral != null) peripheral.invalidate();
+	}
+
+	/**
+	 * The computer's view of this machine, made by {@code make} the first time and then kept, and handed out for every
+	 * block of the tower.  A fresh one for each question could never be withdrawn, so a computer went on reading a
+	 * removed turbine's last snapshot and stopping a block entity that was no longer in the world.
+	 */
+	public LazyOptional<?> peripheral(Function<WindTurbineBlockEntity, ?> make) {
+		if (isRemoved()) return LazyOptional.empty();
+
+		if (peripheral == null || !peripheral.isPresent()) {
+			Object view = make.apply(this);
+			peripheral = LazyOptional.of(() -> view);
+		}
+
+		return peripheral;
 	}
 
 	// ---- the wire fitting ----

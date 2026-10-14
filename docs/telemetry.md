@@ -19,8 +19,13 @@ had, so programs written against that still find it and all nine of its methods 
 tower answers on behalf of the machine it carries — so a computer or a Wired Modem
 against **any block of the tower**, the foot included, reaches the same turbine. That is
 deliberate: a real turbine gathers its cables at the tower base, which is where you will
-build. Two modems on one structure resolve to one peripheral. The photovoltaic blocks each
-answer on their own block.
+build. When the turbine is broken the peripheral goes with it, and one placed on the same
+tower appears in its place, on every block of it. A computer touching the tower on several
+sides still sees one turbine per side, and on a wired network every modem is a name of its
+own, so two modems on one tower make `peripheral.find` return the turbine twice: put one
+modem on a structure, or tell them apart with `getPosition()` (the machine's own block,
+the same from every block of its tower), as the farm program in section 6 does. The
+photovoltaic blocks each answer on their own block.
 
 **Which one to talk to.** The **inverter**, for almost everything. It is where a real plant's
 SCADA lives and it is the only part of a plant a program can usefully change — an array has no
@@ -69,6 +74,7 @@ Mekanism's default 2.5 J per FE, so every part of the mod agrees on the scale.
 | `isStopped()` | boolean | true only if *this program* stopped it |
 | `isRunning()` | boolean | true if nothing at all is holding it off load |
 | `isWindCutOut()` | boolean | the machine shut itself down for the weather |
+| `getPosition()` | table | `{x, y, z}` of the machine block, the same from every block of its tower |
 | `isStoppedByRedstone()` | boolean | the mode and the signal are holding it down |
 | `getRedstoneMode()` | string | `DISABLED`, `HIGH` or `LOW` |
 | `setRedstoneMode(mode)` | — | throws on anything else |
@@ -535,7 +541,13 @@ end
 Curtail a farm to a target, and let it back up again:
 
 ```lua
-local turbines = { peripheral.find("renewables_wind_turbine") }
+-- one entry per machine, however many modems reach it
+local turbines, seen = {}, {}
+for _, t in ipairs({ peripheral.find("renewables_wind_turbine") }) do
+  local p = t.getPosition()
+  local key = p.x .. "," .. p.y .. "," .. p.z
+  if not seen[key] then seen[key] = true; table.insert(turbines, t) end
+end
 
 local function curtail(targetKw)
   local share = targetKw / #turbines
