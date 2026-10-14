@@ -213,13 +213,22 @@ un impianto dimensionato bene. `derating` quando è troppo caldo e si autolimita
 | **C130-4.0** | 4000 kW | 130 m | 3,0 m/s | 25 m/s | 9–13 |
 
 **Come si monta:** impila i blocchi **Turbine Tower** fino all'altezza che vuoi, poi posa la turbina
-sopra l'ultimo. Nient'altro sta in piedi sopra i 16 blocchi.
+sopra l'ultimo. Nient'altro sta in piedi sopra i 16 blocchi. La torre si fonda su terreno pieno: non su
+un'altra macchina, non su una lastra a metà blocco; e un pilastro sotto il piede non la rende più ventosa,
+perché la cresta che conta è quella del terreno com'era. In mare la torre si fonda sul fondale e il vento
+si misura dal pelo dell'acqua.
+
+**Il rotore deve stare all'aperto.** Se sopra la navicella c'è qualcosa (un tetto, una grotta, il mare) o il
+mozzo finisce dentro un blocco, il vento non ci arriva: la turbina non si lascia posare, e se le costruisci
+intorno dopo il pannello dice *"No wind — rotor obstructed"* e non produce. Blocchi nel disco delle pale (alberi, muri, la
+torre di un'altra turbina) le tolgono la loro parte: il pannello dice quanta del rotore è all'aperto.
 
 **Se sbagli altezza te lo dice:** *"… is built for … to … blocks of tower. This one stands …"*. E se la
 torre è troppo alta per la macchina che le hai messo sopra, **l'acciaio cede**: la torre crolla.
 
-**Collegamento:** una campata di conduttore **MT** dall'isolatore della navicella a un trasformatore
-macchina, a una cabina, o a un'altra turbina (le turbine si mettono in fila così, come un vero parco).
+**Collegamento:** una campata di conduttore **MT** dall'isolatore ai piedi della torre (clic con la bobina sulla
+porcellana o su qualunque blocco della torre) a un trasformatore macchina, a una cabina, o a un'altra turbina (le
+turbine si mettono in fila così, come un vero parco).
 
 **Pannello:** velocità del vento e turbolenza, giri del rotore, angolo di imbardata e di passo, coppia,
 potenza istantanea e prodotta, temperature, e i tre cursori di limite.
@@ -603,6 +612,7 @@ classe di conduttore sbagliata.
 | la potenza si ferma a metà catena | un sezionatore è aperto — la gola d'aria si vede da fuori |
 | la torre è crollata | più blocchi di torre di quanti quella turbina regge |
 | la turbina non gira | vento sotto l'avvio, o sopra l'arresto, o fermata da redstone o dal quadro |
+| il pannello dice `No wind — rotor obstructed` | c'è qualcosa sopra la navicella o nel mozzo: un tetto, una grotta, l'acqua |
 | l'inverter dice `clipping` a mezzogiorno | non è un guasto: hai più pannelli che inverter, ed è normale |
 | l'inverter dice `derating` | è caldo e si sta autolimitando |
 | tutto l'impianto produce a metà senza motivo | il quadro di controllo è in `holding a setpoint`: guarda il cursore |
