@@ -36,10 +36,12 @@ import org.joml.Matrix4f;
  * prefix:
  * <ul>
  * <li>{@code pole*}: the tower, stretched to the height of the tower and as wide as the turbine's scale;</li>
- * <li>{@code insulator*}: the wire fitting at the foot, as authored;</li>
+ * <li>{@code insulator*}: the wire fitting at the foot, as authored.  Neither of these two follows the wind, so
+ *     the fitting stays where the picker and the wire anchor are;</li>
  * <li>{@code rotate_1*}: the blades, about the hub, at the rotor's scale;</li>
  * <li>{@code rotate_2*}: the hub's cone, about the hub, at the nacelle's scale;</li>
- * <li>anything else is the nacelle, brought down to sit on the top of the tower.</li>
+ * <li>anything else is the nacelle, brought down to sit on the top of the tower.  These three turn about the axis of
+ *     the tower to face the wind.</li>
  * </ul>
  *
  * The block entity keeps its yaw in the wind's own frame (the direction the air goes); the model is turned for the
@@ -91,8 +93,6 @@ public class WindTurbineRenderer extends MachineRenderer {
 		poseStack.pushPose();
 		// the model starts at the foot of the tower; if the block entity does not already say so, lower it
 		if (!(turbine instanceof ExtraPose)) poseStack.translate(0.0, -segments, 0.0);
-		// turned about the axis of the tower, the one thing every group is symmetrical about
-		if (relativeYaw != 0.0f) poseStack.mulPose(Axis.YP.rotationDegrees(relativeYaw));
 
 		Map<String, Matrix4f> poses = new HashMap<>();
 		for (String groupName : model.groups.keySet()) {
@@ -100,6 +100,8 @@ public class WindTurbineRenderer extends MachineRenderer {
 
 			poseStack.pushPose();
 			if (groupName.startsWith("pole")) {
+				// the tower and the fitting at its foot never follow the wind: the tube is the same all the way
+				// round, and the fitting is what the picker and the wire anchor stand on
 				if (segments <= 0) {
 					poseStack.popPose();
 					continue;
@@ -108,14 +110,19 @@ public class WindTurbineRenderer extends MachineRenderer {
 				poseStack.scale(nacelleScale, (float) (segments / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), nacelleScale);
 			} else if (groupName.startsWith("insulator")) {
 				// stays at the foot, as it was authored
-			} else if (groupName.startsWith("rotate_1")) {
-				spin(poseStack, hub, hubCentre, rotorScale, rotor);
-			} else if (groupName.startsWith("rotate_2")) {
-				spin(poseStack, hub, hubCentre, nacelleScale, rotor);
 			} else {
-				poseStack.translate(0.0, segments, 0.0);
-				poseStack.scale(nacelleScale, nacelleScale, nacelleScale);
-				poseStack.translate(0.0, -nacelleBottom, 0.0);
+				// everything that is up at the machine turns about the axis of the tower to face into the wind
+				if (relativeYaw != 0.0f) poseStack.mulPose(Axis.YP.rotationDegrees(relativeYaw));
+
+				if (groupName.startsWith("rotate_1")) {
+					spin(poseStack, hub, hubCentre, rotorScale, rotor);
+				} else if (groupName.startsWith("rotate_2")) {
+					spin(poseStack, hub, hubCentre, nacelleScale, rotor);
+				} else {
+					poseStack.translate(0.0, segments, 0.0);
+					poseStack.scale(nacelleScale, nacelleScale, nacelleScale);
+					poseStack.translate(0.0, -nacelleBottom, 0.0);
+				}
 			}
 
 			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
