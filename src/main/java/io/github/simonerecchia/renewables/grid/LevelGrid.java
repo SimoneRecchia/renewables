@@ -39,8 +39,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * was strung to is stale and goes, with its refund.
  */
 final class LevelGrid {
-	/** A reading that has moved by less than this many kW is not worth a packet. */
+	/** A reading that has moved by less than this many kW is not worth a packet... */
 	static final double SEND_TOLERANCE_KW = 0.05;
+	/** ...nor one that has moved by less than this share of what was sent: a megawatt machine moves kilowatts a tick. */
+	static final double SEND_TOLERANCE_SHARE = 0.005;
+	/** A reading that keeps moving is sent at most this often, so a wind farm is not a packet per machine per tick. */
+	static final long MIN_SEND_INTERVAL_TICKS = 10;
 	/** But a client that has been told nothing for this long is told again, so a lost or missed update heals in a second. */
 	static final long HEARTBEAT_TICKS = 20;
 
@@ -330,14 +334,27 @@ final class LevelGrid {
 		powered = next;
 	}
 
-	/** Tells the clients a reading, but only if it moved or it is time to say it again. */
+	/** Tells the clients a reading, but only if it is worth a packet ({@link #worthSending}). */
 	private void publish(ServerLevel level, long pos, double kw) {
 		long now = level.getGameTime();
 		Sent last = sent.get(pos);
-		if (last != null && Math.abs(kw - last.kw()) <= SEND_TOLERANCE_KW && now - last.tick() < HEARTBEAT_TICKS) return;
+		if (last != null && !worthSending(kw, last.kw(), now - last.tick())) return;
 
 		sent.put(pos, new Sent(kw, now));
 		if (!level.players().isEmpty()) sendNow(level, BlockPos.of(pos), kw);
+	}
+
+	/**
+	 * Whether a reading is sent, given what was sent last and how many ticks ago.  Power coming or going is sent at
+	 * once; a reading that moved by more than {@link #SEND_TOLERANCE_KW} and {@link #SEND_TOLERANCE_SHARE} of itself
+	 * at most every {@link #MIN_SEND_INTERVAL_TICKS}; anything after {@link #HEARTBEAT_TICKS}, moved or not.
+	 */
+	static boolean worthSending(double kw, double lastKw, long age) {
+		if ((kw > 0.0) != (lastKw > 0.0)) return true;
+		if (age >= HEARTBEAT_TICKS) return true;
+
+		double tolerance = Math.max(SEND_TOLERANCE_KW, SEND_TOLERANCE_SHARE * Math.abs(lastKw));
+		return age >= MIN_SEND_INTERVAL_TICKS && Math.abs(kw - lastKw) > tolerance;
 	}
 
 	private static void sendNow(ServerLevel level, BlockPos pos, double kw) {
