@@ -1,6 +1,7 @@
 package io.github.simonerecchia.renewables;
 
 import io.github.simonerecchia.renewables.client.ClientBlockEntities;
+import io.github.simonerecchia.renewables.client.hooks.ClientInput;
 import io.github.simonerecchia.renewables.client.hooks.WireLinker;
 import io.github.simonerecchia.renewables.client.render.MetStationRenderer;
 import io.github.simonerecchia.renewables.client.render.PlantControllerRenderer;
@@ -36,7 +37,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
  *
  * What lives here is the client's lifecycle: the config, the renderer registrations and the clean-up when a world
  * goes.  The wire drawing is {@code client.events.WireRenderEvents}, the clicks are {@code client.events.WireInputEvents}
- * and {@code client.hooks.ClientHooks}; those subscribe themselves.
+ * and {@code client.hooks.ClientInput}; those subscribe themselves.
  */
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
@@ -57,6 +58,9 @@ public final class RenewablesClient {
 			MinecraftForge.EVENT_BUS.addListener((LevelEvent.Unload unload) -> {
 				if (unload.getLevel().isClientSide()) forgetWorld();
 			});
+
+			// the items and the pole reach the input code through these, never by name
+			ClientInput.install();
 
 			// each registers its blocks with the model bindings, which is how the machine pass knows what to draw
 			// owner M adds the pole, cabin, power box, tower and turbine renderers here
