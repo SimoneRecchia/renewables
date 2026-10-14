@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,13 +51,15 @@ import org.joml.Vector3f;
  *
  * Machines are not drawn by a block entity renderer nor baked into chunks: once a frame, after the solid blocks, each
  * renderer walks the machines of its type that the client is tracking and draws their model groups from vertex
- * buffers of its own, with the "entity cutout, no cull" shader.  A renderer subclasses this only to inherit these
- * statics: it keeps its own buffer cache and subscribes its own {@code RenderLevelStageEvent}.
+ * buffers, with the "entity cutout, no cull" shader.  A renderer subclasses this only to inherit these statics and
+ * subscribes its own {@code RenderLevelStageEvent}; it says what to draw and with which pose, and owns no buffer.
  *
  * <ul>
- * <li>One static buffer per (block position, group), built the first time the group is drawn and again when the
- *     machine's light or the group's texture changes.  The buffers of a position that was not drawn this pass are
- *     closed, and all of them are when the level changes or the resources reload.</li>
+ * <li>The buffers are kept here, one cache per block entity type: one buffer per (block position, group), built the
+ *     first time the group is drawn and again when the machine's light or the group's texture changes.  The buffers
+ *     of a position its type's pass did not draw are closed, and all of them are when the level changes or the
+ *     resources reload.  A cache per type, not one for all, because a pass only knows which of its own machines it
+ *     drew; it also keeps a turbine and the bare tower it replaced, at the same position, from sharing buffers.</li>
  * <li>Within a machine the groups are batched by texture: one render state per texture, one draw per group.</li>
  * <li>A group that is given no matrix is not drawn, which is how a renderer hides a part.  Markers
  *     ({@code pivot_*}) are never drawn.</li>
@@ -68,7 +69,7 @@ import org.joml.Vector3f;
 @OnlyIn(Dist.CLIENT)
 public abstract class MachineRenderer {
 	/** A group's vertex buffer on the GPU, kept per (block position, group name). */
-	public static final class GroupBuffer implements AutoCloseable {
+	static final class GroupBuffer implements AutoCloseable {
 		private static final int VERTEX_BYTES = DefaultVertexFormat.NEW_ENTITY.getVertexSize();
 
 		@Nullable
@@ -126,16 +127,19 @@ public abstract class MachineRenderer {
 		}
 	}
 
-	/** What a renderer does with one machine, given the model and the block's pose already on the stack. */
+	/**
+	 * What a renderer does with one machine, given the model and the block's pose already on the stack: work out the
+	 * pose of each group and hand them to one of the {@code renderGrouped}s with the same context.
+	 */
 	@FunctionalInterface
 	public interface Draw<T extends BlockEntity> {
-		void draw(T machine, RenderContext context, PoseStack poseStack, Matrix4f projection);
+		void draw(T machine, RenderContext context, PoseStack poseStack);
 	}
 
 	/** What {@code drawAll} returns on a stage it does not draw in: "nothing was decided", unlike an empty set. */
 	private static final Set<BlockPos> SKIPPED = Collections.unmodifiableSet(new HashSet<>());
-	/** Every renderer's cache that has been drawn into, so that all of them can be released at once. */
-	private static final Set<Map<BlockPos, Map<String, GroupBuffer>>> CACHES = Collections.newSetFromMap(new IdentityHashMap<>());
+	/** The buffers of every machine type that has been drawn: per position, per group. */
+	private static final Map<Class<?>, Map<BlockPos, Map<String, GroupBuffer>>> CACHES = new HashMap<>();
 	private static final Map<String, ResourceLocation> TEXTURES = new HashMap<>();
 	private static final Set<String> REPORTED = new HashSet<>();
 	@Nullable
@@ -143,23 +147,27 @@ public abstract class MachineRenderer {
 
 	// ---- the pass ----
 
-	/** Draws every tracked machine of a type with just the block's pose.  Returns the positions it drew. */
+	/**
+	 * Draws every tracked machine of a type with just the block's pose.  Returns the positions it drew.
+	 *
+	 * One renderer draws a type, once a frame: the buffers of the type's positions that a pass did not draw are
+	 * released at its end.
+	 */
 	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
-			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache) {
-		return drawAll(event, type, maxDistanceSq, facing, authored, cache, null, null);
+			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored) {
+		return drawAll(event, type, maxDistanceSq, facing, authored, null, null);
 	}
 
 	/** As above, but the renderer decides what to draw and how each group is posed. */
 	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
-			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache,
-			@Nullable Draw<T> draw) {
-		return drawAll(event, type, maxDistanceSq, facing, authored, cache, draw, null);
+			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored, @Nullable Draw<T> draw) {
+		return drawAll(event, type, maxDistanceSq, facing, authored, draw, null);
 	}
 
 	/** As above, for only those machines of the type that pass {@code filter}. */
 	protected static <T extends BlockEntity> Set<BlockPos> drawAll(RenderLevelStageEvent event, Class<T> type, double maxDistanceSq,
-			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored, Map<BlockPos, Map<String, GroupBuffer>> cache,
-			@Nullable Draw<T> draw, @Nullable Predicate<T> filter) {
+			@Nullable Function<BlockState, Direction> facing, @Nullable Direction authored, @Nullable Draw<T> draw,
+			@Nullable Predicate<T> filter) {
 		if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) return SKIPPED;
 
 		Minecraft minecraft = Minecraft.getInstance();
@@ -168,7 +176,7 @@ public abstract class MachineRenderer {
 
 		FrameClock.begin(event.getRenderTick(), event.getPartialTick(), minecraft.isPaused());
 		watchLevel(level);
-		CACHES.add(cache);
+		Map<BlockPos, Map<String, GroupBuffer>> cache = CACHES.computeIfAbsent(type, key -> new HashMap<>());
 
 		Vec3 camera = event.getCamera().getPosition();
 		PoseStack poseStack = event.getPoseStack();
@@ -190,7 +198,8 @@ public abstract class MachineRenderer {
 			if (model == null) continue;
 
 			int light = LevelRenderer.getLightColor(level, pos);
-			RenderContext context = new RenderContext(model, ModelBindings.fallbackTexture(state.getBlock()), light);
+			Map<String, GroupBuffer> buffers = cache.computeIfAbsent(pos.immutable(), key -> new HashMap<>());
+			RenderContext context = new RenderContext(model, ModelBindings.fallbackTexture(state.getBlock()), light, projection, buffers);
 
 			poseStack.pushPose();
 			try {
@@ -203,9 +212,9 @@ public abstract class MachineRenderer {
 				if (machine instanceof ExtraPose pose) applyPose(poseStack, pose);
 
 				if (draw == null) {
-					renderGrouped(model, poseStack, projection, context.texture(), light, pos, cache, name -> true);
+					renderGrouped(context, poseStack, name -> true);
 				} else {
-					draw.draw(machine, context, poseStack, projection);
+					draw.draw(machine, context, poseStack);
 				}
 
 				seen.add(pos);
@@ -235,48 +244,40 @@ public abstract class MachineRenderer {
 	private record Batch(GroupBuffer buffer, Matrix4f pose) {
 	}
 
-	/** Draws groups, each with the matrix in {@code poses}; a group with no matrix is not drawn. */
-	protected static void renderGrouped(MeshModel model, Map<String, Matrix4f> poses, Matrix4f projection, ResourceLocation texture,
-			int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache) {
+	/** Draws the machine's groups, each with the matrix in {@code poses}; a group with no matrix is not drawn. */
+	protected static void renderGrouped(RenderContext context, Map<String, Matrix4f> poses) {
 		if (poses.isEmpty()) return;
 
 		Map<ResourceLocation, List<Batch>> batches = new LinkedHashMap<>();
-		Map<String, GroupBuffer> buffers = buffersAt(cache, pos);
 		for (Map.Entry<String, Matrix4f> entry : poses.entrySet()) {
-			collect(batches, buffers, model.groups.get(entry.getKey()), entry.getValue(), texture, packedLight);
+			collect(batches, context, context.model().groups.get(entry.getKey()), entry.getValue());
 		}
 
-		drawBatches(batches, projection);
+		drawBatches(batches, context.projection);
 	}
 
-	/** Draws every group with the one pose on the stack, except those {@code visible} rejects. */
-	protected static void renderGrouped(MeshModel model, PoseStack poseStack, Matrix4f projection, ResourceLocation texture,
-			int packedLight, BlockPos pos, Map<BlockPos, Map<String, GroupBuffer>> cache, Predicate<String> visible) {
+	/** Draws every group of the machine with the one pose on the stack, except those {@code visible} rejects. */
+	protected static void renderGrouped(RenderContext context, PoseStack poseStack, Predicate<String> visible) {
 		Matrix4f pose = poseStack.last().pose();
 		Map<ResourceLocation, List<Batch>> batches = new LinkedHashMap<>();
-		Map<String, GroupBuffer> buffers = buffersAt(cache, pos);
-		for (MeshModel.Group group : model.groups.values()) {
-			if (visible.test(group.name)) collect(batches, buffers, group, pose, texture, packedLight);
+		for (MeshModel.Group group : context.model().groups.values()) {
+			if (visible.test(group.name)) collect(batches, context, group, pose);
 		}
 
-		drawBatches(batches, projection);
+		drawBatches(batches, context.projection);
 	}
 
-	private static Map<String, GroupBuffer> buffersAt(Map<BlockPos, Map<String, GroupBuffer>> cache, BlockPos pos) {
-		CACHES.add(cache);
-		return cache.computeIfAbsent(pos.immutable(), key -> new HashMap<>());
-	}
-
-	private static void collect(Map<ResourceLocation, List<Batch>> batches, Map<String, GroupBuffer> buffers, @Nullable MeshModel.Group group,
-			Matrix4f pose, ResourceLocation fallback, int light) {
+	private static void collect(Map<ResourceLocation, List<Batch>> batches, RenderContext context, @Nullable MeshModel.Group group,
+			Matrix4f pose) {
 		if (group == null || group.isMarker() || group.vertexCount() == 0) return;
 
-		ResourceLocation texture = textureOf(group, fallback);
-		GroupBuffer buffer = buffers.get(group.name);
+		ResourceLocation texture = textureOf(group, context.texture());
+		int light = context.packedLight();
+		GroupBuffer buffer = context.buffers.get(group.name);
 		if (buffer == null || buffer.isStale(group, texture, light)) {
 			if (buffer != null) buffer.close();
 			buffer = GroupBuffer.build(group, texture, light);
-			buffers.put(group.name, buffer);
+			context.buffers.put(group.name, buffer);
 		}
 
 		batches.computeIfAbsent(texture, key -> new ArrayList<>()).add(new Batch(buffer, pose));
@@ -325,16 +326,15 @@ public abstract class MachineRenderer {
 		}
 	}
 
-	/** Closes every buffer of every renderer: the resources reloaded, or the world went away. */
+	/** Closes every buffer of every machine type: the resources reloaded, or the world went away. */
 	public static void releaseAll() {
-		for (Map<BlockPos, Map<String, GroupBuffer>> cache : CACHES) {
+		for (Map<BlockPos, Map<String, GroupBuffer>> cache : CACHES.values()) {
 			for (Map<String, GroupBuffer> buffers : cache.values()) {
 				for (GroupBuffer buffer : buffers.values()) buffer.close();
 			}
-
-			cache.clear();
 		}
 
+		CACHES.clear();
 		TEXTURES.clear();
 		REPORTED.clear();
 		FrameClock.reset();
