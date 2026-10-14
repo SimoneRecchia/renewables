@@ -216,10 +216,31 @@ public interface MachineShell {
 		return !(level instanceof LevelReader reader) || reader.hasChunkAt(pos);
 	}
 
-	/** Where a click on this block was really aimed. */
+	/**
+	 * Where a click on this block was really aimed: the machine a cell is part of, the machine a carrier holds up, or
+	 * the block itself.
+	 */
 	static BlockPos hostOr(BlockGetter level, BlockPos pos) {
 		BlockPos host = hostOf(level, pos);
-		return host == null ? pos : host;
+		if (host != null) return host;
+
+		if (level.getBlockState(pos).getBlock() instanceof Carrier carrier) {
+			BlockPos carried = carrier.carriedMachine(level, pos);
+			if (carried != null) return carried;
+		}
+
+		return pos;
+	}
+
+	/**
+	 * A block that is part of a machine without being one of its cells: a turbine's tower, which is a pile of blocks of
+	 * its own and carries the machine's fitting at its foot.  A click on it - a reel on the porcelain at the foot - is a
+	 * click on the machine it carries.
+	 */
+	interface Carrier {
+		/** The machine this block holds up, or null when it holds up none. */
+		@Nullable
+		BlockPos carriedMachine(BlockGetter level, BlockPos pos);
 	}
 
 	/** Whether a machine at {@code host} says the cell at {@code pos} is one of its own. */

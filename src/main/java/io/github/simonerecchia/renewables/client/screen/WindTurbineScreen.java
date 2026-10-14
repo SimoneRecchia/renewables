@@ -123,6 +123,14 @@ public class WindTurbineScreen extends PlantScreen<WindTurbineBlockEntity> {
 		} else if (turbine.isStoppedByRedstone()) {
 			key = "screen.renewables.wind_turbine.state.stopped_by_redstone";
 			colour = AMBER;
+		} else if (turbine.isRotorObstructed()) {
+			key = "screen.renewables.wind_turbine.state.obstructed";
+			colour = RED;
+		} else if (turbine.getRotorExposure() < 0.995) {
+			// part of the disc is behind blocks: the share in the open is what it can make of the wind
+			state(graphics, Component.translatable("screen.renewables.wind_turbine.state.part_obstructed",
+					fmt("%.0f", turbine.getRotorExposure() * 100.0)), AMBER, 46);
+			return;
 		} else if (turbine.getUncappedPower() > turbine.getReportedPowerKw() + 0.01) {
 			key = "screen.renewables.wind_turbine.state.curtailed";
 			colour = BLUE;

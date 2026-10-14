@@ -25,6 +25,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.SupportType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -40,12 +41,17 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * something steps on its top.  Either way the fall is {@link TowerCollapse}.  Nothing built to a turbine's own
  * limits (13 at the most) ever comes near these, so the rule is for bare towers.
  */
-public class TurbineTowerBlock extends Block implements EntityBlock {
+public class TurbineTowerBlock extends Block implements EntityBlock, MachineShell.Carrier {
+	/** How far up or down a column is counted: past the tallest pile that can stand ({@link TurbineGeometry#SCAN_LIMIT}). */
+	public static final int SCAN_LIMIT = TurbineGeometry.SCAN_LIMIT;
 	/**
-	 * Nothing stands above this many segments.  Kept under this name for the code that already reads it; it is
-	 * {@link TurbineGeometry#SAFE_SEGMENTS}.
+	 * The count the bare tower's renderer stops at, under the name it reads.  It was the safe height, 16, so a pile of
+	 * 18 to 20 that stands until walked on was drawn 17 high with its top blocks solid and invisible.
+	 *
+	 * @deprecated the count is {@link #countAbove}; this is {@link #SCAN_LIMIT} and goes once the renderer calls that
 	 */
-	public static final int MAX_SEGMENTS = TurbineGeometry.SAFE_SEGMENTS;
+	@Deprecated
+	public static final int MAX_SEGMENTS = SCAN_LIMIT;
 
 	/** Finest radius step the tube's staircase is cached at: a tenth of a pixel. */
 	private static final double RADIUS_STEPS_PER_BLOCK = 160.0;
@@ -54,9 +60,13 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	/** The insulator's box at the foot of a tower that carries a turbine, turned with the machine's four facings. */
 	private static final MachineShell.Cell INSULATOR = new MachineShell.Cell(0, 0, 0, box(TurbineGeometry.INSULATOR_BOX));
 
-	/** The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state. */
+	/**
+	 * The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state.
+	 * Solid as far as fluids go: a dynamic shape is never counted solid, and water spread into a tower stood in the sea and
+	 * washed its foot away, and the rest of it with it.
+	 */
 	public TurbineTowerBlock(Properties properties) {
-		super(properties.dynamicShape());
+		super(properties.dynamicShape().forceSolidOn());
 	}
 
 	private static VoxelShape box(double[] b) {
@@ -112,6 +122,13 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	/** Whether this segment is the lowest of its pile. */
 	public static boolean isFoot(BlockGetter level, BlockPos pos) {
 		return !(level.getBlockState(pos.below()).getBlock() instanceof TurbineTowerBlock);
+	}
+
+	/** A click on any segment of a tower that carries a turbine is a click on the turbine, its fitting included. */
+	@Nullable
+	@Override
+	public BlockPos carriedMachine(BlockGetter level, BlockPos pos) {
+		return findTurbineAbove(level, pos);
 	}
 
 	// ---- shape and light ----
@@ -176,13 +193,26 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 
 	// ---- standing up ----
 
-	/** A segment stands on another segment, or on anything that has a solid shape to stand on. */
+	/**
+	 * A segment stands on another segment, or is founded on a block whose top can carry it in the middle - and never on a
+	 * machine of this mod.  Any collision at all used to do, so a tower stood on another turbine's nacelle, counted its
+	 * own pile only, and ran a second rotor through the first one's, its foot fourteen blocks up in the wind.
+	 */
 	@Override
 	public boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
 		BlockPos below = pos.below();
 		BlockState support = level.getBlockState(below);
+		if (support.getBlock() instanceof TurbineTowerBlock) return true;
 
-		return support.getBlock() instanceof TurbineTowerBlock || !support.getCollisionShape(level, below).isEmpty();
+		return isFoundation(level, below, support);
+	}
+
+	/** Whether a block can take the foot of a tower: a top face that carries a load in its middle, and not a machine. */
+	public static boolean isFoundation(LevelReader level, BlockPos pos, BlockState support) {
+		Block block = support.getBlock();
+		if (block instanceof MachineBlock || block instanceof MachineShellBlock || block instanceof TurbineTowerBlock) return false;
+
+		return support.isFaceSturdy(level, pos, Direction.UP, SupportType.CENTER);
 	}
 
 	/**

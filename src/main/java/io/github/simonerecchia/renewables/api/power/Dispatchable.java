@@ -49,4 +49,27 @@ public interface Dispatchable extends IEnergyBudget {
 	double getActivePowerLimit();
 
 	void setActivePowerLimit(double limitKw);
+
+	// ---- what a computer reads ----
+
+	/**
+	 * The energy figures and the running state, all from one tick, for a reader on another thread.
+	 *
+	 * @param grossJoulesPerTick what the machine produced in the tick, before anything was claimed
+	 * @param availableJoules    what was left unclaimed in that tick's budget when it was taken
+	 * @param maxJoulesPerTick   the ceiling on what the machine hands out in a tick
+	 * @param running            turning and allowed to generate
+	 */
+	record Reading(double grossJoulesPerTick, double availableJoules, double maxJoulesPerTick, boolean running) {
+		public static final Reading NONE = new Reading(0.0, 0.0, 0.0, false);
+	}
+
+	/**
+	 * The figures a computer reads besides the telemetry.  A machine that publishes one {@link Reading} at the end of its
+	 * tick overrides this, so a program never sees the production of one tick against the budget of the next; the default
+	 * reads the live state, field by field.
+	 */
+	default Reading reading() {
+		return new Reading(getGrossJoulesPerTick(), getAvailableJoules(), getMaxJoulesPerTick(), isRunning());
+	}
 }
