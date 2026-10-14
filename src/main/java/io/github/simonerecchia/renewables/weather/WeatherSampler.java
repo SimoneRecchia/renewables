@@ -29,9 +29,17 @@ public final class WeatherSampler {
 	 * @param thundering   whether there is a thunderstorm (only meaningful with rain)
 	 * @param site         the ground around the mast
 	 * @param withSky      whether the caller wants the sky (cloud cover, irradiance); a wind-only caller can skip it
+	 * @param sunPhase     where the drawn sun is, {@link Atmosphere#sunPhase} of the level's celestial angle; NaN in a
+	 *                     dimension with no sky, where there is no sun to sample
 	 */
 	public record Input(long seed, int x, int z, int groundY, int seaLevel, int mastBlocks, long dayTime, long gameTime,
-			boolean raining, boolean thundering, SiteConditions site, boolean withSky) {
+			boolean raining, boolean thundering, SiteConditions site, boolean withSky, double sunPhase) {
+		/** An Overworld sky, whose sun follows the day clock through vanilla's own easing. */
+		public Input(long seed, int x, int z, int groundY, int seaLevel, int mastBlocks, long dayTime, long gameTime,
+				boolean raining, boolean thundering, SiteConditions site, boolean withSky) {
+			this(seed, x, z, groundY, seaLevel, mastBlocks, dayTime, gameTime, raining, thundering, site, withSky,
+					Atmosphere.sunPhase(Atmosphere.celestialAngle(dayTime)));
+		}
 	}
 
 	/** The measurement height of a mast of this many blocks, in metres. */
@@ -80,16 +88,18 @@ public final class WeatherSampler {
 		double density = Atmosphere.airDensity(temperature, pressure);
 		double shear = Atmosphere.profileExponent(site.roughness(), stability);
 
-		SkyConditions sky = in.withSky() ? skyAt(in, site, dayPhase, pressure, temperature, instantWind, thundering) : null;
+		SkyConditions sky = in.withSky() ? skyAt(in, site, pressure, temperature, instantWind, thundering) : null;
 
 		return new WeatherSnapshot(meanWind, instantWind, gust, turbulence, direction, temperature, pressure, density, shear, sky);
 	}
 
-	private static SkyConditions skyAt(Input in, SiteConditions site, double dayPhase, double pressure, double temperature,
+	private static SkyConditions skyAt(Input in, SiteConditions site, double pressure, double temperature,
 			double windSpeed, boolean thundering) {
 		double cover = Atmosphere.cloudCover(in.seed(), in.x(), in.z(), in.dayTime(), in.gameTime(), site.downfall(),
 				in.raining(), thundering);
 
-		return Atmosphere.sky(Atmosphere.sunPosition(dayPhase), pressure, cover, site.albedo(), temperature, windSpeed);
+		// the sun the player sees, not the day clock read as a straight line: they are twelve degrees apart at dawn
+		SunPosition sun = Double.isNaN(in.sunPhase()) ? SunPosition.NONE : Atmosphere.sunPosition(in.sunPhase());
+		return Atmosphere.sky(sun, pressure, cover, site.albedo(), temperature, windSpeed);
 	}
 }

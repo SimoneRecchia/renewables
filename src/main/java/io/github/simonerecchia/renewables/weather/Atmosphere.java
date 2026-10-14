@@ -66,6 +66,22 @@ public final class Atmosphere {
 		return Math.floorMod(dayTime, 24000L) / 24000.0;
 	}
 
+	/**
+	 * Vanilla's celestial angle at a day-clock reading, worked out as {@code DimensionType.timeOfDay} does: 0 with the
+	 * sun overhead, a quarter at sunset.  It is not linear in the clock - the drawn sun lingers round noon and hurries
+	 * through the night - so at dayTime 0 the sun the player sees is already 12.4 degrees up.
+	 */
+	public static double celestialAngle(long dayTime) {
+		double day = Mth.frac(dayTime / 24000.0 - 0.25);
+		double eased = 0.5 - Math.cos(day * Math.PI) / 2.0;
+		return (day * 2.0 + eased) / 3.0;
+	}
+
+	/** Where the drawn sun is in its day, on {@link #dayPhase}'s scale (0 sunrise, 0.25 noon), from a celestial angle. */
+	public static double sunPhase(double celestialAngle) {
+		return Mth.frac(celestialAngle - 0.75);
+	}
+
 	// ---- the pressure map ----
 
 	/** Mean sea level pressure at a block column, in hPa. */
@@ -269,13 +285,14 @@ public final class Atmosphere {
 	private static final double CUMULUS_TICKS = 6000.0;
 
 	/**
-	 * Where the sun is at a point in the day.
+	 * Where the sun is at a point in its day, given as {@link #sunPhase} - the sun Minecraft draws, so a tracker points
+	 * where the player sees the sun and a row goes dark when it sets.
 	  *
 	 * See {@link SunPosition} for what having no axial tilt does to everything downstream.
 	 */
-	public static SunPosition sunPosition(double dayPhase) {
-		double elevation = Math.toDegrees(Math.asin(Math.sin(dayPhase * 2.0 * Math.PI)));
-		return new SunPosition(elevation, dayPhase < 0.25 || dayPhase >= 0.75 ? SunPosition.EAST : SunPosition.WEST);
+	public static SunPosition sunPosition(double sunPhase) {
+		double elevation = Math.toDegrees(Math.asin(Math.sin(sunPhase * 2.0 * Math.PI)));
+		return new SunPosition(elevation, sunPhase < 0.25 || sunPhase >= 0.75 ? SunPosition.EAST : SunPosition.WEST);
 	}
 
 	/** Solar irradiance above the atmosphere, W/m2. */
