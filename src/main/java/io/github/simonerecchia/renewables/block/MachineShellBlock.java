@@ -136,19 +136,35 @@ public class MachineShellBlock extends Block {
 	}
 
 	/**
-	 * A player who breaks any cell breaks the machine.  The drop follows the player's tool as the cell itself
-	 * would: the shell is tagged like the machines it belongs to, so the same pickaxe is right for both.
+	 * A player who breaks any cell breaks the machine, with its drop on the machine's own rule: not in creative,
+	 * and only with the tool the <em>machine</em> wants.  That is read off the machine's state and not this
+	 * cell's, so a shell that drifted out of a tool tag would not make a machine drop nothing for a pickaxe
+	 * that is right for it.
 	 */
 	@Override
 	public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
 		if (!level.isClientSide) {
 			BlockPos host = MachineShell.hostOf(level, pos);
 			if (host != null) {
-				level.destroyBlock(host, !player.isCreative() && player.hasCorrectToolForDrops(state), player);
+				BlockState hostState = level.getBlockState(host);
+				level.destroyBlock(host, !player.isCreative() && player.hasCorrectToolForDrops(hostState), player);
 			}
 		}
 
 		super.playerWillDestroy(level, pos, state, player);
+	}
+
+	/**
+	 * Taking a cell apart goes at the speed of taking the machine apart.  A shell's own hardness is the
+	 * smallest of the machines' (a tower is 3.0), so left to itself a player digging at the steel of a tower
+	 * would finish a third sooner than digging at the block that holds it.
+	 */
+	@Override
+	public float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
+		BlockPos host = MachineShell.hostOf(level, pos);
+		if (host == null) return super.getDestroyProgress(state, player, level, pos);
+
+		return level.getBlockState(host).getDestroyProgress(player, level, host);
 	}
 
 	/** A cell whose machine is gone or does not claim it goes too, without a drop. */

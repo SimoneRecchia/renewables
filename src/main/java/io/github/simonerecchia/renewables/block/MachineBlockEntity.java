@@ -5,6 +5,7 @@ import io.github.simonerecchia.renewables.client.wire.InsulatorIndex;
 import io.github.simonerecchia.renewables.grid.FittingTypes;
 import io.github.simonerecchia.renewables.grid.InsulatorHost;
 import io.github.simonerecchia.renewables.grid.InsulatorIds;
+import io.github.simonerecchia.renewables.model.ExtraPose;
 import io.github.simonerecchia.renewables.model.ModelDefinition;
 import io.github.simonerecchia.renewables.model.ModelDefinitions;
 import io.github.simonerecchia.renewables.model.PartBox;
@@ -91,11 +92,20 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 		return -1;
 	}
 
+	/**
+	 * Where fitting {@code index} ends a wire, in the world; null when this machine cannot say yet.
+	 *
+	 * Read from the cache {@link #refreshAnchors} fills, and worked out on the spot if that has not run (a
+	 * wire request can reach a machine in the instant between its being built and its being loaded).
+	 */
 	@Nullable
 	@Override
 	public Vec3 getWirePosition(int index) {
 		ensureSizes();
-		return index >= 0 && index < wirePositions.length ? wirePositions[index] : null;
+		if (index < 0 || index >= wirePositions.length) return null;
+		if (wirePositions[index] == null) wirePositions[index] = computeAnchor(index);
+
+		return wirePositions[index];
 	}
 
 	/** Recomputes every anchor.  Call when the block loads, turns, changes state or is reconfigured. */
@@ -107,10 +117,22 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 	}
 
 	/**
+	 * A new state means anchors may have moved (a turned machine, a kiosk that is wall-mounted) and the clients
+	 * have to be told by whoever changed it: this only keeps the numbers on this side true.
+	 */
+	@Override
+	public void setBlockState(BlockState state) {
+		super.setBlockState(state);
+		refreshAnchors();
+	}
+
+	/**
 	 * Where fitting {@code index} ends a wire, in the world.
 	 *
-	 * The default is the middle of the top of the fitting's box, in the model's frame, turned onto the block's
-	 * facing and set on the block.  Null when the fittings table has no box for it.
+	 * The default is the middle of the top of the fitting's box, in the model's frame, put through the one
+	 * transform the renderer draws with ({@link ExtraPose#toWorld}): turned onto the block's facing, set on the
+	 * block, and - for a machine that is also an {@link ExtraPose} (the pole's arms, a wall-mounted kiosk) -
+	 * moved by what that says.  Null when the fittings table has no box for it.
 	 */
 	@Nullable
 	protected Vec3 computeAnchor(int index) {
@@ -122,8 +144,8 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 		if (box == null) return null;
 
 		Vector3f top = box.top();
-		Vec3 turned = ModelFacing.turned(new Vec3(top.x(), top.y(), top.z()), definition.authored(), facing(definition.authored()));
-		return Vec3.atLowerCornerOf(getBlockPos()).add(0.5, 0.0, 0.5).add(turned);
+		return ExtraPose.toWorld(new Vec3(top.x(), top.y(), top.z()), getBlockPos(), definition.authored(),
+				facing(definition.authored()), this instanceof ExtraPose pose ? pose : null);
 	}
 
 	/** Which way the block is turned; a machine with no facing is as it was authored. */
@@ -142,6 +164,11 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 	@Override
 	public double getCurrentPower() {
 		return currentPower;
+	}
+
+	/** For a machine that spends some of what it was delivered before the grid delivers the next. */
+	protected void setCurrentPower(double power) {
+		currentPower = power;
 	}
 
 	// ---- persistence and sync ----

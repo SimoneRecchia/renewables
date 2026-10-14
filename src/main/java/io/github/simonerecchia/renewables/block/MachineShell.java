@@ -3,6 +3,7 @@ package io.github.simonerecchia.renewables.block;
 
 
 import java.util.List;
+import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
@@ -107,6 +108,34 @@ public interface MachineShell {
 				level.setBlock(target, want, Block.UPDATE_ALL);
 			}
 		}
+	}
+
+	/**
+	 * The first cell of this machine that something solid already stands in, or null when it all fits.
+	 *
+	 * Run before a machine is put down: a pole with an arm inside a wall is a pole whose arm cannot be hit,
+	 * stood on, or broken, and one that quietly lacks collision where the model has steel.  What is in the way
+	 * is what {@link #place} would refuse to overwrite: anything that is not replaceable and is not a cell
+	 * of a machine that has gone.  A cell in a chunk that is not loaded cannot be asked, and is left to
+	 * {@link #heal}, as it is when placing.
+	 */
+	@Nullable
+	static BlockPos obstruction(Level level, BlockPos pos, BlockState state) {
+		if (!(state.getBlock() instanceof MachineShell machine)) return null;
+
+		int quarters = machine.shellTurns(state);
+		for (Cell cell : machine.shellCells(state)) {
+			if (cell.own()) continue;
+
+			BlockPos target = pos.offset(cell.at(quarters));
+			if (level.isOutsideBuildHeight(target)) return target;
+			if (!level.hasChunkAt(target)) continue;
+
+			BlockState there = level.getBlockState(target);
+			if (!there.canBeReplaced() && !mine(level, pos, target, there)) return target;
+		}
+
+		return null;
 	}
 
 	/** Whether a cell already standing here is this machine's to overwrite. */
