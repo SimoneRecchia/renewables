@@ -17,7 +17,7 @@ public final class SwitchLogic {
 	private SwitchLogic() {
 	}
 
-	/** Whether there is load on a switch: more than 2 % of its rating (520 kW of 26 000 kW). */
+	/** Whether there is load on a switch: more than 2 % of its rating (720 kW of 36 000 kW). */
 	public static boolean underLoad(double deliveredKw, double ratedKw) {
 		return deliveredKw > ratedKw * LOAD_FRACTION;
 	}
