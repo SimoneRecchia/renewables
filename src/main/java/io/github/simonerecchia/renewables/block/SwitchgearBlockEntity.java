@@ -44,7 +44,7 @@ public class SwitchgearBlockEntity extends MachineBlockEntity {
 
 		lastSignal = signal;
 		setChanged();
-		SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), edge > 0);
+		SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), edge > 0, false);
 	}
 
 	/** A breaker, closed and carrying more than it is rated for, opens itself, with the sound of it. */
@@ -53,7 +53,7 @@ public class SwitchgearBlockEntity extends MachineBlockEntity {
 		if (SwitchgearBlock.open(getBlockState()) || !spec().breaksLoad()) return;
 		if (!SwitchLogic.overRated(getCurrentPower(), spec().ratedKw())) return;
 
-		if (SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), true)) {
+		if (SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), true, false)) {
 			level.playSound(null, worldPosition, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.8f, 1.4f);
 		}
 	}
