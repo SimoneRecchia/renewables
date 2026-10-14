@@ -51,7 +51,7 @@ UPPER_ARM_Y = 5.67
 ARM_DEPTH = 0.187          # how deep the channel is, top to bottom
 LOWER_ARM_HALF = 2.086     # how far the lower arm reaches from the shaft
 UPPER_ARM_HALF = 1.677
-# Where the eight insulators stand, in the order ObjDefinitions names them.
+# Where the eight insulators stand, in the order ModelDefinitions names them.
 LOWER_PINS = (-0.79, -1.56, 0.79, 1.56)
 UPPER_PINS = (-0.615, -1.19, 0.615, 1.19)
 
