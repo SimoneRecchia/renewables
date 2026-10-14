@@ -163,11 +163,17 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 	}
 
 	/**
-	 * The disturbance that came with this tick's power.  The grid sets it before the box ticks and the box clears
-	 * it after, so it is used once.
+	 * The disturbance that came with this tick's power.  The grid delivers it straight after the power, every tick,
+	 * before the box ticks; the box clears it after, so it is used once.
 	 */
-	public void setIncomingEvent(PowerDeliveryEvent event) {
+	@Override
+	public void deliverEvent(PowerDeliveryEvent event) {
 		incoming = event == null ? PowerDeliveryEvent.NONE : event;
+	}
+
+	/** The same, for anything that is not the grid. */
+	public void setIncomingEvent(PowerDeliveryEvent event) {
+		deliverEvent(event);
 	}
 
 	// ---- Forge Energy ----
