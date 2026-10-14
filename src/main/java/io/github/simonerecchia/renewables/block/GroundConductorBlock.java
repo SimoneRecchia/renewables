@@ -172,6 +172,12 @@ public class GroundConductorBlock extends Block implements EntityBlock {
 	private static final Map<Direction, BooleanProperty> SIDES = sides();
 
 	/** Which table this conductor takes: the three are three different objects, not one at three sizes. */
+	/** Whether a run in this state is joined to the next length on that side: the shape it took for it. */
+	public static boolean joinedOn(BlockState state, Direction side) {
+		BooleanProperty property = SIDES.get(side);
+		return property != null && state.hasProperty(property) && state.getValue(property);
+	}
+
 	private Map<Integer, VoxelShape> hubs() {
 		if (spec.id().equals(ConductorCatalog.ABC_70.id())) return ABC_HUBS;
 		if (spec.id().equals(ConductorCatalog.AAAC_228.id())) return MV_HUBS;

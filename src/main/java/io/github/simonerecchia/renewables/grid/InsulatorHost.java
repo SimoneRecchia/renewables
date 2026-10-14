@@ -4,7 +4,9 @@ import io.github.simonerecchia.renewables.api.power.ConductorSpec;
 import io.github.simonerecchia.renewables.api.power.Dispatchable;
 import io.github.simonerecchia.renewables.api.power.PowerDeliveryEvent;
 
+import java.util.List;
 import javax.annotation.Nullable;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -78,6 +80,21 @@ public interface InsulatorHost {
 	 */
 	default boolean takesConductor(ConductorSpec conductor, int index) {
 		return true;
+	}
+
+	/**
+	 * The conductor this machine is a laid length of: a ground-laid run, and nothing else answers.  Lengths of one
+	 * conductor that touch are one conductor, so the grid carries power between them as if a block of it were strung
+	 * there ({@link #laidNeighbours}).
+	 */
+	@Nullable
+	default ConductorSpec laidConductor() {
+		return null;
+	}
+
+	/** Where the lengths this run is joined to lie, by its own shape; empty for every other machine. */
+	default List<BlockPos> laidNeighbours() {
+		return List.of();
 	}
 
 	/** Whether a fitting is an output, an input, or either. */
