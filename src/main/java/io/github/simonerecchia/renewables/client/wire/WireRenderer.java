@@ -1,6 +1,7 @@
 package io.github.simonerecchia.renewables.client.wire;
 
 import io.github.simonerecchia.renewables.client.hooks.WirePreview;
+import io.github.simonerecchia.renewables.client.render.PoseLighting;
 import io.github.simonerecchia.renewables.core.ClientConfig;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -124,7 +125,11 @@ public final class WireRenderer {
 			WirePreview.draw(consumer, pose, level, player, pending, camera, event.getPartialTick());
 		}
 
-		if (consumer != null) buffers.endBatch(type);
+		if (consumer == null) return;
+
+		// the normals are in camera space; the level's lights are not set yet at this stage of the frame
+		PoseLighting.setLevel(event.getPoseStack().last().pose(), level.effects().constantAmbientLight());
+		buffers.endBatch(type);
 	}
 
 	// ---- light ----

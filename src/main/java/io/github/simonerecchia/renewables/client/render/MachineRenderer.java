@@ -61,7 +61,8 @@ import org.joml.Vector3f;
  *     resources reload.  A cache per type, not one for all, because a pass only knows which of its own machines it
  *     drew; it also keeps a turbine and the bare tower it replaced, at the same position, from sharing buffers.  Every
  *     build goes through one shared builder.</li>
- * <li>Within a machine the groups are batched by texture: one render state per texture, one draw per group.</li>
+ * <li>Within a machine the groups are batched by texture: one render state per texture, one draw per group.  The
+ *     level's two lights are turned into each group's frame for its draw ({@link PoseLighting}).</li>
  * <li>A group that is given no matrix is not drawn, which is how a renderer hides a part.  Markers
  *     ({@code pivot_*}) are never drawn.</li>
  * <li>Light is sampled once, at the machine's own block.</li>
@@ -83,15 +84,24 @@ public abstract class MachineRenderer {
 		private final MeshModel.Group source;
 		private final ResourceLocation texture;
 		private final int light;
+		/** The scale along the model's axes baked into the vertices, or null for none. */
+		@Nullable
+		private final Vector3f baked;
 
-		private GroupBuffer(VertexBuffer buffer, MeshModel.Group source, ResourceLocation texture, int light) {
+		private GroupBuffer(VertexBuffer buffer, MeshModel.Group source, ResourceLocation texture, int light, @Nullable Vector3f baked) {
 			this.buffer = buffer;
 			this.source = source;
 			this.texture = texture;
 			this.light = light;
+			this.baked = baked;
 		}
 
-		static GroupBuffer build(MeshModel.Group group, ResourceLocation texture, int light) {
+		/**
+		 * The group's triangles in a buffer of their own.  {@code baked} is a scale along the model's axes that is not the
+		 * same on all three: it goes into the positions, and its inverse into the normals, so that what is left of the pose
+		 * is a rotation the lights can follow ({@link PoseLighting}).
+		 */
+		static GroupBuffer build(MeshModel.Group group, ResourceLocation texture, int light, @Nullable Vector3f baked) {
 			int count = group.vertexCount();
 			BufferBuilder builder = builder();
 			// triangles as they are: no need for the quad of four that the render type would otherwise ask for
@@ -100,16 +110,29 @@ public abstract class MachineRenderer {
 			float[] p = group.positions;
 			float[] n = group.normals;
 			float[] uv = group.uvs;
+			float sx = baked == null ? 1.0f : baked.x();
+			float sy = baked == null ? 1.0f : baked.y();
+			float sz = baked == null ? 1.0f : baked.z();
 			for (int i = 0; i < count; i++) {
-				builder.vertex(p[3 * i], p[3 * i + 1], p[3 * i + 2], 1.0f, 1.0f, 1.0f, 1.0f, uv[2 * i], uv[2 * i + 1],
-						OverlayTexture.NO_OVERLAY, light, n[3 * i], n[3 * i + 1], n[3 * i + 2]);
+				float nx = n[3 * i] / sx;
+				float ny = n[3 * i + 1] / sy;
+				float nz = n[3 * i + 2] / sz;
+				float length = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+				if (length > 0.0f) {
+					nx /= length;
+					ny /= length;
+					nz /= length;
+				}
+
+				builder.vertex(p[3 * i] * sx, p[3 * i + 1] * sy, p[3 * i + 2] * sz, 1.0f, 1.0f, 1.0f, 1.0f, uv[2 * i], uv[2 * i + 1],
+						OverlayTexture.NO_OVERLAY, light, nx, ny, nz);
 			}
 
 			VertexBuffer vertexBuffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
 			vertexBuffer.bind();
 			vertexBuffer.upload(builder.end());
 			VertexBuffer.unbind();
-			return new GroupBuffer(vertexBuffer, group, texture, light);
+			return new GroupBuffer(vertexBuffer, group, texture, light, baked == null ? null : new Vector3f(baked));
 		}
 
 		/**
@@ -123,8 +146,11 @@ public abstract class MachineRenderer {
 			return BUILDER;
 		}
 
-		boolean isStale(MeshModel.Group group, ResourceLocation texture, int light) {
-			return buffer == null || source != group || this.light != light || !this.texture.equals(texture);
+		boolean isStale(MeshModel.Group group, ResourceLocation texture, int light, @Nullable Vector3f baked) {
+			if (buffer == null || source != group || this.light != light || !this.texture.equals(texture)) return true;
+			if (this.baked == null || baked == null) return this.baked != baked;
+
+			return !PoseLighting.sameScale(this.baked, baked);
 		}
 
 		void draw(Matrix4f modelView, Matrix4f projection, ShaderInstance shader) {
@@ -157,6 +183,10 @@ public abstract class MachineRenderer {
 	private static final Map<Class<?>, Map<BlockPos, Map<String, GroupBuffer>>> CACHES = new HashMap<>();
 	private static final Map<String, ResourceLocation> TEXTURES = new HashMap<>();
 	private static final Set<String> REPORTED = new HashSet<>();
+	/** The lights of the pass under way: drawing happens on the render thread only, one pass at a time. */
+	private static final PoseLighting LIGHTING = new PoseLighting();
+	/** Scratch for {@link PoseLighting#axisScale}; a buffer that keeps it copies it. */
+	private static final Vector3f BAKED = new Vector3f();
 	@Nullable
 	private static Level lastLevel;
 
@@ -197,6 +227,8 @@ public abstract class MachineRenderer {
 		PoseStack poseStack = event.getPoseStack();
 		Matrix4f projection = event.getProjectionMatrix();
 		Set<BlockPos> seen = new HashSet<>();
+		// nothing is pushed yet, so the stage's pose is the camera's rotation: the frame the level's lights are set in
+		LIGHTING.forView(poseStack.last().pose(), level.effects().constantAmbientLight());
 
 		for (T machine : ClientBlockEntities.of(type)) {
 			if (machine.isRemoved() || machine.getLevel() != level) continue;
@@ -214,7 +246,8 @@ public abstract class MachineRenderer {
 
 			int light = LevelRenderer.getLightColor(level, pos);
 			Map<String, GroupBuffer> buffers = cache.computeIfAbsent(pos.immutable(), key -> new HashMap<>());
-			RenderContext context = new RenderContext(model, ModelBindings.fallbackTexture(state.getBlock()), light, projection, buffers);
+			RenderContext context = new RenderContext(model, ModelBindings.fallbackTexture(state.getBlock()), light, projection, buffers,
+					LIGHTING);
 
 			poseStack.pushPose();
 			try {
@@ -241,6 +274,7 @@ public abstract class MachineRenderer {
 			}
 		}
 
+		LIGHTING.restore();
 		release(cache, seen);
 		return seen;
 	}
@@ -268,7 +302,7 @@ public abstract class MachineRenderer {
 			collect(batches, context, context.model().groups.get(entry.getKey()), entry.getValue());
 		}
 
-		drawBatches(batches, context.projection);
+		drawBatches(batches, context);
 	}
 
 	/** Draws every group of the machine with the one pose on the stack, except those {@code visible} rejects. */
@@ -279,7 +313,7 @@ public abstract class MachineRenderer {
 			if (visible.test(group.name)) collect(batches, context, group, pose);
 		}
 
-		drawBatches(batches, context.projection);
+		drawBatches(batches, context);
 	}
 
 	private static void collect(Map<ResourceLocation, List<Batch>> batches, RenderContext context, @Nullable MeshModel.Group group,
@@ -288,18 +322,21 @@ public abstract class MachineRenderer {
 
 		ResourceLocation texture = textureOf(group, context.texture());
 		int light = context.packedLight();
+		// a scale that differs along the model's axes goes into the vertices, so the pose left is one the lights follow
+		Vector3f baked = PoseLighting.axisScale(pose, BAKED) ? BAKED : null;
 		GroupBuffer buffer = context.buffers.get(group.name);
-		if (buffer == null || buffer.isStale(group, texture, light)) {
+		if (buffer == null || buffer.isStale(group, texture, light, baked)) {
 			if (buffer != null) buffer.close();
-			buffer = GroupBuffer.build(group, texture, light);
+			buffer = GroupBuffer.build(group, texture, light, baked);
 			context.buffers.put(group.name, buffer);
 		}
 
-		batches.computeIfAbsent(texture, key -> new ArrayList<>()).add(new Batch(buffer, pose));
+		Matrix4f drawn = buffer.baked == null ? pose : new Matrix4f(pose).scale(1.0f / buffer.baked.x(), 1.0f / buffer.baked.y(), 1.0f / buffer.baked.z());
+		batches.computeIfAbsent(texture, key -> new ArrayList<>()).add(new Batch(buffer, drawn));
 	}
 
-	/** One render state per texture, however many groups share it. */
-	private static void drawBatches(Map<ResourceLocation, List<Batch>> batches, Matrix4f projection) {
+	/** One render state per texture, however many groups share it; the lights are turned into each group's frame. */
+	private static void drawBatches(Map<ResourceLocation, List<Batch>> batches, RenderContext context) {
 		for (Map.Entry<ResourceLocation, List<Batch>> entry : batches.entrySet()) {
 			RenderType type = RenderType.entityCutoutNoCull(entry.getKey());
 			type.setupRenderState();
@@ -307,7 +344,10 @@ public abstract class MachineRenderer {
 				ShaderInstance shader = RenderSystem.getShader();
 				if (shader == null) continue;
 
-				for (Batch batch : entry.getValue()) batch.buffer().draw(batch.pose(), projection, shader);
+				for (Batch batch : entry.getValue()) {
+					context.lighting.applyTo(batch.pose());
+					batch.buffer().draw(batch.pose(), context.projection, shader);
+				}
 			} finally {
 				type.clearRenderState();
 			}
