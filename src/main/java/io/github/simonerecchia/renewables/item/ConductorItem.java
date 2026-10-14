@@ -11,7 +11,9 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -38,6 +40,9 @@ import net.minecraft.world.phys.shapes.CollisionContext;
  *
  * <b>On anything else</b> the reel lays one block of ground conductor where a block would be placed, if it can
  * stand there (it wants something solid under it), and costs one item outside creative.
+ *
+ * <b>On nothing</b> (the crosshair past block reach) the click picks the nearest fitting the look ray passes through,
+ * within sixteen blocks: the client's again, through {@link #use}.
  *
  * The spec the reel carries is also what the server reads when it charges for a span.
  */
@@ -70,6 +75,21 @@ public class ConductorItem extends Item {
 		return layRun(context);
 	}
 
+	/**
+	 * A click on nothing: the reaching click, for a fitting out of block reach such as the top of a tower.
+	 *
+	 * The item is the only way in - vanilla posts its click-on-empty event only for an empty hand, so a reel in hand
+	 * never sees it.  The server has nothing to do; the client answers {@link ClientHooks#wireClickInAir}, which also
+	 * turns away the call that follows a {@link #useOn} that passed on a block.
+	 */
+	@Override
+	public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+		ItemStack stack = player.getItemInHand(hand);
+		if (!level.isClientSide) return InteractionResultHolder.pass(stack);
+
+		return new InteractionResultHolder<>(ClientHooks.wireClickInAir(level, player, hand), stack);
+	}
+
 	/** One block of this conductor on the ground, where a block would go. */
 	private InteractionResult layRun(UseOnContext context) {
 		Level level = context.getLevel();
@@ -82,6 +102,8 @@ public class ConductorItem extends Item {
 		if (!placing.canPlace()) return InteractionResult.PASS;
 
 		BlockPos pos = placing.getClickedPos();
+		if (level.isOutsideBuildHeight(pos) || !level.getWorldBorder().isWithinBounds(pos)) return InteractionResult.PASS;
+
 		Block block = registered.get();
 		BlockState state = block.getStateForPlacement(placing);
 		if (state == null || !state.canSurvive(level, pos)) return InteractionResult.PASS;
@@ -92,7 +114,9 @@ public class ConductorItem extends Item {
 		// the client is told it worked and the server does the work
 		if (level.isClientSide) return InteractionResult.SUCCESS;
 
-		level.setBlock(pos, state, Block.UPDATE_ALL_IMMEDIATE);
+		// a reel is paid for a block that is there, and only then
+		if (!level.setBlock(pos, state, Block.UPDATE_ALL_IMMEDIATE)) return InteractionResult.FAIL;
+
 		level.gameEvent(GameEvent.BLOCK_PLACE, pos, GameEvent.Context.of(player, state));
 		level.playSound(null, pos, state.getSoundType(level, pos, player).getPlaceSound(), SoundSource.BLOCKS, 0.8f, 1.1f);
 

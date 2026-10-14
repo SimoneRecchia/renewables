@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.simonerecchia.renewables.net.packet.PoleConfigPayload;
+
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
@@ -65,5 +67,48 @@ class PoleConfigTextTest {
 		assertEquals(1.0f, PoleConfigText.clamp(7.0f, 1.0f));
 		assertEquals(-1.0f, PoleConfigText.clamp(-7.0f, 1.0f));
 		assertEquals(0.25f, PoleConfigText.clamp(0.25f, 1.0f));
+	}
+
+	@Test
+	void aNumberOutsideTheRangeIsToldApartFromOneInside() {
+		// typed 5 in an offset, 270 in yaw, 60 in pitch: what goes is 1, 180 and 45, so the field has to say so
+		assertFalse(PoleConfigText.within(5.0f, PoleConfigPayload.MAX_OFFSET));
+		assertTrue(PoleConfigText.within(-1.0f, PoleConfigPayload.MAX_OFFSET));
+		assertTrue(PoleConfigText.within(0.25f, PoleConfigPayload.MAX_OFFSET));
+
+		assertFalse(PoleConfigText.withinDegrees(270.0f, PoleConfigPayload.MAX_YAW));
+		assertTrue(PoleConfigText.withinDegrees(-180.0f, PoleConfigPayload.MAX_YAW));
+		assertFalse(PoleConfigText.withinDegrees(60.0f, PoleConfigPayload.MAX_PITCH));
+		assertTrue(PoleConfigText.withinDegrees(45.0f, PoleConfigPayload.MAX_PITCH));
+		assertTrue(PoleConfigText.withinDegrees(-45.0f, PoleConfigPayload.MAX_PITCH));
+	}
+
+	@Test
+	void theFieldsAndTheirLabelsStayOnTheNarrowestScreen() {
+		// "Offset X:" and "Pitch (deg):" in the vanilla font, "±1" and "±180°" beside the fields (check_gui_fits' widths)
+		int screen = 320;
+		int field = 60;
+		int leftLabel = 44;
+		int leftRange = 15;
+		int rightLabel = 56;
+		int rightRange = 35;
+		PoleConfigText.Layout layout = PoleConfigText.layout(screen, field, leftLabel, leftRange, rightLabel, rightRange);
+
+		int leftLabelStart = layout.leftField() - PoleConfigText.LABEL_GAP - leftLabel;
+		int leftRangeEnd = layout.leftField() + field + PoleConfigText.LABEL_GAP + leftRange;
+		int rightLabelStart = layout.rightField() - PoleConfigText.LABEL_GAP - rightLabel;
+		int rightRangeEnd = layout.rightField() + field + PoleConfigText.LABEL_GAP + rightRange;
+
+		assertTrue(leftLabelStart >= 0, "the left labels start on screen: " + leftLabelStart);
+		assertTrue(leftRangeEnd < rightLabelStart, "the columns do not overlap");
+		assertTrue(rightRangeEnd <= screen, "the right ranges end on screen: " + rightRangeEnd);
+		// centred: as much room either side
+		assertTrue(Math.abs(leftLabelStart - (screen - rightRangeEnd)) <= 1);
+	}
+
+	@Test
+	void aScreenTooNarrowForBothColumnsStartsAtItsLeftEdge() {
+		PoleConfigText.Layout layout = PoleConfigText.layout(200, 60, 44, 15, 56, 35);
+		assertEquals(PoleConfigText.LABEL_GAP + 44, layout.leftField());
 	}
 }

@@ -140,8 +140,11 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 	@Nullable
 	protected Vec3 computeAnchor(int index) {
 		Vec3 local = localAnchor(index);
-		if (local == null) return null;
+		return local == null ? null : modelToWorld(local);
+	}
 
+	/** A point of this machine's model in the world, through the one transform the renderer draws it with. */
+	protected Vec3 modelToWorld(Vec3 local) {
 		Direction authored = authored();
 		return ExtraPose.toWorld(local, getBlockPos(), authored, facing(authored), this instanceof ExtraPose pose ? pose : null);
 	}
@@ -200,17 +203,21 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 	// ---- persistence and sync ----
 
+	/**
+	 * The ids, and nothing of the power: what the grid delivers is a reading of the tick, not a state.  Saved, a box
+	 * that was powered when the server stopped came back powered by a grid that never told it otherwise - its far
+	 * end in a chunk not loaded, so it was in nobody's graph to be told zero.
+	 */
 	@Override
 	protected void saveAdditional(CompoundTag tag) {
 		super.saveAdditional(tag);
 		tag.putIntArray("insulatorIds", getInsulatorIds());
-		tag.putDouble("currentPower", currentPower);
 	}
 
+	/** Reads the ids.  A {@code currentPower} in the tag (an older save, a command) is ignored: see {@link #saveAdditional}. */
 	@Override
 	public void load(CompoundTag tag) {
 		super.load(tag);
-		currentPower = tag.getDouble("currentPower");
 
 		int[] saved = tag.getIntArray("insulatorIds");
 		ensureSizes();
@@ -220,20 +227,29 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 		}
 	}
 
+	/** The saved state, and the reading, so a client that loads the chunk sees it at once. */
 	@Override
 	public CompoundTag getUpdateTag() {
 		CompoundTag tag = super.getUpdateTag();
 		saveAdditional(tag);
+		tag.putDouble("currentPower", currentPower);
 		return tag;
 	}
 
+	/** The client's side of the update tag; only here is the reading taken from a tag. */
 	@Override
 	public void handleUpdateTag(CompoundTag tag) {
+		int[] before = getInsulatorIds();
 		load(tag);
+		if (tag.contains("currentPower")) currentPower = tag.getDouble("currentPower");
 		refreshAnchors();
+		int[] after = getInsulatorIds();
 		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-			InsulatorIndex.register(this, getInsulatorIds());
-			ClientWires.invalidate(getInsulatorIds());
+			// an id this machine has given up (the server renumbered a duplicate) must not keep finding it here
+			InsulatorIndex.unregister(this, before);
+			InsulatorIndex.register(this, after);
+			ClientWires.invalidate(before);
+			ClientWires.invalidate(after);
 		});
 	}
 
@@ -279,7 +295,8 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				InsulatorIndex.unregister(getInsulatorIds());
+				// only what still points here: an id already taken up by a copy of this machine stays with the copy
+				InsulatorIndex.unregister(this, getInsulatorIds());
 				ClientWires.invalidate(getInsulatorIds());
 			});
 		}

@@ -14,10 +14,13 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * A switch's six fittings: three on the line side, three on the load side.  One bus while closed, two while open.
+ * A switch's six fittings: three on the line side, three on the load side, two buses that the contacts join
+ * while it is closed.
  *
  * The bus split and the pass-through are the whole reason a switch is a switch to the grid: closed, power crosses
- * it as it crosses any machine; open, the two sides are two nodes at one position with nothing between them.
+ * it as it crosses any machine; open, the two sides are two nodes at one position with nothing between them.  Its
+ * reading is what crosses the contacts, so a disconnector whose terminals carry a line on to somewhere else, or one
+ * in front of an open breaker, has no load on it.
  *
  * It also remembers what the redstone signal was the last time it was looked at, so that only a <em>change</em>
  * moves the switch, and a breaker, which is the only one with a ticker, looks at what it carries once a second.
@@ -41,7 +44,7 @@ public class SwitchgearBlockEntity extends MachineBlockEntity {
 
 		lastSignal = signal;
 		setChanged();
-		SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), edge > 0);
+		SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), edge > 0, false);
 	}
 
 	/** A breaker, closed and carrying more than it is rated for, opens itself, with the sound of it. */
@@ -50,7 +53,7 @@ public class SwitchgearBlockEntity extends MachineBlockEntity {
 		if (SwitchgearBlock.open(getBlockState()) || !spec().breaksLoad()) return;
 		if (!SwitchLogic.overRated(getCurrentPower(), spec().ratedKw())) return;
 
-		if (SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), true)) {
+		if (SwitchgearBlock.setOpen(level, worldPosition, getBlockState(), true, false)) {
 			level.playSound(null, worldPosition, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.8f, 1.4f);
 		}
 	}
@@ -87,12 +90,16 @@ public class SwitchgearBlockEntity extends MachineBlockEntity {
 		return true;
 	}
 
-	/** Closed, one bus; open, the line side (the first half) and the load side are separate. */
+	/** The line side (the first half) and the load side, which the contacts join while the switch is closed. */
 	@Override
 	public int busOf(int index) {
-		if (!SwitchgearBlock.open(getBlockState())) return 0;
-
 		return index < spec().poles() ? 0 : 1;
+	}
+
+	/** What the grid then delivers here is what crosses the contacts, which is what the interlock and the trip read. */
+	@Override
+	public boolean closed() {
+		return !SwitchgearBlock.open(getBlockState());
 	}
 
 	@Override

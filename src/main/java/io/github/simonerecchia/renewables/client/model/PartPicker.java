@@ -1,6 +1,5 @@
 package io.github.simonerecchia.renewables.client.model;
 
-import io.github.simonerecchia.renewables.block.WindTurbineBlockEntity;
 import io.github.simonerecchia.renewables.model.ExtraPose;
 import io.github.simonerecchia.renewables.model.ModelDefinition;
 import io.github.simonerecchia.renewables.model.ModelDefinitions;
@@ -22,9 +21,10 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  *
  * Works on the per-group boxes, not on the triangles (docs/spec/models.md section 11): the answer is always a group
  * or the middle of one, never a face.  The ray is carried into the model's own frame by the same chain the renderer
- * draws with - the block's facing, and the block entity's {@link ExtraPose} when it has one - so a fitting is hit
- * exactly where it is drawn, offset and tilt included.  Where boxes overlap along the ray the nearest wins, and a
- * tie goes to the lower fitting index.  Client only.
+ * draws with - the block's facing, the block entity's {@link ExtraPose} when it has one, and the pose the renderer
+ * gives each group ({@link GroupPoses}: a scale, a stretched tower, a group it does not draw) - so a part is hit
+ * exactly where it is drawn.  Where boxes overlap along the ray the nearest wins, and a tie goes to the lower fitting
+ * index.  Client only.
  */
 @OnlyIn(Dist.CLIENT)
 public final class PartPicker {
@@ -82,36 +82,8 @@ public final class PartPicker {
 		Direction authored = definition == null ? Direction.NORTH : definition.authored();
 		Direction facing = ModelBindings.drawnFacing(state, authored);
 
-		PartFrame frame = PartFrame.of(pos, authored, facing, poseOf(level.getBlockEntity(pos)));
-		return new PartSearch(model, frame, definition == null ? List.of() : definition.insulators());
-	}
-
-	/** The extra transform the renderer draws this machine with. */
-	@Nullable
-	private static ExtraPose poseOf(@Nullable BlockEntity machine) {
-		if (machine instanceof ExtraPose pose) return pose;
-
-		// the model is drawn from the foot of the tower and the machine is the block on top of it
-		if (machine instanceof WindTurbineBlockEntity turbine) return new Lowered(-turbine.towerHeight());
-
-		return null;
-	}
-
-	/** A model drawn some blocks below its block, with no turn. */
-	private record Lowered(double dy) implements ExtraPose {
-		@Override
-		public Vec3 poseOffset() {
-			return new Vec3(0.0, dy, 0.0);
-		}
-
-		@Override
-		public float poseYawDegrees() {
-			return 0.0f;
-		}
-
-		@Override
-		public float posePitchDegrees() {
-			return 0.0f;
-		}
+		BlockEntity machine = level.getBlockEntity(pos);
+		PartFrame frame = PartFrame.of(pos, authored, facing, machine instanceof ExtraPose pose ? pose : null);
+		return new PartSearch(model, frame, definition == null ? List.of() : definition.insulators(), GroupPoses.of(machine, model));
 	}
 }
