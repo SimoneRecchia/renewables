@@ -109,16 +109,17 @@ final class LevelGrid {
 		List<WireConnection> spans = WireLedger.spans(level);
 
 		Map<Long, Slot> slots = new HashMap<>();
-		Set<Integer> stale = new LinkedHashSet<>();
+		Map<BlockPos, Set<Integer>> stale = new LinkedHashMap<>();
 		List<WireConnection> live = new ArrayList<>(spans.size());
 		List<End[]> ends = new ArrayList<>(spans.size());
 		for (WireConnection span : spans) {
 			End start = resolve(level, slots, span.startBlockPos(), span.startBlockType(), span.startInsulatorId());
 			End end = resolve(level, slots, span.endBlockPos(), span.endBlockType(), span.endInsulatorId());
 
-			// every id that points at the wrong thing is cleared of all its spans, not just this one
-			if (start.status() == Status.STALE) stale.add(span.startInsulatorId());
-			if (end.status() == Status.STALE) stale.add(span.endInsulatorId());
+			// every end that points at the wrong thing loses all its spans, not just this one - but only the spans
+			// that put that id at that block: the same id elsewhere is another machine's
+			if (start.status() == Status.STALE) stale.computeIfAbsent(span.startBlockPos(), key -> new LinkedHashSet<>()).add(span.startInsulatorId());
+			if (end.status() == Status.STALE) stale.computeIfAbsent(span.endBlockPos(), key -> new LinkedHashSet<>()).add(span.endInsulatorId());
 
 			if (start.status() == Status.ACTIVE && end.status() == Status.ACTIVE) {
 				live.add(span);
@@ -127,13 +128,12 @@ final class LevelGrid {
 		}
 
 		if (!stale.isEmpty()) {
-			int[] ids = stale.stream().mapToInt(Integer::intValue).toArray();
-			WireLedger.removeAttachedTo(level, ids);
+			stale.forEach((pos, ids) -> WireLedger.removeAttachedTo(level, pos, ids.stream().mapToInt(Integer::intValue).toArray()));
 
 			// the spans just removed are not in the graph either
 			for (int i = live.size() - 1; i >= 0; i--) {
 				WireConnection span = live.get(i);
-				if (stale.contains(span.startInsulatorId()) || stale.contains(span.endInsulatorId())) {
+				if (isStale(stale, span.startBlockPos(), span.startInsulatorId()) || isStale(stale, span.endBlockPos(), span.endInsulatorId())) {
 					live.remove(i);
 					ends.remove(i);
 				}
@@ -209,6 +209,11 @@ final class LevelGrid {
 		}
 
 		return network;
+	}
+
+	private static boolean isStale(Map<BlockPos, Set<Integer>> stale, BlockPos pos, int id) {
+		Set<Integer> ids = stale.get(pos);
+		return ids != null && ids.contains(id);
 	}
 
 	/** A transformer that fails to say what it burns is a broken one, and passes nothing on. */

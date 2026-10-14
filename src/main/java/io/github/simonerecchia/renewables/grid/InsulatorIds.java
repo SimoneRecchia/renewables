@@ -1,5 +1,6 @@
 package io.github.simonerecchia.renewables.grid;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.server.ServerLifecycleHooks;
@@ -12,8 +13,9 @@ import javax.annotation.Nullable;
  * Spans are saved on these ids, so they have to outlive a restart and must never point at the wrong machine.  The
  * counter is world data (kept with the Overworld, like every dimension's spans refer to ids from this one
  * sequence): a restart does not wind it back, and an id read from a machine in a chunk that is not loaded yet still
- * counts, because every span names its ids and {@link WireLedger} adopts them all when the world opens.  Two loaded
- * machines that claim the same id (a block copied with its data) are told apart: the second is given a new one.
+ * counts, because every span names its ids and {@link WireLedger} adopts them all when the world opens.  Two
+ * machines that claim the same id (a block copied with its data) are told apart: the one the saved spans do not put
+ * the id on, or else the second to load, is given a new one.
  *
  * The three entry points are the contract machines call.  They are safe to call from any thread, but only the
  * server thread works on the world's counter; a client (even the client half of a single-player game) takes its
@@ -46,6 +48,15 @@ public final class InsulatorIds {
 	 */
 	public static void claim(int[] ids) {
 		pool().claim(ids);
+	}
+
+	/**
+	 * {@link #claim(int[])} for the machine at {@code pos}, which also replaces an id that the saved spans put on a
+	 * machine somewhere else: a copy that loads before its original (or while the original's chunk is not loaded)
+	 * must not take the original's spans.
+	 */
+	public static void claim(int[] ids, ServerLevel level, BlockPos pos) {
+		pool().claim(ids, id -> WireLedger.belongsElsewhere(level, pos, id));
 	}
 
 	/** An id read from a saved machine is in use: the counter must never hand it out again. */

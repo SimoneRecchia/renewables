@@ -72,6 +72,20 @@ class IdPoolTest {
 		assertEquals(6, saved.get());
 	}
 
+	/** A copy that loads while its original is away: the saved spans say where the id belongs, and it is not here. */
+	@Test
+	void anIdTheSpansPutOnAnotherMachineIsReissuedAndTheRestKept() {
+		IdPool pool = new IdPool(0, true, null);
+		pool.adopt(40);
+		int[] copy = {33, 34};
+
+		pool.claim(copy, id -> id == 33);
+
+		assertNotEquals(33, copy[0]);
+		assertTrue(copy[0] > 40);
+		assertEquals(34, copy[1]);
+	}
+
 	@Test
 	void theCounterNeverMovesBack() {
 		IdPool pool = new IdPool(100, true, null);
