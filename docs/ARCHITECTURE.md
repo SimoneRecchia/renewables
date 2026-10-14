@@ -133,8 +133,9 @@ Canale `renewables:main`. Messaggi (l'id è la posizione; i nuovi in coda): 0 `W
 1 `PoleConfigPayload`, 2 `CreateSpanPayload`, 3 `TurbineControlPayload`, 4 `SolarControlPayload`,
 5 `SpanChangedPayload(span, created)`, 6 `PowerUpdatePayload(blockPos, powerKw)`, 7 `PlantControlPayload`.
 I gestori client->server stanno in `ServerHandlers`, tutti i comandi di pannello passano da `PanelGuard.find(...)`
-(chunk caricato, bordo del mondo, `mayInteract`, tipo del block entity, distanza <= `PanelGuard.REACH` = 18 blocchi
-misurata all'asse della macchina). I gestori server->client entrano nel codice solo client da `ClientBridge` (via
+(né spettatore né in avventura, al più `PanelGuard.PER_TICK` = 4 comandi per macchina e giocatore a tick, chunk caricato,
+bordo del mondo, `mayInteract`, tipo del block entity, distanza <= `PanelGuard.REACH` = 18 blocchi misurata all'asse
+della macchina). I gestori server->client entrano nel codice solo client da `ClientBridge` (via
 `DistExecutor`) verso `RenewablesClient.onWireSync / onSpanChanged / onPowerUpdate`.
 Un'azione fuori intervallo arriva come `null` nel payload e il server scarta il messaggio.
 

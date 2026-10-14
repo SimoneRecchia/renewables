@@ -730,6 +730,12 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 		return budget.netKw(Math.max(0.0, acPowerKw));
 	}
 
+	/** What the grid took is spent: no other mod may claim it before the next tick's budget. */
+	@Override
+	public void drawnByGrid(double kw) {
+		budget.drawForGrid(kw);
+	}
+
 	/** Whether this generator is putting a disturbance onto the network. */
 	public boolean isSurging() {
 		return false;

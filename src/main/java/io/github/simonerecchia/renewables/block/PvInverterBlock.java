@@ -191,7 +191,7 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 				// the arrays, or they would go on believing they were wired to a cabinet that is no longer
 				// there and would wait for an operating point that never comes
 				inverter.releaseArrays();
-				WireLedger.removeAttachedTo(serverLevel, inverter.getInsulatorIds());
+				WireLedger.removeAttachedTo(serverLevel, pos, inverter.getInsulatorIds());
 			}
 		}
 
