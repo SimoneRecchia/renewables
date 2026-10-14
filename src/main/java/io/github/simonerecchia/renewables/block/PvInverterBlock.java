@@ -27,6 +27,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -162,6 +164,25 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 		};
 	}
 
+	/**
+	 * The box fitted in the cabinet comes out with it, so rearranging a plant is not a tax on the parts - by the
+	 * cabinet's own loot rule: not from a creative break, and from an explosion only when the cabinet survives it.
+	 */
+	@Override
+	public List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+		List<ItemStack> drops = super.getDrops(state, params);
+		if (drops.isEmpty() || !(params.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof PvInverterBlockEntity inverter)) {
+			return drops;
+		}
+
+		CombinerSpec fitted = inverter.integratedCombiner();
+		if (fitted == null) return drops;
+
+		List<ItemStack> withBox = new ArrayList<>(drops);
+		withBox.add(new ItemStack(ModItems.PV_COMBINERS.get(fitted.id()).get()));
+		return withBox;
+	}
+
 	/** Takes the cabinet out of the plant when it is actually broken. */
 	@Override
 	public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
@@ -171,11 +192,6 @@ public class PvInverterBlock extends HorizontalDirectionalBlock implements Entit
 				// there and would wait for an operating point that never comes
 				inverter.releaseArrays();
 				WireLedger.removeAttachedTo(serverLevel, inverter.getInsulatorIds());
-				// and the box out of the cabinet, so rearranging a plant is not a tax on the parts
-				CombinerSpec fitted = inverter.integratedCombiner();
-				if (fitted != null) {
-					popResource(level, pos, new ItemStack(ModItems.PV_COMBINERS.get(fitted.id()).get()));
-				}
 			}
 		}
 

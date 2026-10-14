@@ -28,7 +28,7 @@ public final class PanelGuard {
 	/**
 	 * The block entity at {@code pos} if the player may command it, otherwise null.
 	 *
-	 * In order: the chunk is loaded (without loading it), the position is inside the world border, the player
+	 * In order: the player is not a spectator, the chunk is loaded (without loading it), the position is inside the world border, the player
 	 * may interact there (spawn protection and the like), the block entity is of the expected kind, and the
 	 * player is close enough.  Close enough is measured to the machine's vertical axis, at the player's own
 	 * height clamped to the machine's span, so someone halfway up a turbine tower is not far from its panel.
@@ -38,7 +38,8 @@ public final class PanelGuard {
 	@Nullable
 	public static <T extends BlockEntity> T find(@Nullable ServerPlayer player, BlockPos pos, Class<T> type,
 			ToIntFunction<T> footDrop) {
-		if (player == null) return null;
+		// a spectator watches: it may open nothing and command nothing, as it may string no span
+		if (player == null || player.isSpectator()) return null;
 
 		ServerLevel level = player.serverLevel();
 		if (!level.isLoaded(pos)) return null;
