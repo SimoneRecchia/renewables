@@ -139,7 +139,8 @@ public class PlantControllerScreen extends PlantScreen<PlantControllerBlockEntit
 		private void follow(PlantControllerBlockEntity controller) {
 			double capacity = controller.getCapacityKw();
 			syncTo(capacity <= 0.0 ? 1.0 : controller.getSetpointKw() / capacity);
-			active = controller.getMode() == PlantControllerBlockEntity.Mode.LIMIT;
+			// a fraction of no capacity is a zero nobody chose: nothing to hold the plant to until units are in range
+			active = controller.getMode() == PlantControllerBlockEntity.Mode.LIMIT && controller.hasCapacity();
 		}
 
 		@Override
@@ -153,7 +154,7 @@ public class PlantControllerScreen extends PlantScreen<PlantControllerBlockEntit
 		@Override
 		protected void commit() {
 			PlantControllerBlockEntity controller = machine();
-			if (controller != null) send(PlantControlPayload.Action.SET_SETPOINT, value * controller.getCapacityKw());
+			if (controller != null && controller.hasCapacity()) send(PlantControlPayload.Action.SET_SETPOINT, value * controller.getCapacityKw());
 		}
 	}
 }

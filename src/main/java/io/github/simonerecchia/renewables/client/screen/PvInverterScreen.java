@@ -127,24 +127,29 @@ public class PvInverterScreen extends PlantScreen<PvInverterBlockEntity> {
 		} else if (inverter.isStoppedByRedstone()) {
 			key = "screen.renewables.pv.state.stopped_by_redstone";
 			colour = AMBER;
-		} else if (inverter.arraysConnected() == 0) {
-			key = "screen.renewables.pv_inverter.state.no_arrays";
+		} else if (inverter.arraysConnected() == 0 && inverter.combinersConnected() == 0) {
+			// a plant fed only through boxes has arrays all the same; one that was refused says why
+			key = inverter.refusal() == PvInverterBlockEntity.Refusal.NONE ? "screen.renewables.pv_inverter.state.no_arrays"
+					: refusalKey(inverter);
 			colour = RED;
 		} else if (inverter.stringsOutOfWindow()) {
 			// named rather than left at standby, because it is the one mismatch a player cannot see
 			graphics.fill(leftPos + MARGIN, topPos + 47, leftPos + MARGIN + 4, topPos + 51, RED);
 			graphics.drawString(font, Component.translatable("screen.renewables.pv_inverter.state.out_of_window",
-					fmt("%.0f", inverter.dcVoltage()), fmt("%.0f", inverter.spec().mpptMinVolts()),
+					fmt("%.0f", inverter.outOfWindowVolts()), fmt("%.0f", inverter.spec().mpptMinVolts()),
 					fmt("%.0f", inverter.spec().mpptMaxVolts())), leftPos + MARGIN + 8, topPos + 46, VALUE_COLOUR, false);
 			return;
+		} else if (inverter.refusal() != PvInverterBlockEntity.Refusal.NONE) {
+			key = refusalKey(inverter);
+			colour = AMBER;
 		} else if (inverter.derating()) {
 			key = "screen.renewables.pv_inverter.state.derating";
 			colour = RED;
+		} else if (inverter.curtailed()) {
+			key = "screen.renewables.pv_inverter.state.curtailed";
+			colour = BLUE;
 		} else if (inverter.clipping()) {
 			key = "screen.renewables.pv_inverter.state.clipping";
-			colour = BLUE;
-		} else if (inverter.getActivePowerLimit() < inverter.spec().acPowerKw() - 0.01 && inverter.acPowerKw() >= inverter.getActivePowerLimit() - 0.01) {
-			key = "screen.renewables.pv_inverter.state.curtailed";
 			colour = BLUE;
 		} else if (inverter.acPowerKw() <= 0.0) {
 			key = "screen.renewables.pv_inverter.state.standby";
@@ -242,6 +247,10 @@ public class PvInverterScreen extends PlantScreen<PvInverterBlockEntity> {
 		Net.sendToServer(SolarControlPayload.of(targetPos, action));
 	}
 
+
+	private static String refusalKey(PvInverterBlockEntity inverter) {
+		return "screen.renewables.pv_inverter.refusal." + inverter.refusal().name().toLowerCase(Locale.ROOT);
+	}
 
 	/** What this cabinet's direct-current terminals actually are. */
 	private static String terminalsKey(PvInverterBlockEntity inverter) {

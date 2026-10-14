@@ -45,16 +45,25 @@ public final class PvStrings {
 		return found;
 	}
 
-	/** The rows this one's own harness carries the connection on to. */
+	/**
+	 * The rows the connection goes on to from this one: where its own lead meets the next row, and where the next
+	 * row's lead comes into this one's socket - the same two pairings the renderer draws as plugged together, so a
+	 * row that looks wired is wired whichever way round it was put down.
+	 */
 	private static void onward(Level level, DcNetwork.Reach at, int maxRuns, Deque<DcNetwork.Reach> pending) {
 		if (at.runs() >= maxRuns) return;
 
 		BlockState state = level.getBlockState(at.pos());
 		for (Direction face : Direction.Plane.HORIZONTAL) {
-			if (face == at.from() || !PvArrayBlock.gives(state, face)) continue;
+			if (face == at.from()) continue;
 
 			BlockPos next = at.pos().relative(face);
-			if (!level.isLoaded(next) || !PvArrayBlock.meets(level.getBlockState(next), face.getOpposite())) continue;
+			if (!level.isLoaded(next)) continue;
+
+			BlockState beside = level.getBlockState(next);
+			boolean leadOut = PvArrayBlock.gives(state, face) && PvArrayBlock.meets(beside, face.getOpposite());
+			boolean leadIn = PvArrayBlock.takes(state, face) && PvArrayBlock.gives(beside, face.getOpposite());
+			if (!leadOut && !leadIn) continue;
 
 			pending.add(new DcNetwork.Reach(next, at.runs() + 1, at.buried(), face.getOpposite()));
 		}

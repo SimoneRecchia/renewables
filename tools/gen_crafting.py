@@ -366,6 +366,9 @@ BLOCK_NAMES = {
 # Which machines need iron and up rather than stone: the heavy steel. Panels, inverters, combiners and the
 # met mast come away with a stone pickaxe; a tower, a transformer, a switch and every machine that was already
 # here do not.
+# The photovoltaic rows, which snow has to be able to lie on.
+PV_ARRAYS = ('solar_panel', 'pv_flat_430', 'pv_tilt_530', 'pv_tilt_580', 'pv_track_700', 'pv_dual_440')
+
 NEEDS_IRON = ('utility_pole', 'electric_cabin', 'power_box', 'turbine_tower',
               'sw_10', 'c52_085', 'c80_20', 'c90_30', 'c112_30', 'wind_turbine',
               'lattice_suspension', 'lattice_tension', 'lattice_terminal',
@@ -438,6 +441,10 @@ def tool_tags():
     write(os.path.join(TAGS, 'mineable', 'pickaxe.json'), {'replace': False, 'values': mineable})
     write(os.path.join(TAGS, 'needs_iron_tool.json'),
           {'replace': False, 'values': sorted('renewables:' + name for name in NEEDS_IRON + ('machine_shell',))})
+    # Snow settles on a row: vanilla lets a layer lie only on a full top face, and no mounting has one, so the
+    # snow model, the snow stow and the winter loss never happened. PvArrayBlock is forced solid for the same reason.
+    write(os.path.join(TAGS, 'snow_layer_can_survive_on.json'),
+          {'replace': False, 'values': sorted('renewables:' + name for name in PV_ARRAYS)})
     return len(mineable)
 
 

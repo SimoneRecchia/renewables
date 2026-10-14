@@ -19,11 +19,14 @@ import java.util.ArrayList;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -53,6 +56,10 @@ public class MetStationBlockEntity extends BlockEntity {
 	private double windDirection = 0.0;
 	private double snowDistanceM = SNOW_SENSOR_HEIGHT_M;
 	private double snowHeightM = 0.0;
+	/** What the sky model says beside the instruments' readings: the panel shows them, so they travel with the rest. */
+	private double clearnessIndex = 0.0;
+	private double sunElevationDeg = 0.0;
+	private double sunAzimuthDeg = 0.0;
 
 	private final ClientSync clientSync = new ClientSync();
 
@@ -94,16 +101,42 @@ public class MetStationBlockEntity extends BlockEntity {
 		// than through it - a wind backing from 5 degrees to 355 has turned ten degrees, not three hundred
 		windDirection = smoothBearing(windDirection, weather.direction(), SensorCatalog.WV_3.response(1));
 
-		double snowOnGround = Shading.snowDepthOver(serverLevel, worldPosition.below());
-		snowDistanceM = SensorCatalog.SN_50.reading(snowDistanceM, SNOW_SENSOR_HEIGHT_M - snowOnGround, 1);
+		snowDistanceM = SensorCatalog.SN_50.reading(snowDistanceM, SNOW_SENSOR_HEIGHT_M - snowUnderTheGauge(serverLevel), 1);
 		snowHeightM = Math.max(0.0, SNOW_SENSOR_HEIGHT_M - snowDistanceM);
 
+		clearnessIndex = sky.clearnessIndex();
+		sunElevationDeg = sky.sun().elevationDeg();
+		sunAzimuthDeg = sky.sun().azimuthDeg();
+		publish();
+
+		clientSync.throttled(this);
+	}
+
+	/**
+	 * Snow on the ground under the gauge's arm, which reaches out over open ground beside the mast: the first free
+	 * column round it, the side the mast faces first.  It used to look at the mast's own block, where snow cannot lie.
+	 */
+	private double snowUnderTheGauge(ServerLevel serverLevel) {
+		Direction facing = getBlockState().hasProperty(MetStationBlock.FACING) ? getBlockState().getValue(MetStationBlock.FACING) : Direction.NORTH;
+		for (Direction side : new Direction[]{facing, facing.getClockWise(), facing.getOpposite(), facing.getCounterClockWise()}) {
+			BlockPos beside = worldPosition.relative(side);
+			if (!serverLevel.isLoaded(beside)) continue;
+
+			BlockState ground = serverLevel.getBlockState(beside);
+			if (ground.isAir() || ground.getBlock() instanceof SnowLayerBlock || ground.is(Blocks.SNOW_BLOCK) || ground.is(Blocks.POWDER_SNOW)) {
+				return Shading.snowDepthOver(serverLevel, beside.below());
+			}
+		}
+
+		return 0.0;
+	}
+
+	/** The snapshot from the readings as they stand - on a client too, where the readings are all it is sent. */
+	private void publish() {
 		telemetry = SolarTelemetrySimulator.sampleStation(new SolarTelemetrySimulator.StationSample(
 				globalIrradiance, diffuseIrradiance, planeIrradiance, referenceCell, albedo, ambientTempC,
 				moduleTempC, windSpeed, windDirection, snowDistanceM, snowHeightM, diffuseFraction(),
-				sky.clearnessIndex(), sky.sun().elevationDeg(), sky.sun().azimuthDeg()));
-
-		clientSync.throttled(this);
+				clearnessIndex, sunElevationDeg, sunAzimuthDeg));
 	}
 
 	/**
@@ -236,6 +269,9 @@ public class MetStationBlockEntity extends BlockEntity {
 		tag.putDouble("windDirection", windDirection);
 		tag.putDouble("snowDistance", snowDistanceM);
 		tag.putDouble("snowHeight", snowHeightM);
+		tag.putDouble("clearness", clearnessIndex);
+		tag.putDouble("sunElevation", sunElevationDeg);
+		tag.putDouble("sunAzimuth", sunAzimuthDeg);
 		if (referenceArray != null) {
 			tag.putLong("referenceArray", referenceArray.asLong());
 		}
@@ -257,6 +293,11 @@ public class MetStationBlockEntity extends BlockEntity {
 		snowDistanceM = tag.contains("snowDistance") ? tag.getDouble("snowDistance") : SNOW_SENSOR_HEIGHT_M;
 		snowHeightM = tag.getDouble("snowHeight");
 		referenceArray = tag.contains("referenceArray") ? BlockPos.of(tag.getLong("referenceArray")) : null;
+		clearnessIndex = tag.getDouble("clearness");
+		sunElevationDeg = tag.getDouble("sunElevation");
+		sunAzimuthDeg = tag.getDouble("sunAzimuth");
+		// the panel reads the snapshot, and on a client nothing else would ever build one
+		publish();
 	}
 
 	@Override
