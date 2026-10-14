@@ -5,7 +5,9 @@ import io.github.simonerecchia.renewables.api.power.TransformerSpec;
 import io.github.simonerecchia.renewables.grid.WireLedger;
 
 import io.github.simonerecchia.renewables.Renewables;
+import io.github.simonerecchia.renewables.item.Tools;
 import java.util.List;
+import java.util.Locale;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -19,7 +21,9 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
@@ -113,6 +117,17 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 		return shellShape(state);
 	}
 
+	/** A structure or a schematic placed turned turns the machine with it, as MachineBlock does. */
+	@Override
+	public BlockState rotate(BlockState state, Rotation rotation) {
+		return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
+	}
+
+	@Override
+	public BlockState mirror(BlockState state, Mirror mirror) {
+		return state.rotate(mirror.getRotation(state.getValue(FACING)));
+	}
+
 	@Override
 	public List<Cell> shellCells(BlockState state) {
 		return spec.duty() == TransformerSpec.Duty.MACHINE ? MACHINE_CELLS : SUBSTATION_CELLS;
@@ -138,18 +153,35 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 		return RenderShape.INVISIBLE;
 	}
 
-	/** An empty hand on the tank reads the nameplate, which is what a transformer has instead of a panel. */
+	/**
+	 * An empty hand on the tank reads the nameplate and the thermometers, which is what a transformer has instead of a
+	 * panel; on a tripped one it is the reset, refused while it is still too hot.
+	 */
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-		if (!player.getItemInHand(hand).isEmpty()) return InteractionResult.PASS;
+		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
+		if (level.isClientSide) return InteractionResult.SUCCESS;
+		if (!(level.getBlockEntity(pos) instanceof TransformerBlockEntity transformer)) return InteractionResult.PASS;
 
-		if (level.isClientSide && level.getBlockEntity(pos) instanceof TransformerBlockEntity transformer) {
-			player.displayClientMessage(Component.translatable("tooltip.renewables.transformer.reading",
-					spec.ratioText(), Nameplate.fmt("%.1f", transformer.getCurrentPower()),
-					Nameplate.fmt("%.1f", spec.lossKw(transformer.getCurrentPower()))), true);
+		TransformerThermal thermal = transformer.thermal();
+		if (thermal.tripped()) {
+			TransformerThermal.Trip cause = thermal.trip();
+			if (transformer.resetProtection()) {
+				player.displayClientMessage(Component.translatable("message.renewables.transformer.reset"), true);
+			} else {
+				player.displayClientMessage(Component.translatable("message.renewables.transformer.tripped",
+						Component.translatable("message.renewables.transformer.trip." + cause.name().toLowerCase(Locale.ROOT)),
+						Nameplate.fmt("%.0f", thermal.hotSpot()), Nameplate.fmt("%.0f", thermal.topOil())), true);
+			}
+
+			return InteractionResult.CONSUME;
 		}
 
-		return InteractionResult.sidedSuccess(level.isClientSide);
+		double kw = transformer.getCurrentPower();
+		player.displayClientMessage(Component.translatable("tooltip.renewables.transformer.reading",
+				spec.ratioText(), Nameplate.fmt("%.1f", kw), Nameplate.fmt("%.1f", spec.lossKw(kw)),
+				Nameplate.fmt("%.0f", thermal.hotSpot())), true);
+		return InteractionResult.CONSUME;
 	}
 
 	@Nullable @Override
@@ -157,10 +189,17 @@ public class TransformerBlock extends Block implements EntityBlock, MachineShell
 		return new TransformerBlockEntity(pos, state);
 	}
 
-	/** Nothing of its own to tick; the substation unit's cells are worth mending. */
+	/** The temperatures and the protection, and the substation unit's cells, which are worth mending. */
 	@Nullable @Override
 	public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-		return (lvl, pos, blockState, blockEntity) -> MachineShell.heal(lvl, pos, blockState);
+		if (level.isClientSide) return null;
+
+		return (lvl, pos, blockState, blockEntity) -> {
+			MachineShell.heal(lvl, pos, blockState);
+			if (blockEntity instanceof TransformerBlockEntity transformer && lvl instanceof ServerLevel serverLevel) {
+				transformer.serverTick(serverLevel);
+			}
+		};
 	}
 
 	@Override

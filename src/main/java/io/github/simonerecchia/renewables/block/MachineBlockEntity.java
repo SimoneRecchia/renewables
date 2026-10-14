@@ -204,23 +204,28 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 	// ---- persistence and sync ----
 
+	/**
+	 * The ids, and nothing of the power: what the grid delivers is a reading of the tick, not a state.  Saved, a box
+	 * that was powered when the server stopped came back powered by a grid that never told it otherwise - its far
+	 * end in a chunk not loaded, so it was in nobody's graph to be told zero.
+	 */
 	@Override
 	protected void saveAdditional(CompoundTag tag) {
 		super.saveAdditional(tag);
 		tag.putIntArray("insulatorIds", getInsulatorIds());
-		tag.putDouble("currentPower", currentPower);
 	}
 
 	/**
-	 * Reads the saved state.  From disk this runs before the machine is in a level, and {@link #onLoad} claims the ids;
-	 * on a machine already in a server level it is data pasted over a live one ({@code /clone}, {@code /setblock} with
-	 * data, a structure, a creative pick-block), so the ids that came with it are claimed again here: a copy is given
-	 * new ones and the original keeps its spans.
+	 * Reads the ids.  A {@code currentPower} in the tag (an older save, a command) is ignored: see {@link #saveAdditional}.
+	 *
+	 * From disk this runs before the machine is in a level, and {@link #onLoad} claims the ids; on a machine already in
+	 * a server level it is data pasted over a live one ({@code /clone}, {@code /setblock} with data, a structure, a
+	 * creative pick-block), so the ids that came with it are claimed again here: a copy is given new ones and the
+	 * original keeps its spans.
 	 */
 	@Override
 	public void load(CompoundTag tag) {
 		super.load(tag);
-		currentPower = tag.getDouble("currentPower");
 
 		int[] saved = tag.getIntArray("insulatorIds");
 		ensureSizes();
@@ -235,17 +240,21 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 		if (pasted) InsulatorIds.claim(insulatorIds, (ServerLevel) level, worldPosition);
 	}
 
+	/** The saved state, and the reading, so a client that loads the chunk sees it at once. */
 	@Override
 	public CompoundTag getUpdateTag() {
 		CompoundTag tag = super.getUpdateTag();
 		saveAdditional(tag);
+		tag.putDouble("currentPower", currentPower);
 		return tag;
 	}
 
+	/** The client's side of the update tag; only here is the reading taken from a tag. */
 	@Override
 	public void handleUpdateTag(CompoundTag tag) {
 		int[] before = getInsulatorIds();
 		load(tag);
+		if (tag.contains("currentPower")) currentPower = tag.getDouble("currentPower");
 		refreshAnchors();
 		int[] after = getInsulatorIds();
 		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {

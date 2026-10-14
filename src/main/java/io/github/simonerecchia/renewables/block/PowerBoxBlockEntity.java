@@ -48,7 +48,8 @@ import net.minecraftforge.energy.IEnergyStorage;
  * given its share of the power every tick ({@link PowerShare}).
  *
  * <b>The buffer</b> is real: what nobody used in a tick is stored, up to {@link FePool#CAPACITY}, and a neighbour
- * that takes Forge Energy draws on it before it touches the flow ({@link FePool}).
+ * that takes Forge Energy draws on it before it touches the flow ({@link FePool}).  The flow is spent once
+ * ({@link KioskEnergy}): what is banked leaves the flow, so what comes in is what can go out.
  *
  * The box also stands a little off the block when it hangs on a wall, which is the one {@link ExtraPose} it has:
  * the model, the pointing and the wire anchors all use it.
@@ -56,13 +57,17 @@ import net.minecraftforge.energy.IEnergyStorage;
 public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose {
 	/** Below this much delivered power (kW) the field is off. */
 	public static final double FIELD_THRESHOLD_KW = 0.1;
+	/** How often a box with the field off tries again to put back what it lit in a chunk that was not loaded, in ticks. */
+	private static final int RELEASE_RETRY_TICKS = 20;
 
 	/** The six sides in the order they are offered Forge Energy: down, up, north, south, west, east. */
 	private static final Direction[] PUSH_ORDER = {Direction.DOWN, Direction.UP, Direction.NORTH, Direction.SOUTH,
 			Direction.WEST, Direction.EAST};
 
-	/** What is stored, in FE. */
-	private int buffer;
+	/** The buffer and what is left of this tick's flow. */
+	private final KioskEnergy energy = new KioskEnergy();
+	/** The Forge Energy that left in the last tick, shown on the wrench's card. */
+	private int outFe;
 	/** Ticks until the breaker re-arms; 0 when it is not tripped. */
 	private int tripTicks;
 	/** Whether the field is on, which is true from the tick the power passes the threshold. */
@@ -111,7 +116,7 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 		}
 	};
 
-	private final LazyOptional<IEnergyStorage> energy = LazyOptional.of(() -> storage);
+	private final LazyOptional<IEnergyStorage> energyCapability = LazyOptional.of(() -> storage);
 
 	/** A consumer found in the field, with the block entity that carries it so that a removed one can be dropped. */
 	private record Consumer(BlockEntity owner, IElectricPowerConsumer consumer) {
@@ -182,16 +187,28 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 		deliverEvent(event);
 	}
 
+	/** The reading, and the energy for the coming tick: the flow replaces whatever was left of the last one. */
+	@Override
+	public void deliverPower(double power) {
+		super.deliverPower(power);
+		energy.deliver(power);
+	}
+
 	// ---- Forge Energy ----
 
-	/** What the box can give a neighbour now: the buffer and this tick's flow, at most the capacity. */
+	/** What the box can give a neighbour now: the buffer and what is left of this tick's flow, at most the capacity. */
 	public int energyStored() {
-		return FePool.stored(buffer, getCurrentPower());
+		return energy.stored();
 	}
 
 	/** Only what has been banked, without the flow: the figure that is saved. */
 	public int energyBuffer() {
-		return buffer;
+		return energy.buffer();
+	}
+
+	/** The Forge Energy that left the box in the last tick, to neighbours and cables. */
+	public int energyOut() {
+		return outFe;
 	}
 
 	/**
@@ -199,20 +216,18 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 	 * the field's power for the rest of the tick, so what a neighbour takes is not also given to the lamps.
 	 */
 	private int extractFe(int requested, boolean simulate) {
-		FePool.Extraction taken = FePool.extract(buffer, getCurrentPower(), requested);
-		if (!simulate && taken.taken() > 0) {
-			buffer = taken.newBuffer();
-			setCurrentPower(taken.newPowerKw());
+		int taken = energy.extract(requested, simulate);
+		if (!simulate && taken > 0) {
 			unsynced = true;
 			dirty = true;
 		}
 
-		return taken.taken();
+		return taken;
 	}
 
 	@Override
 	public <T> LazyOptional<T> getCapability(Capability<T> cap, @Nullable Direction side) {
-		if (cap == ForgeCapabilities.ENERGY) return energy.cast();
+		if (cap == ForgeCapabilities.ENERGY) return energyCapability.cast();
 
 		return super.getCapability(cap, side);
 	}
@@ -220,7 +235,7 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 	@Override
 	public void invalidateCaps() {
 		super.invalidateCaps();
-		energy.invalidate();
+		energyCapability.invalidate();
 	}
 
 	// ---- the tick ----
@@ -231,20 +246,28 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 
 		pushEnergy(level);
 
-		boolean active = getCurrentPower() > FIELD_THRESHOLD_KW;
+		boolean active = energy.flowKw() > FIELD_THRESHOLD_KW;
 		if (active) {
 			refreshField(level, !fieldOn);
 			if (!fieldOn) {
 				fieldOn = true;
 				setChanged();
 			}
-		} else {
-			if (fieldOn) fieldOff(level);
-			// the flow still goes somewhere: whatever a trickle is worth is banked
-			bankUnused(getCurrentPower());
+		} else if (fieldOn) {
+			fieldOff(level);
+		} else if (!claimed.isEmpty() && level.getGameTime() % RELEASE_RETRY_TICKS == 0) {
+			releaseClaimed(level);
 		}
 
+		// whatever the field left - a trickle too small to light it as well - is banked, and leaves the flow
+		bankUnused();
 		incoming = PowerDeliveryEvent.NONE;
+
+		int out = (int) Math.min(Integer.MAX_VALUE, energy.takeOut());
+		if (out != outFe) {
+			outFe = out;
+			unsynced = true;
+		}
 
 		// the buffer is shown by the wrench and so goes to the people looking, and is marked to be saved, a second at a time
 		if (level.getGameTime() % 20 == 0) {
@@ -288,17 +311,15 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 		if (justSwitchedOn || level.getGameTime() % interval == 0) scan(level, radius);
 
 		consumers.removeIf(entry -> entry.owner().isRemoved());
-		if (consumers.isEmpty()) {
-			bankUnused(getCurrentPower());
-			return;
-		}
+		if (consumers.isEmpty()) return;
 
 		List<PowerShare.Demand> demands = new ArrayList<>(consumers.size());
 		for (Consumer entry : consumers) {
 			demands.add(new PowerShare.Demand(entry.consumer().getRequiredPowerKw(), entry.consumer().getMinimumPowerKw()));
 		}
 
-		PowerShare.Outcome outcome = PowerShare.share(getCurrentPower(), demands, incoming, tripTicks > 0, level.random::nextDouble);
+		double flow = energy.flowKw();
+		PowerShare.Outcome outcome = PowerShare.share(flow, demands, incoming, tripTicks > 0, level.random::nextDouble);
 		if (outcome.newTrip()) tripTicks = PowerShare.TRIP_TICKS;
 
 		for (int i = 0; i < consumers.size(); i++) {
@@ -306,7 +327,7 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 			consumers.get(i).consumer().onPowerSupplied(supply.suppliedKw(), supply.meetsMinimum(), supply.event());
 		}
 
-		bankUnused(outcome.unusedKw());
+		energy.spend(flow - outcome.unusedKw());
 	}
 
 	/** Walks the sphere once: lights what can be lit and remembers it, and finds the consumers. */
@@ -328,7 +349,11 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 				chunkKey = key;
 				chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
 			}
-			if (chunk == null) continue;
+			if (chunk == null) {
+				// not loaded: what this box lit there is still its own to put back
+				if (claimed.contains(pos.asLong())) lit.add(pos.asLong());
+				continue;
+			}
 
 			BlockState state = chunk.getBlockState(pos);
 			if (state.isAir()) continue;
@@ -364,33 +389,46 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 	 * Called when the power drops below the threshold and when the block is taken away.
 	 */
 	public void fieldOff(ServerLevel level) {
-		if (!claimed.isEmpty()) {
-			for (long packed : claimed) {
-				BlockPos pos = BlockPos.of(packed);
-				LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
-				if (chunk == null) continue;
-
-				BlockState state = chunk.getBlockState(pos);
-				BooleanProperty property = FieldSwitch.of(state);
-				if (property != null && state.getValue(property)) level.setBlock(pos, state.setValue(property, false), Block.UPDATE_ALL);
-			}
-		}
+		releaseClaimed(level);
 
 		for (Consumer entry : consumers) {
 			if (!entry.owner().isRemoved()) entry.consumer().onPowerSupplied(0.0, false, PowerDeliveryEvent.NONE);
 		}
 
-		claimed = new LongOpenHashSet();
 		consumers = new ArrayList<>();
 		fieldOn = false;
 		setChanged();
 	}
 
-	/** Banks what nothing used this tick; see {@link FePool#bank}. */
-	private void bankUnused(double unusedKw) {
-		int banked = FePool.bank(buffer, unusedKw);
-		if (banked != buffer) {
-			buffer = banked;
+	/**
+	 * Puts back what this box lit where it can reach.  A block in a chunk that is not loaded is not forgotten - it used
+	 * to be, and a lamp out there stayed lit for good - but kept, saved, and tried again while the field is off; a box
+	 * that is broken meanwhile cannot load a chunk to finish the job.
+	 */
+	private void releaseClaimed(ServerLevel level) {
+		if (claimed.isEmpty()) return;
+
+		LongSet unreached = new LongOpenHashSet();
+		for (long packed : claimed) {
+			BlockPos pos = BlockPos.of(packed);
+			LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+			if (chunk == null) {
+				unreached.add(packed);
+				continue;
+			}
+
+			BlockState state = chunk.getBlockState(pos);
+			BooleanProperty property = FieldSwitch.of(state);
+			if (property != null && state.getValue(property)) level.setBlock(pos, state.setValue(property, false), Block.UPDATE_ALL);
+		}
+
+		if (unreached.size() != claimed.size()) dirty = true;
+		claimed = unreached;
+	}
+
+	/** Banks what nothing used this tick; see {@link KioskEnergy#bankRest}. */
+	private void bankUnused() {
+		if (energy.bankRest()) {
 			unsynced = true;
 			dirty = true;
 		}
@@ -401,16 +439,25 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 	@Override
 	protected void saveAdditional(CompoundTag tag) {
 		super.saveAdditional(tag);
-		tag.putInt("buffer", buffer);
+		tag.putInt("buffer", energy.buffer());
 		tag.putInt("tripTicks", tripTicks);
 		tag.putBoolean("fieldOn", fieldOn);
 		tag.putLongArray("claimed", claimed.toLongArray());
 	}
 
+	/** What left in the last tick goes to the clients for the wrench's card; it is not saved. */
+	@Override
+	public CompoundTag getUpdateTag() {
+		CompoundTag tag = super.getUpdateTag();
+		tag.putInt("outFe", outFe);
+		return tag;
+	}
+
 	@Override
 	public void load(CompoundTag tag) {
 		super.load(tag);
-		buffer = Math.max(0, Math.min(FePool.CAPACITY, tag.getInt("buffer")));
+		energy.setBuffer(tag.getInt("buffer"));
+		outFe = Math.max(0, tag.getInt("outFe"));
 		tripTicks = Math.max(0, tag.getInt("tripTicks"));
 		fieldOn = tag.getBoolean("fieldOn");
 		claimed = new LongOpenHashSet(tag.getLongArray("claimed"));

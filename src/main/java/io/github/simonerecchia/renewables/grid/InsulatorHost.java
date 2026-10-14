@@ -4,7 +4,9 @@ import io.github.simonerecchia.renewables.api.power.ConductorSpec;
 import io.github.simonerecchia.renewables.api.power.Dispatchable;
 import io.github.simonerecchia.renewables.api.power.PowerDeliveryEvent;
 
+import java.util.List;
 import javax.annotation.Nullable;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -61,12 +63,22 @@ public interface InsulatorHost {
 	 * Which internal bus a fitting is bonded to.
 	  *
 	 * Every fitting on one machine shares a bus, so power crosses it - that is what makes a pole a pole and
-	 * a transformer a transformer. A switch is the one machine where it depends: open, its line side and its
-	 * load side are two buses, and the grid solver then has two clusters at one position with nothing joining
-	 * them. Without this a switch could not stop anything, because a cluster is keyed on the block.
+	 * a transformer a transformer. A switch is the exception: its line side is bus 0 and its load side bus 1, and
+	 * the grid solver joins the two through the contacts only while it is {@link #closed}. Without this a switch
+	 * could not stop anything, because a cluster is keyed on the block - nor tell the power crossing it from the
+	 * power that merely meets at one of its terminals. A transformer whose protection has tripped is the other
+	 * exception: every bushing a bus of its own, so nothing crosses the tank.
 	 */
 	default int busOf(int index) {
 		return 0;
+	}
+
+	/**
+	 * Whether a switch's contacts are closed, joining its two buses; asked only of a machine that
+	 * {@link #passesThrough}.  What the grid then delivers to it is the power crossing them.
+	 */
+	default boolean closed() {
+		return true;
 	}
 
 	/**
@@ -78,6 +90,29 @@ public interface InsulatorHost {
 	 */
 	default boolean takesConductor(ConductorSpec conductor, int index) {
 		return true;
+	}
+
+	/**
+	 * The conductor this machine is a laid length of: a ground-laid run, and nothing else answers.  Lengths of one
+	 * conductor that touch are one conductor, so the grid carries power between them as if a block of it were strung
+	 * there ({@link #laidNeighbours}).
+	 */
+	@Nullable
+	default ConductorSpec laidConductor() {
+		return null;
+	}
+
+	/** Where the lengths this run is joined to lie, by its own shape; empty for every other machine. */
+	default List<BlockPos> laidNeighbours() {
+		return List.of();
+	}
+
+	/**
+	 * The longest span this machine will hold, in blocks: a lattice tower's ruling span, and no limit of its own for
+	 * anything else.  A span is held to the shorter of this at each end and its conductor's own limit.
+	 */
+	default double maxSpanBlocks() {
+		return Double.POSITIVE_INFINITY;
 	}
 
 	/** Whether a fitting is an output, an input, or either. */

@@ -1,9 +1,11 @@
 package io.github.simonerecchia.renewables.grid;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.simonerecchia.renewables.api.power.PowerDeliveryEvent;
+import io.github.simonerecchia.renewables.block.SwitchLogic;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,6 +60,8 @@ class GridSolverTest {
 		final List<GridSolver.Edge> edges = new ArrayList<>();
 		final List<GridSolver.Source> sources = new ArrayList<>();
 		final Map<Long, DoubleUnaryOperator> passages = new HashMap<>();
+		/** Every switch, and whether it is closed: its line side is bus 0, its load side bus 1. */
+		final Map<Long, Boolean> switches = new HashMap<>();
 		/** Block positions are plain numbers here: x along a line, z across it, y zero. */
 		final Map<Long, int[]> coordinates = new HashMap<>();
 
@@ -117,7 +121,7 @@ class GridSolverTest {
 		}
 
 		Map<Long, GridSolver.Reading> solve() {
-			return GridSolver.byPosition(nodes, GridSolver.solve(nodes, edges, sources, passages, loads()));
+			return GridSolver.byPosition(nodes, GridSolver.solve(nodes, edges, sources, passages, loads(), switches));
 		}
 
 		/** What all the loads together receive. */
@@ -238,9 +242,10 @@ class GridSolverTest {
 		w.machine(5, "pole", 10);
 
 		w.fitting(10, 1, "output");
-		// line side: bus 0; load side: bus 0 when closed, bus 1 when open
+		// line side: bus 0; load side: bus 1, joined to the line side while the switch is closed
 		w.fitting(20, 2, "bidirectional", 0);
-		w.fitting(21, 2, "bidirectional", open ? 1 : 0);
+		w.fitting(21, 2, "bidirectional", 1);
+		w.switches.put(2L, !open);
 		w.fitting(30, 3, "input");
 		w.fitting(31, 3, "output");
 		w.fitting(40, 4, "bidirectional");
@@ -291,7 +296,8 @@ class GridSolverTest {
 			w.fitting(21, 2, "bidirectional");
 			w.fitting(22, 2, "bidirectional");
 			w.fitting(30, 3, "bidirectional", 0);
-			w.fitting(31, 3, "bidirectional", open ? 1 : 0);
+			w.fitting(31, 3, "bidirectional", 1);
+			w.switches.put(3L, !open);
 			w.fitting(40, 4, "bidirectional");
 			w.fitting(50, 5, "bidirectional");
 			w.span(10, 20);
@@ -309,6 +315,120 @@ class GridSolverTest {
 				assertEquals(48.634657, out.get(4L).powerKw(), EPS);
 				assertEquals(49.3078125, out.get(5L).powerKw(), EPS);
 			}
+		}
+	}
+
+	// ---- what a switch reads ----
+
+	/**
+	 * A line bay as it is built: a disconnector in front of a breaker, 10 MW behind them.  With the breaker open
+	 * nothing flows through the disconnector either, so it reads nothing and may be opened by hand, which is what
+	 * "open the breaker first" promises; with the breaker closed it is under load and refuses.
+	 */
+	@Test
+	void aDisconnectorInFrontOfAnOpenBreakerCarriesNothing() {
+		for (boolean breakerOpen : new boolean[] {false, true}) {
+			World w = new World();
+			w.machine(1, "source", 0);
+			w.machine(2, "switch", 5);
+			w.machine(3, "switch", 10);
+			w.machine(4, "cabin", 15);
+			w.machine(5, "pole", 15);
+			w.machine(6, "box", 15);
+
+			w.fitting(10, 1, "output");
+			w.fitting(20, 2, "bidirectional", 0);
+			w.fitting(21, 2, "bidirectional", 1);
+			w.fitting(30, 3, "bidirectional", 0);
+			w.fitting(31, 3, "bidirectional", 1);
+			w.fitting(40, 4, "input");
+			w.fitting(41, 4, "output");
+			w.fitting(50, 5, "bidirectional");
+			w.fitting(51, 5, "bidirectional");
+			w.fitting(60, 6, "bidirectional");
+			w.switches.put(2L, true);
+			w.switches.put(3L, !breakerOpen);
+			w.span(10, 20, MV);
+			w.span(21, 30, MV);
+			w.span(31, 40, MV);
+			w.span(41, 50);
+			w.span(51, 60);
+			w.generator(10, 10_000.0);
+
+			Map<Long, GridSolver.Reading> out = w.solve();
+			double disconnector = out.get(2L).powerKw();
+			if (breakerOpen) {
+				assertEquals(0.0, disconnector, EPS);
+				assertEquals(0.0, out.get(3L).powerKw(), EPS);
+				assertEquals(0.0, out.get(6L).powerKw(), EPS);
+				assertTrue(SwitchLogic.mayOpenByHand(false, disconnector, 36_000.0));
+			} else {
+				assertTrue(disconnector > 9_999.0, "disconnector " + disconnector);
+				// the breaker five blocks on reads it less those 50 m of 33 kV line
+				assertEquals(disconnector, out.get(3L).powerKw(), 1.0);
+				assertFalse(SwitchLogic.mayOpenByHand(false, disconnector, 36_000.0));
+			}
+		}
+	}
+
+	/** A branch behind an open breaker takes no share: the kiosk on the other branch gets the whole of the flow. */
+	@Test
+	void anOpenBreakerOnABranchTakesNoShare() {
+		World w = new World();
+		w.machine(1, "source", 0);
+		w.machine(2, "pole", 0);
+		w.machine(3, "box", 0);
+		w.machine(4, "switch", 0);
+		w.machine(5, "box", 0);
+
+		w.fitting(10, 1, "output");
+		for (int id : new int[] {20, 21, 22}) w.fitting(id, 2, "bidirectional");
+		w.fitting(30, 3, "bidirectional");
+		w.fitting(40, 4, "bidirectional", 0);
+		w.fitting(41, 4, "bidirectional", 1);
+		w.fitting(50, 5, "bidirectional");
+		w.switches.put(4L, false);
+		w.span(10, 20);
+		w.span(21, 30);
+		w.span(22, 40);
+		w.span(41, 50);
+		w.generator(10, 100.0);
+
+		Map<Long, GridSolver.Reading> out = w.solve();
+		assertEquals(100.0, out.get(3L).powerKw(), EPS);
+		assertEquals(0.0, out.get(4L).powerKw(), EPS);
+		assertEquals(0.0, out.get(5L).powerKw(), EPS);
+	}
+
+	/**
+	 * A closed disconnector whose line-side terminals also carry the line on to a kiosk: that flow meets at a terminal
+	 * and never crosses the blades, so it is not load on the switch.  Once its own load side feeds a kiosk too, it
+	 * reads that kiosk's half.
+	 */
+	@Test
+	void aSwitchReadsWhatCrossesItsContactsNotWhatMeetsAtATerminal() {
+		for (boolean loadBehind : new boolean[] {false, true}) {
+			World w = new World();
+			w.machine(1, "source", 0);
+			w.machine(2, "switch", 0);
+			w.machine(3, "box", 0);
+			w.machine(4, loadBehind ? "box" : "pole", 0);
+
+			w.fitting(10, 1, "output");
+			w.fitting(20, 2, "bidirectional", 0);
+			w.fitting(21, 2, "bidirectional", 0);
+			w.fitting(22, 2, "bidirectional", 1);
+			w.fitting(30, 3, "bidirectional");
+			w.fitting(40, 4, "bidirectional");
+			w.switches.put(2L, true);
+			w.span(10, 20);
+			w.span(21, 30);
+			w.span(22, 40);
+			w.generator(10, 100.0);
+
+			Map<Long, GridSolver.Reading> out = w.solve();
+			assertEquals(loadBehind ? 50.0 : 0.0, out.get(2L).powerKw(), EPS);
+			assertEquals(loadBehind ? 50.0 : 100.0, out.get(3L).powerKw(), EPS);
 		}
 	}
 

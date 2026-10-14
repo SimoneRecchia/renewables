@@ -35,7 +35,11 @@ final class ServerHandlers {
 	static void poleConfig(PoleConfigPayload message, Supplier<NetworkEvent.Context> context) {
 		if (!allFinite(message.offsetX(), message.offsetY(), message.offsetZ(), message.yaw(), message.pitch())) return;
 
-		UtilityPoleBlockEntity pole = PanelGuard.find(context.get().getSender(), message.blockPos(), UtilityPoleBlockEntity.class);
+		// the arms are part of the world, so only a player who may build may move them
+		ServerPlayer sender = context.get().getSender();
+		if (sender == null || !sender.mayBuild()) return;
+
+		UtilityPoleBlockEntity pole = PanelGuard.find(sender, message.blockPos(), UtilityPoleBlockEntity.class);
 		if (pole == null) return;
 
 		// one update for all five values, so the clients see one change rather than five

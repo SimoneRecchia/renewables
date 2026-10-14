@@ -150,17 +150,19 @@ public final class SpanPlanner {
 			return;
 		}
 
-		// 11. the span is no longer than the conductor allows, and the player could have clicked both ends
+		// 11. the span is no longer than the conductor allows, nor than either end will hold, and the player could have
+		// clicked both ends
 		double length = startAnchor.distanceTo(endAnchor);
-		if (!(length <= conductor.maxSpan())) {
+		double longest = longestSpan(conductor, start, end);
+		if (!(length <= longest)) {
 			say(player, Component.translatable("message.renewables.wire.too_far",
-					String.format(Locale.ROOT, "%.1f", length), (int) conductor.maxSpan()));
+					String.format(Locale.ROOT, "%.1f", length), (int) longest));
 			return;
 		}
 
 		// the end clicked last is near the player; the first may have been left a whole span behind
 		if (player.getEyePosition().distanceTo(endAnchor) > REACH
-				|| player.getEyePosition().distanceTo(startAnchor) > REACH + conductor.maxSpan()) {
+				|| player.getEyePosition().distanceTo(startAnchor) > REACH + longest) {
 			say(player, Component.translatableWithFallback("message.renewables.wire.out_of_reach", "Too far away to string that."));
 			return;
 		}
@@ -182,6 +184,11 @@ public final class SpanPlanner {
 		}
 
 		say(player, Component.translatable("message.renewables.wire.connected", request.startId(), request.endId()));
+	}
+
+	/** The longest span this conductor may make between these two machines, in blocks: the shortest of the three limits. */
+	static double longestSpan(ConductorSpec conductor, InsulatorHost start, InsulatorHost end) {
+		return Math.min(conductor.maxSpan(), Math.min(start.maxSpanBlocks(), end.maxSpanBlocks()));
 	}
 
 	/** The chunk is loaded, the position inside the border, and the player allowed to interact there. */

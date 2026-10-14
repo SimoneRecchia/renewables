@@ -25,8 +25,10 @@ import java.util.function.DoubleUnaryOperator;
  * A node is a fitting; an edge is a span.  Every node belongs to a <em>bus</em>, the pair (block position, bus
  * index), and the nodes of one bus form a <em>cluster</em>: power crosses a cluster for free, which is what makes
  * a pole one busbar with eight insulators on it - unless the machine there burns something carrying it, which a
- * transformer does ({@code passages}).  A switch that is open puts its two sides on different buses at the same
- * position, and that is all it takes for power to stop.
+ * transformer does ({@code passages}).  A switch has two buses at its position, its line side (0) and its load side
+ * (1): closed, its contacts join them with a way of no resistance; open, nothing does, and that is all it takes for
+ * power to stop.  What a switch reads is the power crossing its contacts, not what passes one of its sides: its
+ * terminals may be a junction for a line that never goes through it.
  *
  * <h2>Where power goes</h2>
  * Power flows to <em>loads</em> (the power boxes) and nowhere else: a line with no load at its end carries no
@@ -49,8 +51,9 @@ import java.util.function.DoubleUnaryOperator;
  * <h2>Cost</h2>
  * Everything that does not depend on the power - the clusters, the ways, and for each generator the order its flow
  * reaches the buses in and the share each way takes - is worked out once for a network ({@link #network}) and kept
- * by the caller for as long as the spans, switches and loads stay as they are; a tick then only pushes the powers
- * through ({@link #solve(Collection, Map)}), which is linear in the buses and ways each generator reaches.
+ * by the caller for as long as the spans, the switches' contacts and the loads stay as they are; a tick then only
+ * pushes the powers through ({@link #solve(Collection, Map)}), which is linear in the buses and ways each generator
+ * reaches.
  */
 final class GridSolver {
 	/** Passes over the generators; the second and third bring in what the others put on each shared line. */
@@ -99,6 +102,13 @@ final class GridSolver {
 
 	private final int nodeCount;
 	private final int[] nodeIds;
+	/** The position of every node's machine, packed. */
+	private final long[] nodePosition;
+	/**
+	 * By switch position, its contacts: the way line side to load side, the way back (-1 where there is none: open, or
+	 * a side nothing is strung to), and the two sides' clusters (-1 for a side with no node).
+	 */
+	private final Map<Long, int[]> contacts = new HashMap<>();
 	private final int[] nodeCluster;
 	private final Map<Integer, Integer> indexOfId = new HashMap<>();
 	private final int clusterCount;
@@ -125,10 +135,11 @@ final class GridSolver {
 	private double[][] sentBefore = new double[0][];
 	private double[][] arrivedBefore = new double[0][];
 
-	private GridSolver(Collection<Node> nodes, Collection<Edge> edges, Set<Long> loads) {
+	private GridSolver(Collection<Node> nodes, Collection<Edge> edges, Set<Long> loads, Map<Long, Boolean> switches) {
 		nodeCount = nodes.size();
 		nodeIds = new int[nodeCount];
 		nodeCluster = new int[nodeCount];
+		nodePosition = new long[nodeCount];
 
 		Map<Long, Map<Integer, Integer>> clusterOf = new HashMap<>();
 		List<Long> positions = new ArrayList<>();
@@ -136,6 +147,7 @@ final class GridSolver {
 		for (Node node : nodes) {
 			indexOfId.put(node.id(), index);
 			nodeIds[index] = node.id();
+			nodePosition[index] = node.position();
 
 			Map<Integer, Integer> buses = clusterOf.computeIfAbsent(node.position(), key -> new HashMap<>());
 			Integer cluster = buses.get(node.bus());
@@ -180,6 +192,19 @@ final class GridSolver {
 			if (edge.bToA()) spans.get(to).computeIfAbsent(from, key -> new ArrayList<>()).add(k);
 		}
 
+		// a closed switch's contacts: a way of no resistance each way between its two sides
+		Map<Long, int[]> sides = new HashMap<>();
+		for (Map.Entry<Long, Boolean> entry : switches.entrySet()) {
+			Map<Integer, Integer> buses = clusterOf.getOrDefault(entry.getKey(), Map.of());
+			int line = buses.getOrDefault(0, -1);
+			int load = buses.getOrDefault(1, -1);
+			sides.put(entry.getKey(), new int[] {line, load});
+			if (!entry.getValue() || line < 0 || load < 0) continue;
+
+			spans.get(line).computeIfAbsent(load, key -> new ArrayList<>()).add(0.0);
+			spans.get(load).computeIfAbsent(line, key -> new ArrayList<>()).add(0.0);
+		}
+
 		wayStart = new int[clusterCount + 1];
 		int ways = 0;
 		for (int c = 0; c < clusterCount; c++) {
@@ -199,6 +224,8 @@ final class GridSolver {
 			}
 		}
 
+		sides.forEach((pos, side) -> contacts.put(pos, new int[] {wayBetween(side[0], side[1]), wayBetween(side[1], side[0]), side[0], side[1]}));
+
 		inflow = new double[clusterCount];
 		carried = new Disturbances(clusterCount);
 		reached = new Disturbances(clusterCount);
@@ -206,12 +233,31 @@ final class GridSolver {
 		totalArrived = new double[clusterCount];
 	}
 
-	/**
-	 * The network these nodes, spans and loads make, ready to be solved for any set of generators.  Keep it while
-	 * the three stay equal: the per-generator work it caches is most of the cost of a solve.
-	 */
+	/** {@link #network(Collection, Collection, Set, Map)} with no switch in it. */
 	static GridSolver network(Collection<Node> nodes, Collection<Edge> edges, Set<Long> loads) {
-		return new GridSolver(nodes, edges, loads);
+		return network(nodes, edges, loads, Map.of());
+	}
+
+	/**
+	 * The network these nodes, spans, loads and switches make, ready to be solved for any set of generators.  Keep it
+	 * while the four stay equal: the per-generator work it caches is most of the cost of a solve.
+	 *
+	 * @param switches by block position, every switch and whether it is closed; its nodes are on bus 0 (line side)
+	 *                 and bus 1 (load side)
+	 */
+	static GridSolver network(Collection<Node> nodes, Collection<Edge> edges, Set<Long> loads, Map<Long, Boolean> switches) {
+		return new GridSolver(nodes, edges, loads, switches);
+	}
+
+	/** The way from cluster {@code from} to cluster {@code to}, or -1. */
+	private int wayBetween(int from, int to) {
+		if (from < 0 || to < 0) return -1;
+
+		for (int w = wayStart[from]; w < wayStart[from + 1]; w++) {
+			if (wayTo[w] == to) return w;
+		}
+
+		return -1;
 	}
 
 	/**
@@ -235,7 +281,13 @@ final class GridSolver {
 
 	/** Solves a network in which nothing but the spans loses power and every machine in {@code loads} draws. */
 	static Map<Integer, Reading> solve(Collection<Node> nodes, Collection<Edge> edges, Collection<Source> sources, Set<Long> loads) {
-		return solve(nodes, edges, sources, Map.of(), loads);
+		return solve(nodes, edges, sources, Map.of(), loads, Map.of());
+	}
+
+	/** Solves a network with no switches in it. */
+	static Map<Integer, Reading> solve(Collection<Node> nodes, Collection<Edge> edges, Collection<Source> sources,
+			Map<Long, DoubleUnaryOperator> passages, Set<Long> loads) {
+		return solve(nodes, edges, sources, passages, loads, Map.of());
 	}
 
 	/**
@@ -243,12 +295,14 @@ final class GridSolver {
 	 *
 	 * @param passages by block position, what the machine there burns (kW) for the flow (kW) crossing it
 	 * @param loads    the block positions of the machines that draw power: where the flow ends
+	 * @param switches by block position, every switch and whether it is closed; its nodes are on bus 0 (line side)
+	 *                 and bus 1 (load side)
 	 * @return for every node that was given, the power passing it (at a generator, what it makes; at a load, what it
-	 * receives); a node no flow passes reads zero
+	 * receives; at a switch, what crosses its contacts); a node no flow passes reads zero
 	 */
 	static Map<Integer, Reading> solve(Collection<Node> nodes, Collection<Edge> edges, Collection<Source> sources,
-			Map<Long, DoubleUnaryOperator> passages, Set<Long> loads) {
-		return network(nodes, edges, loads).solve(sources, passages).readings();
+			Map<Long, DoubleUnaryOperator> passages, Set<Long> loads, Map<Long, Boolean> switches) {
+		return network(nodes, edges, loads, switches).solve(sources, passages).readings();
 	}
 
 	/**
@@ -330,13 +384,42 @@ final class GridSolver {
 			shared = true;
 		}
 
+		// a switch reads what crossed its contacts in the pass that is kept; with more than one generator the totals of
+		// that pass are already in totalSent
+		if (!contacts.isEmpty() && count <= 1) {
+			Arrays.fill(totalSent, 0.0);
+			if (count == 1) {
+				Plan plan = livePlans.get(0);
+				for (int k = 0; k < plan.stepWay().length; k++) {
+					totalSent[plan.stepWay()[k]] += sentNow[0][k];
+				}
+			}
+		}
+
 		Map<Integer, Reading> readings = new LinkedHashMap<>();
 		for (int i = 0; i < nodeCount; i++) {
 			int c = nodeCluster[i];
-			readings.put(nodeIds[i], new Reading(power[c], reached.event(c)));
+			int[] ways = contacts.get(nodePosition[i]);
+			readings.put(nodeIds[i], ways == null ? new Reading(power[c], reached.event(c)) : crossing(ways));
 		}
 
 		return new Solution(readings, drawn);
+	}
+
+	/**
+	 * What a switch reads: the power across its contacts, line to load less load to line, with the disturbance of
+	 * either side.  Nothing crosses an open switch, or one with a side that nothing is strung to.
+	 */
+	private Reading crossing(int[] contact) {
+		if (contact[2] < 0 || contact[3] < 0) return Reading.NOTHING;
+
+		double across = Math.abs(sentDown(contact[0]) - sentDown(contact[1]));
+		return new Reading(across, across > 0.0 ? GridMath.merge(reached.event(contact[2]), reached.event(contact[3])) : PowerDeliveryEvent.NONE);
+	}
+
+	/** What the kept pass put down a way, all generators together; nothing down a way that is not there. */
+	private double sentDown(int way) {
+		return way < 0 ? 0.0 : totalSent[way];
 	}
 
 	/**
