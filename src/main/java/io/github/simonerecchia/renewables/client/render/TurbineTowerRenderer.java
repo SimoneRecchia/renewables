@@ -1,7 +1,6 @@
 package io.github.simonerecchia.renewables.client.render;
 
 import io.github.simonerecchia.renewables.Renewables;
-import io.github.simonerecchia.renewables.api.power.TurbineSpec;
 import io.github.simonerecchia.renewables.block.TurbineTowerBlock;
 import io.github.simonerecchia.renewables.block.TurbineTowerBlockEntity;
 import io.github.simonerecchia.renewables.client.model.MeshModel;
@@ -66,7 +65,11 @@ public class TurbineTowerRenderer extends MachineRenderer {
 			if (!groupName.startsWith("pole")) continue;
 
 			poseStack.pushPose();
-			poseStack.scale(width, (float) (height / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), width);
+			if (groupName.startsWith("pole_base")) {
+				poseStack.scale(width, width, width);
+			} else {
+				poseStack.scale(width, height / WindTurbineRenderer.authoredTowerHeight(model), width);
+			}
 			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
 			poseStack.popPose();
 		}

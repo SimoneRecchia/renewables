@@ -35,6 +35,7 @@ import org.joml.Matrix4f;
  * machine block, which is the block on top of the tower.  Each part gets a matrix of its own, by the group's name
  * prefix:
  * <ul>
+ * <li>{@code pole_base*}: the door, flange and nuts at the foot, scaled uniformly and never stretched;</li>
  * <li>{@code pole*}: the tower, stretched to the height of the tower and as wide as the turbine's scale;</li>
  * <li>{@code insulator*}: the wire fitting at the foot, as authored.  Neither of these two follows the wind, so
  *     the fitting stays where the picker and the wire anchor are;</li>
@@ -55,7 +56,7 @@ public class WindTurbineRenderer extends MachineRenderer {
 	private static final Map<BlockPos, Float> YAW = new HashMap<>();
 
 	/** Where the hub's cone is if the model has none to measure. */
-	private static final Vec3 HUB_FALLBACK = new Vec3(0.0, 12.65, 0.95);
+	private static final Vec3 HUB_FALLBACK = new Vec3(0.0, 13.30, 1.04);
 
 	/** The yaw follower, tuned at 60 frames a second: the fraction of the gap closed a frame, and the most a frame turns. */
 	private static final float YAW_FOLLOW = 0.1f;
@@ -82,6 +83,7 @@ public class WindTurbineRenderer extends MachineRenderer {
 
 		Vec3 hubCentre = centerOf(model, "rotate_2", HUB_FALLBACK);
 		float nacelleBottom = nacelleBottom(model, (float) hubCentre.y);
+		float authoredHeight = authoredTowerHeight(model);
 		// the hub rides on the nacelle: the same height above its underside, scaled with it
 		Vec3 hub = new Vec3(hubCentre.x * nacelleScale, segments + nacelleScale * (hubCentre.y - nacelleBottom), hubCentre.z * nacelleScale);
 
@@ -107,7 +109,12 @@ public class WindTurbineRenderer extends MachineRenderer {
 					continue;
 				}
 
-				poseStack.scale(nacelleScale, (float) (segments / TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS), nacelleScale);
+				if (groupName.startsWith("pole_base")) {
+					// the base (door, flange, nuts) is a thing of fixed size: stretching it with the tube would squash the door
+					poseStack.scale(nacelleScale, nacelleScale, nacelleScale);
+				} else {
+					poseStack.scale(nacelleScale, segments / authoredHeight, nacelleScale);
+				}
 			} else if (groupName.startsWith("insulator")) {
 				// stays at the foot, as it was authored
 			} else {
@@ -139,6 +146,15 @@ public class WindTurbineRenderer extends MachineRenderer {
 		poseStack.scale(scale, scale, scale);
 		poseStack.mulPose(Axis.ZP.rotationDegrees(degrees));
 		poseStack.translate(-centre.x, -centre.y, -centre.z);
+	}
+
+	/**
+	 * The height of the authored tube, read from the model so that a redrawn tower needs no constant changed: the
+	 * stretch is {@code segments / this}, and the nacelle has to land on the top of the tube.
+	 */
+	static float authoredTowerHeight(MeshModel model) {
+		var box = model.union("pole");
+		return box == null || box.max().y() <= 0.0f ? (float) TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS : box.max().y();
 	}
 
 	/** The underside of the nacelle in the model: what rests on the top of the tower. */
