@@ -20,7 +20,8 @@ import net.minecraftforge.fml.common.Mod;
  */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class UtilityPoleRenderer extends MachineRenderer {
-	private static final double MAX_RENDER_DISTANCE_SQ = 64 * 64;
+	/** A pole is six blocks tall and carries the line: drawn as far as the wires are by default, or a line ends in mid-air. */
+	private static final double MAX_RENDER_DISTANCE_SQ = 128 * 128;
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {

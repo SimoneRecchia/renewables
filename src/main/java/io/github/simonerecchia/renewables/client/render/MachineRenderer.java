@@ -69,7 +69,7 @@ import org.joml.Vector3f;
  *     level's two lights are turned into each group's frame for its draw ({@link PoseLighting}).</li>
  * <li>A group that is given no matrix is not drawn, which is how a renderer hides a part.  Markers
  *     ({@code pivot_*}) are never drawn.</li>
- * <li>Light is sampled once, at the machine's own block.</li>
+ * <li>Light is sampled once, at the machine's own block and the one above it ({@link #lightAt}).</li>
  * </ul>
  */
 @OnlyIn(Dist.CLIENT)
@@ -186,6 +186,8 @@ public abstract class MachineRenderer {
 	/** The buffers of every machine type that has been drawn: per position, per group. */
 	private static final Map<Class<?>, Map<BlockPos, Map<String, GroupBuffer>>> CACHES = new HashMap<>();
 	private static final Map<String, ResourceLocation> TEXTURES = new HashMap<>();
+	/** The squared range each type's pass draws to, as the pass last said. */
+	private static final Map<Class<?>, Double> RANGES = new HashMap<>();
 	private static final Set<String> REPORTED = new HashSet<>();
 	/** The lights of the pass under way: drawing happens on the render thread only, one pass at a time. */
 	private static final PoseLighting LIGHTING = new PoseLighting();
@@ -236,6 +238,7 @@ public abstract class MachineRenderer {
 		ClientLevel level = minecraft.level;
 		if (level == null) return SKIPPED;
 
+		RANGES.put(type, maxDistanceSq);
 		FrameClock.begin(event.getRenderTick(), event.getPartialTick(), minecraft.isPaused());
 		watchLevel(level);
 		Map<BlockPos, Map<String, GroupBuffer>> cache = CACHES.computeIfAbsent(type, key -> new HashMap<>());
@@ -266,7 +269,7 @@ public abstract class MachineRenderer {
 			seen.add(pos);
 			if (frustum != null && !frustum.isVisible(bounds == null ? aroundModel(machine, model) : bounds.apply(machine, model))) continue;
 
-			int light = LevelRenderer.getLightColor(level, pos);
+			int light = lightAt(level, pos);
 			Map<String, GroupBuffer> buffers = cache.computeIfAbsent(pos.immutable(), key -> new HashMap<>());
 			RenderContext context = new RenderContext(model, ModelBindings.fallbackTexture(state.getBlock()), light, projection, buffers,
 					LIGHTING);
@@ -297,6 +300,34 @@ public abstract class MachineRenderer {
 		LIGHTING.restore();
 		release(cache, seen);
 		return seen;
+	}
+
+	/**
+	 * The light a machine is drawn with: the brighter of its own cell and the one above, per channel, which is what a
+	 * wire's end takes too ({@code WireRenderer.sampleLight}).  A machine whose own cell is shaded by its own shell or
+	 * shape would otherwise be drawn a step darker than the wire hanging from it and the ground it stands on.
+	 */
+	static int lightAt(Level level, BlockPos pos) {
+		int here = LevelRenderer.getLightColor(level, pos);
+		int above = LevelRenderer.getLightColor(level, pos.above());
+		int block = Math.max((here >> 4) & 15, (above >> 4) & 15);
+		int sky = Math.max((here >> 20) & 15, (above >> 20) & 15);
+		return (block << 4) | (sky << 20);
+	}
+
+	/**
+	 * Whether a machine is near enough to the camera for its renderer to draw it, by the renderer's own range; true for
+	 * one no renderer has drawn yet.  A wire asks it of both its ends, so it is never drawn hanging from nothing.
+	 */
+	public static boolean inRange(BlockEntity machine, Vec3 camera) {
+		Double range = RANGES.get(machine.getClass());
+		if (range == null) return true;
+
+		BlockPos pos = machine.getBlockPos();
+		double dx = pos.getX() + 0.5 - camera.x;
+		double dy = pos.getY() + 0.5 - camera.y;
+		double dz = pos.getZ() + 0.5 - camera.z;
+		return dx * dx + dy * dy + dz * dz <= range;
 	}
 
 	/**
