@@ -120,7 +120,7 @@
   "tooltip.renewables.conductor.reach": "%s blocks a reel, %s blocks a span at most",
   "tooltip.renewables.lattice_suspension": "Holds a 400 kV line up. Nine towers in ten are one.",
   "tooltip.renewables.lattice_tension": "Takes the difference between the pulls either side of it.",
-  "tooltip.renewables.lattice_terminal": "Takes the whole pull of a line, and is stayed back for it.",
+  "tooltip.renewables.lattice_terminal": "Takes the whole pull of a line from one side, on the widest foot.",
   "tooltip.renewables.tx_machine": "Steps a machine\u2019s 800 V up to 33 kV. Every generator on a plant needs one.",
   "tooltip.renewables.tx_substation": "Steps 33 kV up to 400 kV. The transmission line starts here.",
   "tooltip.renewables.transformer.reading": "Ratio %s  in %s kW  loss %s kW",
