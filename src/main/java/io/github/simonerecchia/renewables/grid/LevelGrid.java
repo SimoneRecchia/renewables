@@ -178,12 +178,25 @@ final class LevelGrid {
 			if (host.isLoad()) loads.add(entry.getKey());
 		}
 
-		List<GridSolver.Source> sources = sources(level, hosts, firstNode);
+		Map<Integer, InsulatorHost> generators = new HashMap<>();
+		List<GridSolver.Source> sources = sources(level, hosts, firstNode, generators);
 		List<GridSolver.Node> graph = new ArrayList<>(nodes.values());
 		GridSolver.Solution solution = network(graph, edges, loads).solve(sources, passages);
 		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(graph, solution.readings());
 
 		deliver(level, hosts, byPosition);
+
+		// what the grid carried away is spent: no other mod's cable may take it again before the next tick
+		solution.drawn().forEach((node, kw) -> {
+			InsulatorHost host = generators.get(node);
+			if (host == null) return;
+
+			try {
+				host.drawnByGrid(kw);
+			} catch (RuntimeException e) {
+				faults.report(level, "the machine at " + describe(host) + " failed to take its draw", e);
+			}
+		});
 	}
 
 	/** The solver for this graph: the one already built if the graph reads exactly as it did, else a new one. */
@@ -208,6 +221,10 @@ final class LevelGrid {
 		}
 	}
 
+	private static String describe(InsulatorHost host) {
+		return host instanceof BlockEntity entity ? entity.getBlockPos().toShortString() : host.fittingType();
+	}
+
 	private void addNode(Map<Integer, GridSolver.Node> nodes, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode,
 			int id, BlockPos pos, End end) {
 		if (nodes.containsKey(id)) return;
@@ -218,8 +235,12 @@ final class LevelGrid {
 		firstNode.putIfAbsent(key, id);
 	}
 
-	/** Every machine in the graph that is putting power on the network, with the disturbance it is carrying. */
-	private List<GridSolver.Source> sources(ServerLevel level, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode) {
+	/**
+	 * Every machine in the graph that is putting power on the network, with the disturbance it is carrying; each one's
+	 * node goes into {@code generators}.
+	 */
+	private List<GridSolver.Source> sources(ServerLevel level, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode,
+			Map<Integer, InsulatorHost> generators) {
 		long now = level.getGameTime();
 		boolean advance = now != memoryTick;
 		Map<Integer, PowerDeliveryEvent> next = advance ? new HashMap<>() : memory;
@@ -240,6 +261,7 @@ final class LevelGrid {
 			if (!(power > 0.0)) continue;
 
 			int node = firstNode.get(entry.getKey());
+			generators.put(node, host);
 			PowerDeliveryEvent event = PowerDeliveryEvent.NONE;
 			if (wind != null) {
 				// one draw per game tick: a second calculation in the same tick (a switch moved) must not

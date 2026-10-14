@@ -754,6 +754,26 @@ class GridSolverTest {
 		}
 	}
 
+	/**
+	 * What the network takes from each generator, for its energy budget: all of it when a load can be reached, nothing
+	 * when none can - a generator on a dead line has spent nothing, and another mod may still have it.
+	 */
+	@Test
+	void aGeneratorGivesTheNetworkItsPowerOnlyWhenALoadCanBeReached() {
+		World w = baseChain(true);
+		w.machine(6, "source", 50);
+		w.fitting(60, 6, "output");
+		w.machine(7, "pole", 60);
+		w.fitting(70, 7, "bidirectional");
+		w.span(60, 70);
+		w.generator(60, 12.0);
+
+		Map<Integer, Double> drawn = GridSolver.network(w.nodes, w.edges, w.loads()).solve(w.sources, w.passages).drawn();
+
+		assertEquals(X, drawn.get(10), EPS);
+		assertEquals(0.0, drawn.get(60), EPS);
+	}
+
 	/** With every span lossless, the loads together receive exactly what the generators make: nothing made, nothing lost. */
 	@Test
 	void aLosslessNetworkDeliversExactlyWhatIsGenerated() {

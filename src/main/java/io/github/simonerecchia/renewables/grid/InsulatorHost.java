@@ -122,6 +122,15 @@ public interface InsulatorHost {
 	}
 
 	/**
+	 * What the network actually carried away from this generator this tick, in kW: what {@link #getGeneratedPower}
+	 * offered if a load could be reached, zero if none could.  A generator with an energy budget takes it off the
+	 * budget ({@link GeneratorBudget#drawForGrid}), so that no other mod's cable can claim the same energy before
+	 * the next tick opens a new one.  Called after every calculation, for every generator in it.
+	 */
+	default void drawnByGrid(double kw) {
+	}
+
+	/**
 	 * The wind a generator stands in, when it is one that can disturb the network with gusts; null for every other
 	 * machine, and for a generator the weather does not reach.  Only turbines have an answer.
 	 */
