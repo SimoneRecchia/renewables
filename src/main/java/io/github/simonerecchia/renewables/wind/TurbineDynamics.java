@@ -268,6 +268,39 @@ public final class TurbineDynamics {
 		return MAX_REGULATING_PITCH + clamp01((alignedWind - onset) / stormSpan) * (MAX_STORM_PITCH - MAX_REGULATING_PITCH);
 	}
 
+	/**
+	 * The collective pitch with the curtailment in it.  A machine held under what the wind offers sheds the rest with
+	 * its blades, as a real one does: it reported flat blades on a slowed rotor, 0° on a C130 held to 1000 of 2642 kW.
+	 * Never less than the curve's own pitch; feathered when held to nothing.
+	 */
+	public static double collectivePitch(boolean braked, double alignedWind, double uncappedKw, double limitKw, TurbineSpec spec) {
+		double curve = collectivePitch(braked, alignedWind, spec);
+		if (braked || uncappedKw <= 0.0 || limitKw >= uncappedKw) return curve;
+
+		double kept = Math.max(0.0, limitKw) / uncappedKw;
+		double rated = spec.ratedSpeed();
+		// over rated wind the regulating pitch is already shedding the rest of what flat blades would take
+		if (alignedWind > rated) kept *= Math.pow(rated / alignedWind, 3);
+
+		return Math.max(curve, sheddingPitch(kept, spec));
+	}
+
+	/**
+	 * The pitch that keeps {@code kept} of what flat blades would take, on the regulating range's own scale: there, at a
+	 * wind v over rated, flat blades would take (v / rated)^3 of the rated power and the pitch is 25° x (v - rated) / (onset
+	 * - rated); this is the same pitch for the same share kept, so curtailment and regulation agree with each other.
+	 */
+	static double sheddingPitch(double kept, TurbineSpec spec) {
+		if (kept <= 0.0) return FEATHERED_PITCH;
+		if (kept >= 1.0) return 0.0;
+
+		double rated = spec.ratedSpeed();
+		double span = spec.stormOnsetSpeed() - rated;
+		if (span <= 0.0) span = spec.cutOutSpeed() - rated;
+
+		return Math.min(FEATHERED_PITCH, MAX_REGULATING_PITCH * rated * (Math.cbrt(1.0 / kept) - 1.0) / span);
+	}
+
 	private static double clamp01(double value) {
 		return Math.max(0.0, Math.min(1.0, value));
 	}
