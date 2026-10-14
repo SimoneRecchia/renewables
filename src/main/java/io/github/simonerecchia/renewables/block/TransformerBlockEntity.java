@@ -12,8 +12,10 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * A transformer's bushings, low-voltage side first.
  *
- * STUB: owner B (grid-blocks.md section 7).  The conductor classes and the {@code feeds} list are the table
- * of section 11; applying the losses to the flow is the grid's (owner G).
+ * What it keeps as its reading is the power <em>going in</em>.  What comes out is that less the losses
+ * ({@link TransformerSpec#lossKw}: a core loss it burns whatever is drawn, and a share of the load), and the
+ * grid applies it to the flow that crosses the transformer: {@link TransformerFlow#output} is the one place the figure is
+ * worked out, so the wrench's reading and the grid's cannot differ.
  */
 public class TransformerBlockEntity extends MachineBlockEntity {
 	public TransformerBlockEntity(BlockPos pos, BlockState state) {
@@ -22,6 +24,16 @@ public class TransformerBlockEntity extends MachineBlockEntity {
 
 	public TransformerSpec spec() {
 		return ((TransformerBlock) getBlockState().getBlock()).spec();
+	}
+
+	/** What it costs to carry the power that is going in now, in kW. */
+	public double lossKw() {
+		return spec().lossKw(getCurrentPower());
+	}
+
+	/** What comes out for what goes in now: {@link TransformerFlow#output} of the delivered power. */
+	public double outputKw() {
+		return TransformerFlow.output(spec(), getCurrentPower());
 	}
 
 	@Override
