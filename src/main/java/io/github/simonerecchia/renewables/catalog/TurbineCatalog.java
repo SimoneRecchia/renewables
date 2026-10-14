@@ -18,13 +18,14 @@ public final class TurbineCatalog {
 
 	/**
 	 * The 10 kW machine, and the only one outside the C line: a Bergey Excel 10's 7 m rotor, 2.5 m/s cut-in and
-	 * 0-400 rpm, direct drive.
+	 * 0-400 rpm, direct drive.  Rated at 250 rpm: the speed tip-speed ratio 8 reaches at 11.5 m/s, where its curve
+	 * is at nine tenths of nameplate.
 	 */
 	public static final TurbineSpec SW_10 = TURBINES.register(new TurbineSpec(
 			id("sw_10"), "SW-10", "",
 			10.0, 7.0, 0.35,
 			2.5, 25.0, 25.0,
-			60.0, 400.0,
+			60.0, 250.0, 400.0,
 			2, 4,
 			3.3, TurbineSpec.Nacelle.SMALL_WIND));
 
@@ -33,7 +34,7 @@ public final class TurbineCatalog {
 			id("c52_085"), "C52-0.85", "IA",
 			850.0, 52.0, 0.44,
 			4.0, 25.0, 22.0,
-			14.0, 31.4,
+			14.0, 26.0, 31.4,
 			4, 7,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
@@ -42,7 +43,7 @@ public final class TurbineCatalog {
 			id("c80_20"), "C80-2.0", "IIA",
 			2000.0, 80.0, 0.46,
 			4.0, 25.0, 22.0,
-			9.0, 19.0,
+			9.0, 16.7, 19.0,
 			6, 10,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
@@ -51,7 +52,7 @@ public final class TurbineCatalog {
 			id("c90_30"), "C90-3.0", "IIA",
 			3000.0, 90.0, 0.46,
 			3.5, 25.0, 22.0,
-			8.6, 18.4,
+			8.6, 16.1, 18.4,
 			8, 11,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
@@ -60,7 +61,7 @@ public final class TurbineCatalog {
 			id("c112_30"), "C112-3.0", "IIIA",
 			3000.0, 112.0, 0.47,
 			3.0, 25.0, 22.0,
-			6.2, 17.7,
+			6.2, 12.8, 17.7,
 			8, 12,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
@@ -68,13 +69,14 @@ public final class TurbineCatalog {
 	 * The top of the line, and the machine the authored model already was: its rotor measures 13.044 blocks from the hub, so this is the one that draws at 1:1 and every other model is it scaled down.
 	 *
 	 * Its class is the 4 MW, 130 m low-wind machine: a Siemens SWT-4.0-130 tops out at 14 rpm, and a Nordex
-	 * N131/3900 runs from 7.9 rpm with the same 3 m/s cut-in and 25 m/s cut-out.
+	 * N131/3900 runs from 7.9 rpm and is rated at 12.6 (86 m/s at the tip) with the same 3 m/s cut-in and 25 m/s
+	 * cut-out.
 	 */
 	public static final TurbineSpec C130_40 = TURBINES.register(new TurbineSpec(
 			id("c130_40"), "C130-4.0", "IIIA",
 			4000.0, 130.0, 0.47,
 			3.0, 25.0, 22.5,
-			7.9, 14.0,
+			7.9, 12.6, 14.0,
 			9, 13,
 			1.0, TurbineSpec.Nacelle.UTILITY));
 
