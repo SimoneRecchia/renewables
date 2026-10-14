@@ -328,7 +328,7 @@ class Plant:
 # ------------------------------------------------------------------ the site
 
 def build(origin):
-    """A 596 kW plant on four sub-fields, out to a 400 kV line, with everything a real one has.
+    """A 505 kW plant on four sub-fields, out to a 400 kV line, with everything a real one has.
 
     Two constraints shape it, and both are the mod's own:
 
@@ -338,10 +338,12 @@ def build(origin):
     trackers is an east-west spine with a row each side.  Get that backwards and the field looks wired and
     carries nothing.
 
-    And an inverter has a **string count** as well as a rating.  A VX-350K takes 32 strings; three boxes of
-    sixteen is 48, and it simply refuses the third - the box goes on saying it is full and nobody collects
-    it.  Each sub-field here is sized to one inverter's inputs, which is also why the flat tables and the
-    thin-film row go straight in with no box at all: twelve strings and three.
+    And an inverter has a **string count** as well as a rating, and its current limit is per tracker: a
+    string lands on one tracker's terminals and has to fit under that tracker's amps.  A VX-350K takes 32
+    strings; three boxes of sixteen is 48, and it simply refuses the third - the box goes on saying it is full
+    and nobody collects it.  A VX-110K's nine 26 A trackers take one 17.3 A HX-700 string each, or two of the
+    10-11 A ones.  Each sub-field here is sized to one inverter's inputs, which is also why the flat tables go
+    straight in with no box at all.
     """
     ox, oy, oz = origin
     p = Plant()
@@ -369,36 +371,39 @@ def build(origin):
     p.run(TRUNK, (at(1, -2), at(16, -2)), 'dorsale')
     inverter_a = p.machine('inverter', 'renewables:' + INVERTERS['VX_350']['block'], at(17, -2), facing='south')
 
-    # ---- sub-field 2: the tracked rows, which take their cable on the other axis.  Fourteen single-axis
-    # and two dual-axis: sixteen strings, one box, one string inverter.
-    for i in range(6):
+    # ---- sub-field 2: the tracked rows, which take their cable on the other axis.  Eight single-axis and
+    # two dual-axis: an HX-700 string is 17.3 A and a VX-110K tracker takes 26, so each has a tracker to
+    # itself - eight of the nine - and the two 10.9 A dual-axis strings share the last.
+    for i in range(4):
         for z in (11, 13):
             p.machine('array', 'renewables:' + ARRAYS['HX_700']['block'], at(i, z), facing='north',
                       harnessed='true')
     for z in (11, 13):
-        p.machine('array', 'renewables:' + ARRAYS['AE_440']['block'], at(6, z), facing='north',
+        p.machine('array', 'renewables:' + ARRAYS['AE_440']['block'], at(4, z), facing='north',
                   harnessed='true')
     # Straight in, with no box: a *string* inverter has no trunk terminals at all - only the VX-350K and the
-    # central VC-2500K do - so a combiner in front of one would sit there full and uncollected.  Sixteen
-    # strings against eighteen inputs is what a string inverter is for.
+    # central VC-2500K do - so a combiner in front of one would sit there full and uncollected.
     p.run(STRING, (at(0, 12), at(8, 12)), 'stringhe HX-700 e AE-440')
     inverter_b = p.machine('inverter', 'renewables:' + INVERTERS['VX_110']['block'], at(9, 12), facing='west')
 
-    # ---- sub-field 3: six flat tables straight into a string inverter, no box between them, which is what
-    # a roof or a small ground mount is.  Twelve strings against eighteen inputs.
-    # No thin film here, and that is a decision the cabinet makes: three TR-530 strings sit at 999 V, which
-    # is inside this window by half a volt and outside the small cabinet's altogether, and one string out of
-    # window stops the whole inverter.  The product wants the 500-1500 V cabinet and three ways a row.
-    fixed('FT_430', 1, 3, 16)
+    # ---- sub-field 3: four flat tables straight into a string inverter, no box between them, which is what
+    # a roof or a small ground mount is.  Four strings of eleven a table, two to a tracker: sixteen strings
+    # on eight trackers.
+    # No thin film here, and that is a decision the cabinet makes: six CdTe modules in series open at 1493 V
+    # on a cold morning, over this cabinet's 1100 V input, and it refuses them.  The product wants the
+    # 1500 V cabinet and three ways a row.
+    fixed('FT_430', 1, 2, 16)
     p.run(STRING, (at(1, 16), at(1, 19)), 'stringhe FT-430')
     inverter_c = p.machine('inverter', 'renewables:' + INVERTERS['VX_110']['block'], at(1, 20), facing='south')
 
-    # ---- sub-field 4: one row on the smallest cabinet there is - 10.4 kW against 10, which is the ratio a
-    # shop roof actually has.  A fixed-tilt row and not the thin film: eighteen modules in series sit at
-    # 783 V and this cabinet's tracker stops at 980, while three thin-film strings sit at 999 and it
-    # refuses them - out of window, and the panel says so.
-    fixed('TR_580', 6, 1, 17, both=False)
-    p.run(STRING, (at(6, 17), at(6, 18)), 'stringhe TR-580 tetto')
+    # ---- sub-field 4: two rows on the smallest cabinet there is - 11.4 kW against 10, the ratio a small
+    # plant actually has.  Dual-axis, one 10.9 A string each on its own 13.5 A tracker.  Not a TR-580: its
+    # 13.62 A string is over the tracker's 13.5, and the cabinet refuses it; nor the thin film, whose cold
+    # 1493 V is over its 1100 V input - and the panel says which.
+    for x in (5, 7):
+        p.machine('array', 'renewables:' + ARRAYS['AE_440']['block'], at(x, 17), facing='north',
+                  harnessed='true')
+    p.run(STRING, (at(5, 18), at(7, 18)), 'stringhe AE-440 piccolo impianto')
     inverter_d = p.machine('inverter', 'renewables:' + INVERTERS['VX_10']['block'], at(6, 19), facing='south')
 
     # ---- the two machine transformers: the big cabinet on its own, the three small ones on the other
@@ -439,7 +444,7 @@ def build(origin):
     mv = 'AAAC_228'
     p.span(mv, 'inverter VX-350K (tetto)', inverter_a, 'TX macchina A (isolatore basso)', tx_a)
     for name, machine in (('VX-110K inseguitori', inverter_b), ('VX-110K tavoli piani', inverter_c),
-                          ('VX-10K film sottile', inverter_d)):
+                          ('VX-10K biassiali', inverter_d)):
         p.span(mv, 'inverter %s (tetto)' % name, machine, 'TX macchina B (isolatore basso)', tx_b)
     p.span(mv, 'TX macchina A (isolatore alto)', tx_a, 'interruttore (lato linea)', breaker)
     p.span(mv, 'TX macchina B (isolatore alto)', tx_b, 'interruttore (lato linea)', breaker)
@@ -492,7 +497,7 @@ def write_datapack(p, origin):
     os.makedirs(functions, exist_ok=True)
     write(os.path.join(DATAPACK, 'pack.mcmeta'),
           '{\n  "pack": {\n    "pack_format": %d,\n'
-          '    "description": "Renewables - impianto solare da 533 kW: /function renewables:plant"\n'
+          '    "description": "Renewables - impianto solare da 505 kW: /function renewables:plant"\n'
           '  }\n}\n' % PACK_FORMAT)
 
     lines = ['# generated by tools/gen_example_plant.py - do not edit by hand',
@@ -557,7 +562,7 @@ def main():
     os.makedirs(functions, exist_ok=True)
     with open(os.path.join(PACK, 'pack.mcmeta'), 'w') as f:
         f.write('{\n  "pack": {\n    "pack_format": 15,\n'
-                '    "description": "Renewables: a 533 kW photovoltaic plant, where you stand"\n  }\n}\n')
+                '    "description": "Renewables: a 505 kW photovoltaic plant, where you stand"\n  }\n}\n')
     with open(os.path.join(functions, name + '.mcfunction'), 'w') as f:
         f.write('# written by tools/gen_example_plant.py - do not edit by hand\n')
         f.write('# /function %s:%s builds the plant from the block you are standing on\n' % (namespace, name))

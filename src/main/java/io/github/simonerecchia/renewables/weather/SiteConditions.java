@@ -40,6 +40,9 @@ public record SiteConditions(double roughness, double downfall, double biomeTemp
 	private static final double FOREST = 0.55;
 	private static final double DENSE_FOREST = 1.0;
 
+	/** Blocks between the columns the snow survey reads. */
+	private static final int SNOW_SURVEY_STEP = 3;
+
 	/** Albedos, and they are the published figures for the same ground the roughnesses above describe. */
 	private static final double WATER_ALBEDO = 0.07;
 	private static final double SNOW_ALBEDO = 0.80;
@@ -96,14 +99,40 @@ public record SiteConditions(double roughness, double downfall, double biomeTemp
 				albedoOf(level, groundPos, biome, downfall), terrain, surrounding);
 	}
 
-	/** How much of the light this ground throws back up. */
+	/**
+	 * How much of the light this ground throws back up: the ground's own, and fresh snow's for the share of the
+	 * surface round the site that is under snow or ice.  It used to look only at the block under the machine, which
+	 * under a row is never snow, so the bifacial gain off a snowfield never came.
+	 */
 	private static double albedoOf(ServerLevel level, BlockPos groundPos, net.minecraft.core.Holder<Biome> biome, double downfall) {
-		BlockState surface = level.getBlockState(groundPos);
-		if (surface.is(Blocks.SNOW) || surface.is(Blocks.SNOW_BLOCK) || surface.is(Blocks.POWDER_SNOW) || surface.is(Blocks.ICE)
-				|| surface.is(Blocks.PACKED_ICE) || surface.is(Blocks.BLUE_ICE)) {
-			return SNOW_ALBEDO;
+		double snow = snowCover(level, groundPos);
+		return snow * SNOW_ALBEDO + (1.0 - snow) * groundAlbedo(biome, downfall);
+	}
+
+	/** Share of the surface round a site under snow or ice: the top block of nine columns three blocks apart. */
+	private static double snowCover(ServerLevel level, BlockPos groundPos) {
+		int seen = 0;
+		int snowy = 0;
+		for (int dx = -SNOW_SURVEY_STEP; dx <= SNOW_SURVEY_STEP; dx += SNOW_SURVEY_STEP) {
+			for (int dz = -SNOW_SURVEY_STEP; dz <= SNOW_SURVEY_STEP; dz += SNOW_SURVEY_STEP) {
+				int x = groundPos.getX() + dx;
+				int z = groundPos.getZ() + dz;
+				if (!level.getChunkSource().hasChunk(x >> 4, z >> 4)) continue;
+
+				BlockState top = level.getBlockState(new BlockPos(x, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1, z));
+				seen++;
+				if (top.is(Blocks.SNOW) || top.is(Blocks.SNOW_BLOCK) || top.is(Blocks.POWDER_SNOW) || top.is(Blocks.ICE)
+						|| top.is(Blocks.PACKED_ICE) || top.is(Blocks.BLUE_ICE)) {
+					snowy++;
+				}
+			}
 		}
 
+		return seen == 0 ? 0.0 : (double) snowy / seen;
+	}
+
+	/** The ground's own albedo, from what the biome is. */
+	private static double groundAlbedo(net.minecraft.core.Holder<Biome> biome, double downfall) {
 		if (biome.is(BiomeTags.IS_OCEAN) || biome.is(BiomeTags.IS_DEEP_OCEAN) || biome.is(BiomeTags.IS_RIVER)) return WATER_ALBEDO;
 		if (biome.is(BiomeTags.IS_BEACH)) return SAND_ALBEDO;
 		if (biome.is(BiomeTags.IS_JUNGLE)) return DENSE_FOREST_ALBEDO;
