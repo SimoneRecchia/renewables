@@ -231,10 +231,13 @@ not an `instanceof` chain in eight files:
 | | |
 |---|---|
 | `feeds(other)` | whether power may flow from a fitting here to one there — where a machine sits in the chain |
-| `busOf(index)` | which internal bus a fitting is bonded to. Every machine says nought, so power crosses it; an **open switch** says its line side and its load side are two, and that is the only thing in the mod that stops power. `GridSolver` keys a cluster on (position, bus) for it |
+| `busOf(index)` | which internal bus a fitting is bonded to. Every machine says nought, so power crosses it; a **switch** says its line side and its load side are two, which `GridSolver` joins through the contacts only while `closed()`; a transformer whose protection has tripped puts every bushing on a bus of its own. Those two are the only things in the mod that stop power. A switch reads what crosses its contacts, not what meets at one of its terminals. `GridSolver` keys a cluster on (position, bus) for it |
 | `takesConductor(spec, index)` | which voltage class may be strung to this fitting. Without it the three conductors are interchangeable and a 400 kV quad bundle goes on a garden kiosk |
 | `fittingType()` | the string a saved span holds, from `FittingTypes`. **Never change one**: every span in every existing world has it |
 | `passesThrough()` | whether power crosses this fitting rather than stopping at it. A switch has no role of its own - it takes the role of the line it is in - so it is on nobody's `feeds` list, and for as long as that was the only rule **nothing in the mod could send power to a switch at all**: a switch in a line silently blocked it, and `busOf`, the refusal to open under load and the trip all read a power that never arrived |
+| `closed()` | for a switch, whether its contacts join its two buses; what it reads is then the power crossing them, which is what the interlock and the trip judge |
+| `laidConductor()`, `laidNeighbours()` | a ground-laid run's conductor and the lengths it is joined to, by its own shape: `LevelGrid` strings a block of that conductor between every two, so a run carries power end to end |
+| `maxSpanBlocks()` | the longest span the machine holds - a tower's ruling span; `SpanPlanner` takes the shortest of both ends and the conductor |
 | `getWirePosition(index, toward)` | where a wire running towards a point ends: the anchor, except at a tension tower, whose phase is held by a dead-end each side of the arm - a span ends at the one on its own side. Only the drawing asks; the server keeps the one anchor, the middle |
 
 Twice an `instanceof` chain over machine types has silently dropped the machines added after it was written:
