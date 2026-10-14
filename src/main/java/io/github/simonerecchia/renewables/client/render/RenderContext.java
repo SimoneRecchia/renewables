@@ -10,7 +10,7 @@ import org.joml.Matrix4f;
 
 /**
  * What a machine's draw callback is handed: the model, the texture to fall back on and the packed light, and -
- * kept for {@link MachineRenderer} alone - the frame's projection and the machine's own vertex buffers, so that a
+ * kept for {@link MachineRenderer} alone - the frame's projection, its lights and the machine's own vertex buffers, so that a
  * renderer passes the context back to {@code renderGrouped} and never names a buffer.
  */
 @OnlyIn(Dist.CLIENT)
@@ -20,14 +20,16 @@ public final class RenderContext {
 	private final int packedLight;
 	final Matrix4f projection;
 	final Map<String, MachineRenderer.GroupBuffer> buffers;
+	final PoseLighting lighting;
 
 	RenderContext(MeshModel model, ResourceLocation texture, int packedLight, Matrix4f projection,
-			Map<String, MachineRenderer.GroupBuffer> buffers) {
+			Map<String, MachineRenderer.GroupBuffer> buffers, PoseLighting lighting) {
 		this.model = model;
 		this.texture = texture;
 		this.packedLight = packedLight;
 		this.projection = projection;
 		this.buffers = buffers;
+		this.lighting = lighting;
 	}
 
 	public MeshModel model() {
