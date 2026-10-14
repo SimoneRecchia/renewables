@@ -825,22 +825,36 @@ def spun(point, hinge_y, hinge_z, degrees):
 def scene_tower():
     triangles = ground(-6, -6, 12, 12, SAND)
     triangles += placed(machine_model('lattice_suspension'), (3, 0, 3))  # noqa: E501
-    return triangles, (-6.0, 9.0, 18.0), (3.5, 6.5, 3.5)
+    return triangles, (-7.0, 9.0, 19.0), (3.5, 6.2, 3.5)
 
 
 def scene_tower_head():
     """The head of each duty side by side: the arms, the hangers and the strings they carry."""
-    triangles = ground(-8, -8, 28, 28, SAND)
+    triangles = ground(-8, -8, 34, 28, SAND)
     for index, duty in enumerate(('suspension', 'tension', 'terminal')):
-        triangles += placed(machine_model('lattice_' + duty), (3 + index * 7, 0, 3))
-    return triangles, (10.5, 12.0, 20.0), (10.5, 8.9, 3.0)
+        triangles += placed(machine_model('lattice_' + duty), (3 + index * 9, 0, 3))
+    return triangles, (12.5, 11.0, 24.0), (12.5, 8.2, 3.0)
 
 
 def scene_tower_arm():
     """One tension tower's lower arm from below: the jumper loops and the dead-ends either side."""
     triangles = ground(-8, -8, 24, 24, SAND)
     triangles += placed(machine_model('lattice_tension'), (3, 0, 3))
-    return triangles, (3.5, 6.2, 9.5), (3.5, 8.4, 3.5)
+    return triangles, (6.6, 5.2, 7.4), (4.6, 7.0, 3.5)
+
+
+def scene_tower_string():
+    """A suspension string close: the hanger, the units, the grading ring, the yoke and the four clamps."""
+    triangles = ground(-8, -8, 24, 24, SAND)
+    triangles += placed(machine_model('lattice_suspension'), (3, 0, 3))
+    return triangles, (5.3, 6.9, 1.6), (4.7, 6.8, 3.5)
+
+
+def scene_tower_foot():
+    """A leg's foot from a player's eye: the pier, the stub, the bracing on its gussets and the plate."""
+    triangles = ground(-8, -8, 24, 24, SAND)
+    triangles += placed(machine_model('lattice_suspension'), (3, 0, 3))
+    return triangles, (0.2, 1.7, -1.6), (2.4, 0.8, 2.2)
 
 
 def scene_machine_cable():
@@ -1134,6 +1148,8 @@ SCENES = {
     'switches_open': scene_switches_open,
     'tower_head': scene_tower_head,
     'tower_arm': scene_tower_arm,
+    'tower_string': scene_tower_string,
+    'tower_foot': scene_tower_foot,
 }
 
 
