@@ -28,7 +28,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PvInverterRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 96 * 96;
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 	/** Where each fan has got to, so it turns continuously rather than restarting every frame. */
 	private static final Map<BlockPos, Float> FAN_ANGLE = new HashMap<>();
 
@@ -41,10 +40,10 @@ public class PvInverterRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		cleanupAngles(FAN_ANGLE, drawAll(event, PvInverterBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				state -> state.getValue(PvInverterBlock.FACING), PvInverterBlock.AUTHORED, BUFFER_CACHE, PvInverterRenderer::render));
+				state -> state.getValue(PvInverterBlock.FACING), PvInverterBlock.AUTHORED, PvInverterRenderer::render));
 	}
 
-	private static void render(PvInverterBlockEntity inverter, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(PvInverterBlockEntity inverter, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		InverterSpec spec = inverter.spec();
 		float scale = (float) spec.renderScale();
@@ -80,7 +79,7 @@ public class PvInverterRenderer extends MachineRenderer {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), inverter.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(context, poses);
 	}
 
 	/** Turns the fan on by the cabinet temperature, and keeps the angle between frames. */

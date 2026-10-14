@@ -11,7 +11,6 @@ import io.github.simonerecchia.renewables.registry.ModBlocks;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.HashMap;
 import java.util.Map;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraftforge.api.distmarker.Dist;
@@ -28,7 +27,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class PowerBoxRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 64 * 64;
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 
 	/**
 	 * How far back a wall-mounted cabinet moves, in blocks along the model's own z, which points at the wall.  The
@@ -41,13 +39,13 @@ public class PowerBoxRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		drawAll(event, PowerBoxBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				state -> state.getValue(MachineBlock.FACING), PowerBoxBlock.AUTHORED, BUFFER_CACHE, PowerBoxRenderer::render);
+				state -> state.getValue(MachineBlock.FACING), PowerBoxBlock.AUTHORED, PowerBoxRenderer::render);
 	}
 
-	private static void render(PowerBoxBlockEntity box, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(PowerBoxBlockEntity box, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		if (!mounted(box.getBlockState())) {
-			renderGrouped(model, poseStack, projection, context.texture(), context.packedLight(), box.getBlockPos(), BUFFER_CACHE, name -> true);
+			renderGrouped(context, poseStack, name -> true);
 			return;
 		}
 
@@ -63,7 +61,7 @@ public class PowerBoxRenderer extends MachineRenderer {
 			poses.put(groupName, moved);
 		}
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), box.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(context, poses);
 	}
 
 	/** Read by name, so that this does not depend on what the block calls its property constant. */

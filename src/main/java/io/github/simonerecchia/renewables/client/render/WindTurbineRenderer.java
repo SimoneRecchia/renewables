@@ -51,7 +51,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class WindTurbineRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 128 * 128;
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 	/** Where the nacelle has got to in the model's own yaw, per turbine, so it follows the wind smoothly. */
 	private static final Map<BlockPos, Float> YAW = new HashMap<>();
 
@@ -67,10 +66,10 @@ public class WindTurbineRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		cleanupAngles(YAW, drawAll(event, WindTurbineBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				state -> state.getValue(MachineBlock.FACING), WindTurbineBlock.AUTHORED, BUFFER_CACHE, WindTurbineRenderer::render));
+				state -> state.getValue(MachineBlock.FACING), WindTurbineBlock.AUTHORED, WindTurbineRenderer::render));
 	}
 
-	private static void render(WindTurbineBlockEntity turbine, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(WindTurbineBlockEntity turbine, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		TurbineSpec spec = turbine.spec();
 		BlockPos pos = turbine.getBlockPos();
@@ -136,7 +135,7 @@ public class WindTurbineRenderer extends MachineRenderer {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), pos, BUFFER_CACHE);
+		renderGrouped(context, poses);
 		poseStack.popPose();
 	}
 

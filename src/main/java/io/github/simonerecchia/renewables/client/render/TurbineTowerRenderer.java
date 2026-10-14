@@ -30,8 +30,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class TurbineTowerRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 128 * 128;
-	/** Its own cache: a tower and a turbine can be at the same position, one after the other, and must not share buffers. */
-	private static final Map<BlockPos, Map<String, GroupBuffer>> BUFFER_CACHE = new HashMap<>();
 
 	/** The width of a bare column: a quarter of the model's at two blocks, the model's own from thirteen on. */
 	private static final float MIN_WIDTH = 0.25f;
@@ -39,7 +37,7 @@ public class TurbineTowerRenderer extends MachineRenderer {
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
-		drawAll(event, TurbineTowerBlockEntity.class, MAX_RENDER_DISTANCE_SQ, null, null, BUFFER_CACHE,
+		drawAll(event, TurbineTowerBlockEntity.class, MAX_RENDER_DISTANCE_SQ, null, null,
 				TurbineTowerRenderer::render, TurbineTowerRenderer::isBareFoot);
 	}
 
@@ -52,7 +50,7 @@ public class TurbineTowerRenderer extends MachineRenderer {
 		return TurbineTowerBlock.countBelow(level, pos) == 0 && TurbineTowerBlock.findTurbineAbove(level, pos) == null;
 	}
 
-	private static void render(TurbineTowerBlockEntity tower, RenderContext context, PoseStack poseStack, Matrix4f projection) {
+	private static void render(TurbineTowerBlockEntity tower, RenderContext context, PoseStack poseStack) {
 		Level level = tower.getLevel();
 		if (level == null) return;
 
@@ -74,7 +72,7 @@ public class TurbineTowerRenderer extends MachineRenderer {
 			poseStack.popPose();
 		}
 
-		renderGrouped(model, poses, projection, context.texture(), context.packedLight(), tower.getBlockPos(), BUFFER_CACHE);
+		renderGrouped(context, poses);
 	}
 
 	/** Tower blocks directly above {@code pos}. */
