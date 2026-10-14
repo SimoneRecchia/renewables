@@ -40,8 +40,9 @@ public record TurbineSpec(
 		 * Equal to {@link #cutOutSpeed} on a machine without it.
 		 */
 		double stormOnsetSpeed,
-		/** The rotor's operating speed range in rpm */
+		/** The rotor's operating speed range in rpm: lowest, rated (where it holds at full power) and the overspeed limit. */
 		double minRotorRpm,
+		double ratedRotorRpm,
 		double maxRotorRpm,
 		int minTowerSegments,
 		int maxTowerSegments,
@@ -86,7 +87,9 @@ public record TurbineSpec(
 			throw new IllegalArgumentException(id + ": storm onset must fall between cut-in and cut-out");
 		}
 
-		if (minRotorRpm <= 0.0 || maxRotorRpm < minRotorRpm) throw new IllegalArgumentException(id + ": invalid rotor speed range");
+		if (minRotorRpm <= 0.0 || ratedRotorRpm < minRotorRpm || maxRotorRpm < ratedRotorRpm) {
+			throw new IllegalArgumentException(id + ": invalid rotor speed range");
+		}
 		if (minTowerSegments < 1 || maxTowerSegments < minTowerSegments) throw new IllegalArgumentException(id + ": invalid tower segment range");
 		if (rotorRenderScale <= 0.0) throw new IllegalArgumentException(id + ": rotor render scale must be positive");
 	}
@@ -189,11 +192,11 @@ public record TurbineSpec(
 	 */
 	private static final double TIP_SPEED_RATIO = 8.0;
 	/**
-	 * Generator speed at the top of the rotor's range.  A four-pole doubly-fed machine on a 50 Hz grid is
-	 * synchronous at 1500 rpm and runs some 20-30 % above it at full speed: a V52 reaches 1947 rpm, a V80 1909, a
-	 * SWT-4.0-130 1800.
+	 * Generator speed at the rotor's rated speed.  A four-pole doubly-fed machine on a 50 Hz grid is synchronous at
+	 * 1500 rpm and runs about 12 % above it at full power: a V80 at 16.7 rpm through 1:100.5 and a V90-3.0 at 16.1 rpm
+	 * through 1:104.5 both turn their generator at 1680; the overspeed limit takes it to about 1900.
 	 */
-	private static final double GENERATOR_RATED_RPM = 1800.0;
+	private static final double GENERATOR_RATED_RPM = 1680.0;
 	/** Tip speed ratio of a rotor that is idling rather than working. */
 	private static final double IDLING_TIP_SPEED_RATIO = 2.0;
 	/** Ceiling on an idling rotor's speed, as a fraction of rated. */
@@ -208,12 +211,30 @@ public record TurbineSpec(
 		return Math.min(rpmForTipSpeed(IDLING_TIP_SPEED_RATIO * windSpeed), maxRotorRpm * IDLING_SPEED_FRACTION);
 	}
 
-	/** Rotor speed in rpm at a given wind. */
+	/**
+	 * Rotor speed in rpm at a given wind: the tip-speed ratio held between the lowest speed and the rated one, at
+	 * which the controller holds the rotor while the pitch takes care of the rest.  The overspeed limit above it is
+	 * what a gust may push it to, not a speed it is run at.
+	 */
 	public double rotorRpmAt(double windSpeed) {
 		// below the cut-in there is nothing to hold a speed with, so the rotor is idling
 		if (windSpeed < cutInSpeed) return idlingRpmAt(windSpeed);
 
-		return Mth.clamp(rpmForTipSpeed(TIP_SPEED_RATIO * windSpeed), minRotorRpm, maxRotorRpm);
+		return Mth.clamp(rpmForTipSpeed(TIP_SPEED_RATIO * windSpeed), minRotorRpm, ratedRotorRpm);
+	}
+
+	/** Blade tip speed at the rated rotor speed, m/s: 70 to 90 on a modern onshore machine, held there by noise. */
+	public double ratedTipSpeed() {
+		return Math.PI * rotorDiameterM * ratedRotorRpm / 60.0;
+	}
+
+	/**
+	 * The most the generator can take out of a rotor turning at {@code rotorRpm}, kW: its rated torque times the
+	 * speed.  Power is torque times speed, so a rotor that has only just begun to turn can only be loaded lightly,
+	 * whatever the wind is offering.
+	 */
+	public double torqueCeilingKw(double rotorRpm) {
+		return ratedPowerKw * Math.max(0.0, rotorRpm) / ratedRotorRpm;
 	}
 
 	private double rpmForTipSpeed(double tipSpeed) {
@@ -229,20 +250,20 @@ public record TurbineSpec(
 	  * @see #DRAWN_REVOLUTIONS_PER_SECOND_AT_RATED
 	 */
 	public double drawnRotation(double realDegreesPerTick) {
-		double atRated = maxRotorRpm * DEGREES_PER_TICK_PER_RPM;
+		double atRated = ratedRotorRpm * DEGREES_PER_TICK_PER_RPM;
 		if (atRated <= 0.0) return 0.0;
 
 		return realDegreesPerTick / atRated * DRAWN_REVOLUTIONS_PER_SECOND_AT_RATED * 360.0 / 20.0;
 	}
 
 	/**
-	 * Gearbox step-up, derived so every utility machine's generator reaches its rated speed at its own top rotor
+	 * Gearbox step-up, derived so every utility machine's generator reaches its rated speed at its own rated rotor
 	 * speed.  A small wind turbine has no gearbox: its permanent-magnet alternator is on the rotor shaft.
 	 */
 	public double gearboxRatio() {
 		if (nacelle == Nacelle.SMALL_WIND) return 1.0;
 
-		return maxRotorRpm <= 0.0 ? 1.0 : GENERATOR_RATED_RPM / maxRotorRpm;
+		return GENERATOR_RATED_RPM / ratedRotorRpm;
 	}
 
 	// The wind profile used to live here, as a fixed 0.14 exponent applied to a single wind

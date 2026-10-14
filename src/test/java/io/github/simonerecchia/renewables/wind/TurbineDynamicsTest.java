@@ -199,6 +199,20 @@ class TurbineDynamicsTest {
 		assertTrue(TurbineDynamics.updateCutOut(false, 18.0, 31.0, C130));
 	}
 
+	/**
+	 * A turbulent wind (TI 0.13) whose gust sits on the 30 m/s trip while its mean is under the 22 m/s release: the
+	 * machine trips and stays stopped until the gust is down to 1.2 x 22 = 26.4, instead of restarting each tick.
+	 */
+	@Test
+	void aGustTripHoldsUntilTheGustIsDownToo() {
+		double ti = 0.13;
+		boolean latched = TurbineDynamics.updateCutOut(false, 21.8, 21.8 * (1.0 + 3.0 * ti), C130);
+		assertTrue(latched);
+		assertTrue(TurbineDynamics.updateCutOut(latched, 21.5, 21.5 * (1.0 + 3.0 * ti), C130));
+		assertTrue(TurbineDynamics.updateCutOut(latched, 19.2, 19.2 * (1.0 + 3.0 * ti), C130));
+		assertFalse(TurbineDynamics.updateCutOut(latched, 18.9, 18.9 * (1.0 + 3.0 * ti), C130));
+	}
+
 	@Test
 	void hysteresisCycle() {
 		boolean latched = false;
@@ -270,9 +284,9 @@ class TurbineDynamicsTest {
 		double rpm = TurbineDynamics.rpmOf(TurbineDynamics.targetDegreesPerTick(false, false, 10.0, 4000.0, 3284.0, C130));
 		assertEquals(8.0 * 10.0 * 60.0 / (Math.PI * 130.0), rpm, 1e-6);
 
-		// at 20 m/s it would be 23.5 and is held at the maximum
+		// at 20 m/s it would be 23.5 and is held at the rated speed, not the overspeed limit above it
 		double fast = TurbineDynamics.rpmOf(TurbineDynamics.targetDegreesPerTick(false, false, 20.0, 4000.0, 4000.0, C130));
-		assertEquals(C130.maxRotorRpm(), fast, 1e-9);
+		assertEquals(C130.ratedRotorRpm(), fast, 1e-9);
 
 		// just over the cut-in it is held at the minimum
 		double slow = TurbineDynamics.rpmOf(TurbineDynamics.targetDegreesPerTick(false, false, 3.1, 4000.0, 100.0, C130));
@@ -376,5 +390,19 @@ class TurbineDynamicsTest {
 		assertTrue(TurbineDynamics.collectivePitch(false, 20.0, SW10) > 0.0);
 		// and from the onset on it reads as the storm value
 		assertEquals(60.0, TurbineDynamics.collectivePitch(false, 25.0, SW10), 1e-9);
+	}
+
+	/**
+	 * Power is torque times speed.  The C130 is rated 4000 kW at 12.6 rpm; a rotor just off the brake at 0.7 rpm can
+	 * give 4000 x 0.7 / 12.6 = 222 kW, not the 4000 the wind offers, and only the full rated speed gives it all.
+	 */
+	@Test
+	void aRotorThatHasNotSpunUpCannotDeliverFullPower() {
+		assertEquals(222.22, TurbineDynamics.producedKw(false, 4000.0, 4000.0, 0.7, C130), 0.01);
+		assertEquals(4000.0, TurbineDynamics.producedKw(false, 4000.0, 4000.0, 12.6, C130), 1e-9);
+		// below the rated speed, the curve stays under the ceiling where the tip-speed ratio holds it
+		double rpm = C130.rotorRpmAt(9.0);
+		assertTrue(C130.powerWhileRunningKw(9.0, 1.225) < C130.torqueCeilingKw(rpm));
+		assertEquals(0.0, TurbineDynamics.producedKw(true, 4000.0, 4000.0, 12.6, C130), 0.0);
 	}
 }
