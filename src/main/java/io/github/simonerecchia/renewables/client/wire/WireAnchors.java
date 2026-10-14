@@ -26,8 +26,17 @@ final class WireAnchors {
 	/** The end of a wire at fitting {@code id}, or null while it cannot be told. */
 	@Nullable
 	static Vec3 anchorOf(Level level, int id, BlockPos hostPos) {
+		return anchorOf(level, id, hostPos, null);
+	}
+
+	/**
+	 * The end of a wire at fitting {@code id} that runs towards {@code toward} (a tension tower's dead-end on that side;
+	 * see {@link InsulatorHost#getWirePosition(int, Vec3)}), or the fitting's one point when {@code toward} is null.
+	 */
+	@Nullable
+	static Vec3 anchorOf(Level level, int id, BlockPos hostPos, @Nullable Vec3 toward) {
 		return anchorOf(id, () -> level.isLoaded(hostPos) && level.getBlockEntity(hostPos) instanceof InsulatorHost found
-				? found : null);
+				? found : null, toward);
 	}
 
 	/**
@@ -36,12 +45,17 @@ final class WireAnchors {
 	 */
 	@Nullable
 	static Vec3 anchorOf(int id, Supplier<InsulatorHost> atHostPos) {
+		return anchorOf(id, atHostPos, null);
+	}
+
+	@Nullable
+	private static Vec3 anchorOf(int id, Supplier<InsulatorHost> atHostPos, @Nullable Vec3 toward) {
 		if (id <= 0) return null;
 
 		InsulatorHost host = InsulatorIndex.find(id);
 		if (host != null) {
 			int index = indexOf(host.getInsulatorIds(), id);
-			if (index >= 0) return host.getWirePosition(index);
+			if (index >= 0) return positionOf(host, index, toward);
 
 			// the id has gone to another machine since this one was entered: the entry is stale, not the span
 			InsulatorIndex.unregister(host, new int[] {id});
@@ -52,7 +66,11 @@ final class WireAnchors {
 
 		InsulatorIndex.register(found);
 		int index = indexOf(found.getInsulatorIds(), id);
-		return index < 0 ? null : found.getWirePosition(index);
+		return index < 0 ? null : positionOf(found, index, toward);
+	}
+
+	private static Vec3 positionOf(InsulatorHost host, int index, @Nullable Vec3 toward) {
+		return toward == null ? host.getWirePosition(index) : host.getWirePosition(index, toward);
 	}
 
 	/** The position of {@code id} among a machine's fitting ids, or -1. */

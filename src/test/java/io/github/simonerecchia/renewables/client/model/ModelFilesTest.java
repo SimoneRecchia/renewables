@@ -86,6 +86,26 @@ class ModelFilesTest {
 	}
 
 	@Test
+	void theRadiusReachesEveryVertexAMachineDraws() {
+		// what the renderers cull with: a machine whose box is off screen is not drawn, so nothing may stick out of it
+		for (String name : machineModels) {
+			MeshModel model = machine(name);
+			float farthest = 0.0f;
+			for (MeshModel.Group group : model.groups.values()) {
+				if (group.isMarker()) continue;
+
+				for (int i = 0; i < group.positions.length; i += 3) {
+					float x = group.positions[i], y = group.positions[i + 1], z = group.positions[i + 2];
+					farthest = Math.max(farthest, (float) Math.sqrt(x * x + y * y + z * z));
+				}
+			}
+
+			assertTrue(model.radius() >= farthest - 1.0e-5f, name + ": radius " + model.radius() + " short of " + farthest);
+			assertTrue(model.radius() <= farthest * 1.75f + 0.01f, name + ": radius " + model.radius() + " far past " + farthest);
+		}
+	}
+
+	@Test
 	void everyMachineModelHasItsTexturesAndTheyExist() {
 		for (String name : machineModels) {
 			MeshModel model = machine(name);
