@@ -17,3 +17,8 @@ updates:
     commit-message:
       prefix: deps
     open-pull-requests-limit: 5
+    ignore:
+      # ForgeGradle 6 refuses Gradle 9 ("Versions Gradle 9.0 and newer are not supported yet"),
+      # so the wrapper stays on 8.x until the build moves to a ForgeGradle that accepts it.
+      - dependency-name: gradle-wrapper
+        update-types: [version-update:semver-major]
