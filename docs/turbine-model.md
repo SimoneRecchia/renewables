@@ -182,7 +182,10 @@ il giocatore punta, e fa sì che un clic sull'isolatore cada su un blocco della 
 (0.7 px) non collidono.
 
 **Blocco turbina**: la navicella e il raffreddatore, scalati da `s_n` e tagliati alla cella (la parte fuori cella non
-collide): `Block.box` in sedicesimi, frame authored SUD, da ruotare col facing.
+collide): `Block.box` in sedicesimi, frame authored SUD. La forma segue lo **yaw** della navicella, non il facing del
+blocco (che è solo lo yaw iniziale): a passi di 5°, ogni scatola girata come la gira il renderer e tagliata in otto
+strisce lungo x, ciascuna profonda quanto la scatola girata in quella striscia (`TurbineGeometry.nacelleBoxes(spec,
+yaw)`); ai quarti di giro è esattamente la tabella qui sotto ruotata.
 
 ```
 SW-10    scale 0.2500  navicella (6.89, 0.00, 4.45, 9.12, 2.40, 10.64)    raffreddatore (7.22, 2.32, 4.70, 8.78, 3.14, 6.58)
