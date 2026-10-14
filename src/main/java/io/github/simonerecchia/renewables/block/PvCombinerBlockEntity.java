@@ -44,6 +44,8 @@ public class PvCombinerBlockEntity extends BlockEntity {
 	private double availableDcKw = 0.0;
 	private double busVoltage = 0.0;
 	private double busCurrent = 0.0;
+	/** The air the trunk lies in, read off the rows it collects; not saved, it is back within a tick. */
+	private double ambientTempC = 20.0;
 	private double mpptFraction = 0.0;
 
 	/** The inverter collecting this box's output */
@@ -157,6 +159,8 @@ public class PvCombinerBlockEntity extends BlockEntity {
 		}
 
 		busVoltage = highest;
+		// the box has no thermometer of its own; the trunk lies in the same air as the rows
+		if (!live.isEmpty()) ambientTempC = live.get(0).ambientTempC();
 		// the switch open means the group is off the inverter
 		// operating point goes to zero, which is what isolating a combiner box actually does
 		double fraction = isolated() ? 0.0 : mpptFraction;
@@ -225,14 +229,27 @@ public class PvCombinerBlockEntity extends BlockEntity {
 	public double busVoltageAtInverter() {
 		if (isolated() || trunk == null || runMetres <= 0.0) return isolated() ? 0.0 : busVoltage;
 
-		return Math.max(0.0, busVoltage - trunk.voltageDrop(designAmps(), runMetres));
+		return Math.max(0.0, busVoltage - trunk.voltageDrop(trunkAmps(), runMetres, trunkTempC()));
 	}
 
 	/** What the trunk burns, as a fraction of what is going down it. */
 	public double trunkLossFraction() {
 		if (trunk == null || runMetres <= 0.0 || busVoltage <= 0.0) return 0.0;
 
-		return trunk.lossFraction(designAmps(), busVoltage, runMetres);
+		return trunk.lossFraction(trunkAmps(), busVoltage, runMetres, trunkTempC());
+	}
+
+	/**
+	 * The current down the trunk at the strings' maximum power point, which is what the loss goes with: the box's
+	 * design current is what it is wired for at full sun, and at a fifth of the light a fifth of it flows.
+	 */
+	private double trunkAmps() {
+		return busVoltage <= 0.0 ? 0.0 : Math.max(0.0, availableDcKw) * 1000.0 / busVoltage;
+	}
+
+	/** The trunk's copper temperature at that current. */
+	private double trunkTempC() {
+		return trunk == null ? ambientTempC : trunk.conductorTemperature(ambientTempC, trunkAmps(), runBuriedFraction);
 	}
 
 	/** The current the box is wired for, in amps: everything in it at standard conditions. */

@@ -13,9 +13,9 @@ import net.minecraft.world.level.block.state.BlockState;
  * A transformer's bushings, low-voltage side first.
  *
  * What it keeps as its reading is the power <em>going in</em>.  What comes out is that less the losses
- * ({@link TransformerSpec#lossKw}: a core loss it burns whatever is drawn, and a share of the load), and the
- * grid applies it to the flow that crosses the transformer: {@link TransformerFlow#output} is the one place the figure is
- * worked out, so the wrench's reading and the grid's cannot differ.
+ * ({@link TransformerSpec#lossKw}: a core loss it burns whatever is drawn, and the windings' loss, which goes with the
+ * square of the load), and the grid applies the same figure to the flow that crosses the transformer through
+ * {@link #throughLossKw}, so the wrench's reading and the grid's cannot differ.
  */
 public class TransformerBlockEntity extends MachineBlockEntity {
 	public TransformerBlockEntity(BlockPos pos, BlockState state) {
@@ -34,6 +34,17 @@ public class TransformerBlockEntity extends MachineBlockEntity {
 	/** What comes out for what goes in now: {@link TransformerFlow#output} of the delivered power. */
 	public double outputKw() {
 		return TransformerFlow.output(spec(), getCurrentPower());
+	}
+
+	/** The one machine on the grid that burns something carrying power across itself. */
+	@Override
+	public boolean losesInPassing() {
+		return true;
+	}
+
+	@Override
+	public double throughLossKw(double throughKw) {
+		return spec().lossKw(throughKw);
 	}
 
 	@Override

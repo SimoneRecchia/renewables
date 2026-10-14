@@ -156,6 +156,12 @@ public class PowerBoxBlockEntity extends MachineBlockEntity implements ExtraPose
 		return false;
 	}
 
+	/** The end of a street: what the grid carries, it carries to here. */
+	@Override
+	public boolean isLoad() {
+		return true;
+	}
+
 	/** Street bundle only: a kiosk is where a street ends, and neither a feeder nor a transmission line lands on it. */
 	@Override
 	public boolean takesConductor(ConductorSpec conductor, int index) {

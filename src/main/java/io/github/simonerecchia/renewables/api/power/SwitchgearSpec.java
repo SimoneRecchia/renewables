@@ -18,6 +18,7 @@ import net.minecraft.resources.ResourceLocation;
  *                contacts are past the current they were built for.
  */
 public record SwitchgearSpec(ResourceLocation id, String displayName, Duty duty,
+		/** {@code volts} is the rated voltage Ur, the highest of the system it is built for. */
 		ConductorSpec.VoltageClass voltageClass, double volts, int poles, double ratedKw,
 		String modelName) {
 

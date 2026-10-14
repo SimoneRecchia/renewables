@@ -242,4 +242,107 @@ class WeatherSamplerTest {
 		double high = c130.powerWhileRunningKw(at(c130.maxTowerSegments()).meanWind(), at(c130.maxTowerSegments()).airDensity());
 		assertTrue(high >= low);
 	}
+
+	// ---- the review's findings ----
+
+	/**
+	 * A flat world's ground is at y -60.  Read against a sea level of 63 it was 1230 m under the sea, in air at 1170 hPa
+	 * and 1.48 kg/m3; ground under the sea now reads as the sea's surface, and a flat world's own generator puts its
+	 * sea at -63, 30 m below its ground.
+	 */
+	@Test
+	void groundUnderTheSeaIsReadAtTheSurface() {
+		SiteConditions mild = new SiteConditions(0.03, 0.4, 0.55, 0.22, Double.NaN);
+		WeatherSnapshot under = WeatherSampler.sample(new Input(SEED, 0, 0, -60, SEA, 1, NOON, NOON, false, false, mild, false));
+		WeatherSnapshot at = WeatherSampler.sample(new Input(SEED, 0, 0, SEA, SEA, 1, NOON, NOON, false, false, mild, false));
+		assertEquals(at.pressureHpa(), under.pressureHpa(), 1e-9);
+		assertTrue(under.airDensity() < 1.3, "density " + under.airDensity());
+
+		WeatherSnapshot flat = WeatherSampler.sample(new Input(SEED, 0, 0, -60, -63, 1, NOON, NOON, false, false, mild, false));
+		assertTrue(flat.pressureHpa() < at.pressureHpa());
+		assertEquals(at.pressureHpa(), flat.pressureHpa(), 5.0);
+	}
+
+	/** The hub's air is the air at the hub: 130 m up it is thinner than 10 m up, by the scale height's 1.4 %. */
+	@Test
+	void theAirIsTakenAtTheInstrumentsHeight() {
+		assertTrue(at(13).pressureHpa() < at(1).pressureHpa());
+		assertEquals(at(1).pressureHpa() * Math.exp(-120.0 / 8400.0), at(13).pressureHpa(), 0.5);
+	}
+
+	/**
+	 * The cumulus field drifted by the instantaneous wind times the whole game clock, so after three hours of play a
+	 * change of the wind moved it kilometres in a tick and the cover jumped by up to 0.53.  It drifts with the steering
+	 * flow now, and a tick moves it half a metre.
+	 */
+	@Test
+	void cloudCoverDoesNotJumpAfterHoursOfPlay() {
+		SiteConditions wet = new SiteConditions(0.03, 0.8, 0.8, 0.22, Double.NaN);
+		for (long start : new long[] {216_000L, 720_000L, 5_000_000L}) {
+			for (int x = -4000; x <= 4000; x += 800) {
+				double previous = Atmosphere.cloudCover(SEED, x, 77, start, start, wet.downfall(), false, false);
+				for (long t = start + 1; t <= start + 40; t++) {
+					double now = Atmosphere.cloudCover(SEED, x, 77, t, t, wet.downfall(), false, false);
+					assertTrue(Math.abs(now - previous) < 0.01, "jump " + (now - previous) + " at " + t);
+					previous = now;
+				}
+			}
+		}
+	}
+
+	/** Centred difference over the same 75 blocks the geostrophic wind is worked out from, hPa per block. */
+	private static double[] pressureGradient(double x, double z, long time) {
+		double step = 75.0;
+		return new double[] {
+				(Atmosphere.pressureAt(SEED, x + step, z, time) - Atmosphere.pressureAt(SEED, x - step, z, time)) / (2 * step),
+				(Atmosphere.pressureAt(SEED, x, z + step, time) - Atmosphere.pressureAt(SEED, x, z - step, time)) / (2 * step)};
+	}
+
+	/**
+	 * At 45° north the wind aloft keeps the low on its left (Buys Ballot).  With x east and z south the left of a
+	 * heading (u, w) is (w, -u), and the low lies against the gradient, so grad p . (w, -u) < 0 everywhere.  The
+	 * prevailing westerly, which no local gradient explains, is taken off first.
+	 */
+	@Test
+	void theWindAloftKeepsTheLowOnItsLeft() {
+		double heading = Math.toRadians(Atmosphere.prevailingDirection(SEED));
+		int checked = 0;
+		for (int i = 0; i < 2000; i++) {
+			double x = (i % 50) * 997.0 - 25_000.0;
+			double z = (i / 50) * 1013.0 - 20_000.0;
+			Atmosphere.Flow aloft = Atmosphere.geostrophicWind(SEED, x, z, NOON);
+			double u = aloft.x() - Math.cos(heading) * 4.0;
+			double w = aloft.z() - Math.sin(heading) * 4.0;
+			double[] grad = pressureGradient(x, z, NOON);
+			if (Math.hypot(grad[0], grad[1]) < 1e-6) continue;
+
+			assertTrue(grad[0] * w - grad[1] * u < 0.0, "point " + i);
+			checked++;
+		}
+
+		assertTrue(checked > 1900);
+	}
+
+	/**
+	 * Friction backs the surface wind across the isobars towards the low.  The isobars are those of the whole field:
+	 * the local systems, and the large-scale gradient that drives the prevailing westerly, which at 45° N is the
+	 * gradient whose geostrophic wind it is (u = s dp/dz, w = -s dp/dx, s = 100 / 400 / (1.225 x 1e-4) m/s per hPa a
+	 * block).  The review found 1903 points in 2000 crossing towards the high; every one now crosses towards the low.
+	 */
+	@Test
+	void frictionTurnsTheSurfaceWindTowardsTheLow() {
+		double scale = 100.0 / 400.0 / (WorldConditions.REFERENCE_AIR_DENSITY * 1.0e-4);
+		double heading = Math.toRadians(Atmosphere.prevailingDirection(SEED));
+		double[] background = {-Math.sin(heading) * 4.0 / scale, Math.cos(heading) * 4.0 / scale};
+
+		for (int i = 0; i < 2000; i++) {
+			int x = (i % 50) * 997 - 25_000;
+			int z = (i / 50) * 1013 - 20_000;
+			WeatherSnapshot w = WeatherSampler.sample(new Input(SEED, x, z, 70, SEA, 9, NOON, NOON, false, false, GRASS, false));
+			double[] grad = pressureGradient(x, z, NOON);
+			double towards = Math.toRadians(w.direction());
+			double along = (grad[0] + background[0]) * Math.cos(towards) + (grad[1] + background[1]) * Math.sin(towards);
+			assertTrue(along < 0.0, "point " + i);
+		}
+	}
 }
