@@ -9,6 +9,9 @@ generators run in GENERATORS order, which is section 6's; one that exits non-zer
 of them are checkers too.  Differences are left in place for `git diff` to show.
 
 A PNG is compared by its pixels, not its bytes: zlib on Linux and on macOS compress the same pixels differently.
+And a channel may differ by one level: libm differs in the last bit between platforms, so a texture value that
+lands on .5 rounds either way (Linux against macOS: 52 of 13 million channels, in five textures).  A texture
+drawn by hand or left behind by a changed generator differs by far more than that.
 """
 
 import hashlib
@@ -78,19 +81,32 @@ def pixels(data):
     return width, height, colour, b''.join(rows)
 
 
+# How far apart one channel of a regenerated PNG may be from the tree's: the last-bit rounding of libm.
+PIXEL_TOLERANCE = 1
+
+
 def fingerprint(path):
-    """What a file is, for this comparison: its bytes, or a PNG's pixels."""
+    """What a file is, for this comparison: (hash, pixels) - the pixels only for a PNG, to compare within tolerance."""
     data = open(path, 'rb').read()
     if path.endswith('.png'):
         decoded = pixels(data)
         if decoded is not None:
             width, height, colour, body = decoded
-            return 'png %dx%d/%d %s' % (width, height, colour, hashlib.sha256(body).hexdigest())
-    return hashlib.sha256(data).hexdigest()
+            return 'png %dx%d/%d %s' % (width, height, colour, hashlib.sha256(body).hexdigest()), body
+    return hashlib.sha256(data).hexdigest(), None
+
+
+def same(before, after):
+    """Whether two fingerprints are one file: equal, or a PNG of the same size within PIXEL_TOLERANCE."""
+    if before[0] == after[0]:
+        return True
+    if before[1] is None or after[1] is None or before[0].split()[1] != after[0].split()[1]:
+        return False
+    return all(abs(x - y) <= PIXEL_TOLERANCE for x, y in zip(before[1], after[1]))
 
 
 def snapshot():
-    """{path: fingerprint} for every file under src/."""
+    """{path: fingerprint} for every file under src/: about 60 MB, most of it the pixels of the block textures."""
     out = {}
     for folder, _, names in os.walk(SOURCE):
         for name in names:
@@ -112,7 +128,7 @@ def main():
             print('\n'.join('    ' + line for line in (run.stdout + run.stderr).strip().splitlines()[-20:]))
 
     after = snapshot()
-    changed = sorted(path for path in before.keys() & after.keys() if before[path] != after[path])
+    changed = sorted(path for path in before.keys() & after.keys() if not same(before[path], after[path]))
     added = sorted(after.keys() - before.keys())
     removed = sorted(before.keys() - after.keys())
     for label, paths in (('changed', changed), ('written, and was not in the tree', added),
