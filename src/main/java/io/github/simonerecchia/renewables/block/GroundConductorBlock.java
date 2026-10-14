@@ -3,12 +3,14 @@ package io.github.simonerecchia.renewables.block;
 import io.github.simonerecchia.renewables.api.power.ConductorSpec;
 import io.github.simonerecchia.renewables.catalog.ConductorCatalog;
 import io.github.simonerecchia.renewables.grid.WireLedger;
+import io.github.simonerecchia.renewables.registry.ModItems;
 
 import java.util.EnumMap;
 import java.util.Map;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelAccessor;
@@ -249,6 +251,13 @@ public class GroundConductorBlock extends Block implements EntityBlock, SimpleWa
 		}
 
 		return state;
+	}
+
+	/** A run has no item of its own: middle-click gives the reel it is laid from, which is also what it drops. */
+	@Override
+	public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
+		var reel = ModItems.CONDUCTORS.get(spec.id());
+		return reel == null ? ItemStack.EMPTY : new ItemStack(reel.get());
 	}
 
 	/** Every run carries a fitting, so a span may be anchored to one: see GroundConductorBlockEntity. */
