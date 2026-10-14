@@ -135,7 +135,8 @@ public class UtilityPoleBlock extends MachineBlock {
 	@Override
 	public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
 		if (!Tools.emptyHanded(player, hand)) return InteractionResult.PASS;
-		if (!level.isClientSide) return InteractionResult.PASS;
+		// moving the arms moves the wires: a change to the world, which adventure and spectator may not make
+		if (!level.isClientSide || !player.mayBuild()) return InteractionResult.PASS;
 
 		ClientHooks.openPoleConfiguration(pos);
 		return InteractionResult.SUCCESS;
