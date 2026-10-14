@@ -6,7 +6,7 @@ sottostazione, linea a 400 kV su tralicci, sottostazione di arrivo, tratto MT po
 palo meteo e quadro di controllo.
 
 Non è un esempio inventato: è generato e **verificato** da
-[tools/gen_example_plant.py](tools/gen_example_plant.py) — che prima di scrivere controlla che nessuna
+[tools/gen_example_plant.py](../tools/gen_example_plant.py) — che prima di scrivere controlla che nessuna
 macchina invada le celle di un'altra, che ogni fila abbia il cavo su una faccia che accetta davvero, che
 ogni rete in continua sia un pezzo solo e non ne tocchi un'altra, e che ogni campata stia dentro la portata
 del suo conduttore — ed è stato **costruito e letto macchina per macchina** su un server, prima di essere
