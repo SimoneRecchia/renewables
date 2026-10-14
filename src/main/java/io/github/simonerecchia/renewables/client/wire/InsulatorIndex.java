@@ -42,6 +42,16 @@ public final class InsulatorIndex {
 		}
 	}
 
+	/**
+	 * Forgets {@code ids} as far as they still point at {@code owner}: one that has since gone to another machine
+	 * keeps pointing there.
+	 */
+	public static void unregister(InsulatorHost owner, int[] ids) {
+		for (int id : ids) {
+			HOSTS.computeIfPresent(id, (key, reference) -> reference.get() == owner ? null : reference);
+		}
+	}
+
 	@Nullable
 	public static InsulatorHost find(int id) {
 		WeakReference<InsulatorHost> reference = HOSTS.get(id);

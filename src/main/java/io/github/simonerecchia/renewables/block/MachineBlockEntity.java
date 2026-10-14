@@ -241,11 +241,16 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 	@Override
 	public void handleUpdateTag(CompoundTag tag) {
+		int[] before = getInsulatorIds();
 		load(tag);
 		refreshAnchors();
+		int[] after = getInsulatorIds();
 		DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-			InsulatorIndex.register(this, getInsulatorIds());
-			ClientWires.invalidate(getInsulatorIds());
+			// an id this machine has given up (the server renumbered a duplicate) must not keep finding it here
+			InsulatorIndex.unregister(this, before);
+			InsulatorIndex.register(this, after);
+			ClientWires.invalidate(before);
+			ClientWires.invalidate(after);
 		});
 	}
 
@@ -291,7 +296,8 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 		if (level != null && level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-				InsulatorIndex.unregister(getInsulatorIds());
+				// only what still points here: an id already taken up by a copy of this machine stays with the copy
+				InsulatorIndex.unregister(this, getInsulatorIds());
 				ClientWires.invalidate(getInsulatorIds());
 			});
 		}

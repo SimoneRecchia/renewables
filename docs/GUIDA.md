@@ -291,9 +291,10 @@ Sei isolatori: due sbracci da tre fasi. Solo conduttore **AT**.
 |---|---|
 | **Suspension** | tiene su la linea. Nove tralicci su dieci sono questo. |
 | **Tension** | assorbe la differenza di tiro fra i due lati: dove la linea cambia direzione. |
-| **Terminal** | assorbe tutto il tiro della linea e ha i tiranti per farlo: inizio e fine linea. |
+| **Terminal** | assorbe tutto il tiro della linea da un lato solo, sulla base più larga dei tre: inizio e fine linea. |
 
-Occupano un'impronta di quasi quattro blocchi e molte celle intorno. La cella sotto il centro
+Sono un Donaumast a 380 kV in scala (54 m reali in 11,5 blocchi): la base va da poco più di due blocchi
+(sospensione) a tre (terminale), la mensola bassa è larga sette blocchi, e occupano molte celle intorno. La cella sotto il centro
 dell'impronta **non** è solida: sotto un traliccio ci si passa.
 
 ### 6.8 Tratti posati (Bundle Run / Medium-Voltage Run / Transmission Run)
