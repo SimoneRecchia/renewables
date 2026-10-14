@@ -10,6 +10,7 @@ import io.github.simonerecchia.renewables.client.model.GroupPoses;
 import io.github.simonerecchia.renewables.client.model.MeshModel;
 import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.model.ExtraPose;
+import io.github.simonerecchia.renewables.model.PartBox;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -20,6 +21,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -67,7 +69,8 @@ public class WindTurbineRenderer extends MachineRenderer {
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
 		cleanupAngles(YAW, drawAll(event, WindTurbineBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				state -> state.getValue(MachineBlock.FACING), WindTurbineBlock.AUTHORED, WindTurbineRenderer::render));
+				state -> state.getValue(MachineBlock.FACING), WindTurbineBlock.AUTHORED, WindTurbineRenderer::render, null,
+				WindTurbineRenderer::bounds));
 	}
 
 	/**
@@ -167,6 +170,26 @@ public class WindTurbineRenderer extends MachineRenderer {
 	private static float relativeYaw(float modelYaw, WindTurbineBlockEntity turbine) {
 		Direction facing = turbine.getBlockState().getValue(MachineBlock.FACING);
 		return Mth.wrapDegrees(modelYaw - ModelFacing.degrees(WindTurbineBlock.AUTHORED, facing));
+	}
+
+	/**
+	 * The box the whole turbine is drawn in, from the foot of its tower to the top of the rotor's sweep; the default
+	 * round the block would lose a tower taller than the model's own reach.
+	 */
+	private static AABB bounds(WindTurbineBlockEntity turbine, MeshModel model) {
+		Layout layout = Layout.of(model, turbine);
+		PartBox blades = model.union("rotate_1");
+		double sweep = blades == null ? 6.5 : Math.max(
+				Math.max(Math.abs(blades.min().x() - layout.hubCentre().x), Math.abs(blades.max().x() - layout.hubCentre().x)),
+				Math.max(Math.abs(blades.min().y() - layout.hubCentre().y), Math.abs(blades.max().y() - layout.hubCentre().y)));
+		// the blades' box is a box round three of them; turning, a tip reaches its diagonal
+		double reach = sweep * Math.sqrt(2.0) * layout.rotorScale() + Math.abs(layout.hub().z) + 1.0;
+
+		BlockPos pos = turbine.getBlockPos();
+		double x = pos.getX() + 0.5;
+		double z = pos.getZ() + 0.5;
+		double foot = pos.getY() - layout.segments();
+		return new AABB(x - reach, foot - 0.5, z - reach, x + reach, foot + layout.hub().y + reach, z + reach);
 	}
 
 	/**
