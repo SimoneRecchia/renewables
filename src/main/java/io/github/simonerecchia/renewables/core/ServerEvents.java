@@ -3,12 +3,14 @@ package io.github.simonerecchia.renewables.core;
 import io.github.simonerecchia.renewables.Renewables;
 import io.github.simonerecchia.renewables.block.TowerCollapse;
 import io.github.simonerecchia.renewables.grid.Grid;
+import io.github.simonerecchia.renewables.grid.InsulatorIds;
 import io.github.simonerecchia.renewables.grid.WireLedger;
 import io.github.simonerecchia.renewables.net.Net;
 import io.github.simonerecchia.renewables.weather.LevelWeather;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.LevelEvent;
@@ -22,6 +24,15 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  */
 public final class ServerEvents {
 	private ServerEvents() {
+	}
+
+	/**
+	 * The Overworld exists, and no chunk has loaded yet: the insulator ids are bound to the world's counter before the
+	 * first machine claims one.  (Machines near the spawn load before {@link ServerStartedEvent}.)
+	 */
+	@SubscribeEvent
+	public static void onLevelLoad(LevelEvent.Load event) {
+		if (event.getLevel() instanceof ServerLevel level && level.dimension() == Level.OVERWORLD) InsulatorIds.attach(level);
 	}
 
 	@SubscribeEvent
@@ -85,6 +96,9 @@ public final class ServerEvents {
 
 	@SubscribeEvent
 	public static void onLevelUnload(LevelEvent.Unload event) {
-		if (event.getLevel() instanceof ServerLevel level) LevelWeather.remove(level);
+		if (event.getLevel() instanceof ServerLevel level) {
+			LevelWeather.remove(level);
+			Grid.forget(level);
+		}
 	}
 }

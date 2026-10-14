@@ -83,7 +83,7 @@ dependencies {
     compileOnly "mekanism:Mekanism:${mekanism_version}:api"
     compileOnly "cc.tweaked:cc-tweaked-${minecraft_version}-forge-api:${cctweaked_version}"
 
-    // The pure-physics classes are checked without starting a game.
+    // The solver and the id pool are plain Java so that their arithmetic is tested without starting Minecraft.
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -124,8 +124,12 @@ tasks.named('jar', Jar).configure {
     finalizedBy 'reobfJar'
 }
 
-tasks.withType(Test).configureEach {
+tasks.named('test', Test).configure {
     useJUnitPlatform()
+    testLogging {
+        events 'failed'
+        exceptionFormat 'full'
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {

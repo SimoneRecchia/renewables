@@ -38,13 +38,25 @@ TEXTURES = os.path.join(ASSETS, 'textures')
 # block texture below it is one that was left behind by an older pass.
 MIN_BLOCK = 128
 
-# What is not drawn by a script.  block/plastic2.png is the turbine's nacelle plastic, on
-# wind_turbine.mtl; the item sprites are the original ones, kept at the user's word over a generated set.
-# Everything else in the mod is generated - see CLAUDE.md section 6.
-INHERITED = {'block/plastic2.png'} | {
+# What is not drawn by a script: the item sprites, which are the original ones, kept at the user's word over a
+# generated set.  Everything else in the mod is generated - see CLAUDE.md section 6.
+INHERITED = {
     'item/%s.png' % name for name in
     ('cab', 'circuit_board', 'cpu', 'insulator', 'metal_casing', 'motor_core', 'power_box', 'screen',
      'utility_pole')}
+
+
+def imported(name):
+    """A generator module, or None when it reads a Java file the rewrite has not written yet.
+
+    Said out loud, because a generator that was not read is a claim that was not checked.
+    """
+    try:
+        return importlib.import_module(name)
+    except FileNotFoundError as missing:
+        print('SKIPPED   %s reads %s, which is not written yet (docs/spec/QUESTIONS.md)'
+              % (name, os.path.basename(missing.filename or '?')))
+        return None
 
 
 def outputs():
@@ -59,7 +71,9 @@ def outputs():
         if not name.startswith('gen_') or not name.endswith('.py'):
             continue
 
-        module = importlib.import_module(name[:-3])
+        module = imported(name[:-3])
+        if module is None:
+            continue
         for attribute in dir(module):
             if not attribute.endswith('TEXTURES'):
                 continue
@@ -106,7 +120,9 @@ def blockstates():
     claimed = {}
     for module_name, names in (('gen_crafting', None), ('gen_cable_models', None),
                                ('gen_trunk_models', None), ('gen_conductor_models', None)):
-        module = importlib.import_module(module_name)
+        module = imported(module_name)
+        if module is None:
+            continue
         if hasattr(module, 'MACHINES'):
             names = list(module.MACHINES)
         elif hasattr(module, 'JACKETS'):
