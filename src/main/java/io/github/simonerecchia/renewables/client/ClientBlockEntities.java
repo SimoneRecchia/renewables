@@ -1,5 +1,7 @@
 package io.github.simonerecchia.renewables.client;
 
+import io.github.simonerecchia.renewables.grid.InsulatorHost;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,23 @@ public final class ClientBlockEntities {
 
 			for (BlockEntity blockEntity : entry.getValue()) {
 				found.add(type.cast(blockEntity));
+			}
+		}
+
+		return found;
+	}
+
+	/**
+	 * Every tracked machine that wires can hang from, not removed.
+	 *
+	 * Not all of them share a base class (an inverter and a ground run are hosts but not machines of the common kind),
+	 * so this asks the interface rather than a class.  A fresh list: for a click, not for a frame.
+	 */
+	public static List<BlockEntity> hosts() {
+		List<BlockEntity> found = new ArrayList<>();
+		for (Set<BlockEntity> same : BY_TYPE.values()) {
+			for (BlockEntity blockEntity : same) {
+				if (blockEntity instanceof InsulatorHost && !blockEntity.isRemoved()) found.add(blockEntity);
 			}
 		}
 

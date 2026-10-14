@@ -1,0 +1,93 @@
+package io.github.simonerecchia.renewables.weather;
+
+import io.github.simonerecchia.renewables.api.WorldConditions;
+
+/**
+ * The weather at the top of a mast, worked out from numbers alone.
+ *
+ * {@link LevelWeather} gathers what only a level can say (the seed, the clock, whether it is raining on the
+ * spot, what the ground is) and hands it here, so the procedure itself - the one that turns a pressure field
+ * and a patch of ground into a wind at a hub height - runs without a game and can be checked against its own
+ * formulas.
+ */
+public final class WeatherSampler {
+	private WeatherSampler() {
+	}
+
+	/**
+	 * Everything the procedure needs.
+	 *
+	 * @param seed         the world seed, which fixes the pressure field and the prevailing wind
+	 * @param x            block column of the machine
+	 * @param z            block column of the machine
+	 * @param groundY      the block at the foot of the mast: the machine's own block lowered by the mast's height
+	 * @param seaLevel     the level's sea level, in blocks
+	 * @param mastBlocks   how many blocks of mast the instrument stands on; 1 for a ground instrument
+	 * @param dayTime      the day clock, in ticks
+	 * @param gameTime     the game clock, in ticks, which the gusts run on
+	 * @param raining      whether it is raining on the machine
+	 * @param thundering   whether there is a thunderstorm (only meaningful with rain)
+	 * @param site         the ground around the mast
+	 * @param withSky      whether the caller wants the sky (cloud cover, irradiance); a wind-only caller can skip it
+	 */
+	public record Input(long seed, int x, int z, int groundY, int seaLevel, int mastBlocks, long dayTime, long gameTime,
+			boolean raining, boolean thundering, SiteConditions site, boolean withSky) {
+	}
+
+	/** The measurement height of a mast of this many blocks, in metres. */
+	public static double heightM(int mastBlocks) {
+		return Math.max(1, mastBlocks) * WorldConditions.METRES_PER_BLOCK;
+	}
+
+	/**
+	 * The weather at a mast, in the order the physics goes.
+	 *
+	 * <ol>
+	 * <li>the air's layering from the time of day and the weather overhead;</li>
+	 * <li>the wind above the boundary layer from the pressure field's gradient, plus the prevailing wind, and
+	 *     faster where the site stands proud of the land around it;</li>
+	 * <li>that wind brought down to the instrument's height through the roughness of the ground;</li>
+	 * <li>its turbulence, the instantaneous wind it makes and the three-second gust;</li>
+	 * <li>the heading, turned off the isobars by friction;</li>
+	 * <li>temperature, station pressure and density from the ground's height above the sea.</li>
+	 * </ol>
+	 */
+	public static WeatherSnapshot sample(Input in) {
+		SiteConditions site = in.site();
+		double dayPhase = Atmosphere.dayPhase(in.dayTime());
+		boolean thundering = in.raining() && in.thundering();
+
+		double stability = Atmosphere.stability(dayPhase, in.raining(), thundering);
+		double heightM = heightM(in.mastBlocks());
+		double elevationM = (in.groundY() - in.seaLevel()) * WorldConditions.METRES_PER_BLOCK;
+
+		Atmosphere.Flow aloft = Atmosphere.geostrophicWind(in.seed(), in.x(), in.z(), in.dayTime());
+		double windAloft = aloft.speed() * (1.0 + site.exposure(in.groundY()));
+
+		double meanWind = Atmosphere.windAtHeight(windAloft, heightM, site.roughness(), stability);
+		double turbulence = Atmosphere.turbulenceIntensity(heightM, site.roughness(), stability, in.raining(), thundering);
+		double fluctuation = Atmosphere.turbulentFluctuation(in.seed(), in.x(), in.z(), in.gameTime());
+		double instantWind = Math.max(0.0, meanWind * (1.0 + turbulence * fluctuation));
+		double gust = Atmosphere.gustFrom(meanWind, turbulence);
+
+		float direction = Atmosphere.wrapDegrees(aloft.direction() - (float) Atmosphere.frictionTurn(site.roughness(), stability));
+
+		double temperature = Atmosphere.temperatureAt(site.biomeTemperature(), site.downfall(), elevationM, dayPhase, in.raining(), thundering);
+		double seaLevelPressure = Atmosphere.pressureAt(in.seed(), in.x(), in.z(), in.dayTime());
+		double pressure = Atmosphere.stationPressure(seaLevelPressure, elevationM, temperature);
+		double density = Atmosphere.airDensity(temperature, pressure);
+		double shear = Atmosphere.profileExponent(site.roughness(), stability);
+
+		SkyConditions sky = in.withSky() ? skyAt(in, site, dayPhase, pressure, temperature, instantWind, direction, thundering) : null;
+
+		return new WeatherSnapshot(meanWind, instantWind, gust, turbulence, direction, temperature, pressure, density, shear, sky);
+	}
+
+	private static SkyConditions skyAt(Input in, SiteConditions site, double dayPhase, double pressure, double temperature,
+			double windSpeed, float direction, boolean thundering) {
+		double cover = Atmosphere.cloudCover(in.seed(), in.x(), in.z(), in.dayTime(), in.gameTime(), site.downfall(),
+				windSpeed, direction, in.raining(), thundering);
+
+		return Atmosphere.sky(Atmosphere.sunPosition(dayPhase), pressure, cover, site.albedo(), temperature, windSpeed);
+	}
+}

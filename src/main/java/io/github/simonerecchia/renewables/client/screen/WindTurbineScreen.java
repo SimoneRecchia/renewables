@@ -192,7 +192,8 @@ public class WindTurbineScreen extends PlantScreen<WindTurbineBlockEntity> {
 		if (segments < spec.maxTowerSegments()) {
 			double here = turbine.getReportedPowerKw();
 			double ratio = Math.pow(spec.hubHeightM(segments + 1) / spec.hubHeightM(segments), turbine.getShearExponent());
-			double taller = spec.powerWhileRunningKw(turbine.getWindSpeed() * ratio, turbine.getAirDensity());
+			// a machine held to a setpoint would not make more however tall it stood
+			double taller = Math.min(spec.powerWhileRunningKw(turbine.getWindSpeed() * ratio, turbine.getAirDensity()), turbine.getActivePowerLimit());
 			if (here > 0.01 && taller > here) {
 				String gain = fmt("+%.0f%%", (taller / here - 1.0) * 100.0);
 				graphics.drawString(font, Component.translatable("screen.renewables.wind_turbine.tower_gain", gain), leftPos + 8, topPos + 128, FAINT_COLOUR, false);
