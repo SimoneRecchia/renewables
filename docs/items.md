@@ -47,7 +47,7 @@ plant counts. Length costs what copper costs: 200 m of
 three conductors joins two of them, and every server tick the grid (`grid/Grid`, one network per level, solved
 by `GridSolver`) carries what the generators make down the spans to every machine. Which machine may feed
 which is fixed (see [Getting started](getting-started.md#who-feeds-whom)), and each conductor goes on its own
-voltage class: aerial bundled cable at 1 kV, the medium-voltage conductor at 24 kV, the quad bundle at 420 kV.
+voltage class: aerial bundled cable at 1 kV, the medium-voltage conductor at 33 kV, the quad bundle at 420 kV.
 A power box turns what arrives into Forge Energy for anything else in the pack.
 
 **The met station is not in either chain.** It measures and reports — irradiance on three planes, albedo,
@@ -61,7 +61,7 @@ air and module temperature, wind, snow — and one mast serves a whole plant.
 |---|---|
 | Power Wrench | right-click any machine, or point at one up to 16 blocks away, to open its panel — or, for a machine with no panel, a card with the power through it |
 | Aerial Bundled Cable | low voltage: cabin to pole, pole to pole, pole to power box. Four blocks of span per reel, 40 at most |
-| Medium-Voltage Conductor | 24 kV: generators, transformers, cabins, poles and switches. Eight blocks per reel, 90 at most |
+| Medium-Voltage Conductor | 33 kV: generators, transformers, cabins, poles and switches. Eight blocks per reel, 90 at most |
 | High-Voltage Conductor | 420 kV, a quad bundle: substation transformers and lattice towers. Sixteen blocks per reel, 160 at most |
 
 Used on a block that is not a machine, a reel lays a **run** of its conductor on the ground (Bundle Run,
@@ -109,7 +109,7 @@ the one thing you cannot see from outside and have to know before laying a metre
 
 | item | what it does |
 |---|---|
-| Turbine Tower | stack it to the height you want; nothing stands above 16 blocks |
+| Turbine Tower | stack it to the height you want; above 16 blocks a bare pile folds under anything that steps on it, and above 20 it folds as it is built |
 | SW-10 | small wind, 10 kW: a tail vane on a small nacelle, and no gearbox or slew drive in its recipe |
 | C52-0.85 … C130-4.0 | the utility line. The letter is the maker and the number is the rotor in metres, exactly as a real datasheet reads. The C112 and the C130 are direct drive, so their recipes take no gearbox |
 
@@ -125,8 +125,8 @@ medium-voltage conductor.
 | Power Box | the end of a line: Forge Energy to the six blocks touching it, power to its field. Stands on the ground or hangs on a wall | one on the roof; low voltage only |
 | Machine Transformer | VT-2500 Pad, 2.5 MVA, 800 V to 33 kV, beside a generator; an empty hand reads its ratio, load and loss | three bushings; medium voltage |
 | Substation Transformer | VT-63000 Grid, 63 MVA, 33 kV to 400 kV: where a transmission line starts | six bushings: 1–3 medium, 4–6 high |
-| Disconnector | 24 kV; thrown with an empty hand or by a redstone edge, and refuses to open on load | six: line side 1–3, load side 4–6 |
-| Circuit Breaker | 24 kV; opens on load, and trips by itself above its rating | six, as the disconnector |
+| Disconnector | AB-36/630, on a 33 kV line; thrown with an empty hand or by a redstone edge, and refuses to open on load | six: line side 1–3, load side 4–6 |
+| Circuit Breaker | VB-36/630, on a 33 kV line; opens on load, and trips by itself above 36 MW | six, as the disconnector |
 | Suspension / Tension / Terminal Tower | the three 400 kV lattice towers | six each; high voltage only |
 
 ### Measurement and control
@@ -222,7 +222,7 @@ These came out of writing the table, and none of them is a bug — they are the 
 5. **The first `solar_panel` and `power_box` predate the catalogue.** They work, and they now sit in
    the same crafting tree as everything else, but the power box converts to Forge Energy at a fixed rate
    with no mention of voltage — where every other machine in the mod is careful about it. It does at least
-   take low voltage only, so a 24 kV line has to come down through a pole first.
+   take low voltage only, so a 33 kV line has to come down through a pole first.
 
 6. **No fault state is repairable.** A machine can degrade and de-rate; nothing brings it back. A
    service action with the wrench — clean the modules, replace a blown fuse — would give the wrench a

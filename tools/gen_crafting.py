@@ -397,7 +397,8 @@ BLOCK_NAMES = {
     'mv_conductor_run': ('Medium-Voltage Run', None),
     'hv_conductor_run': ('Transmission Run', None),
     'tx_machine': ('Machine Transformer',
-                   'Steps a machine\u2019s 800 V up to 33 kV. Every generator on a plant needs one.'),
+                   'Steps a generator\u2019s 800 V up to the 33 kV collector, at 2.5 MVA. A turbine or an inverter may also '
+                   'feed a cabin without one.'),
     'tx_substation': ('Substation Transformer',
                       'Steps 33 kV up to 400 kV. The transmission line starts here.'),
     'lattice_suspension': ('Suspension Tower', 'Holds a 400 kV line up. Nine towers in ten are one.'),

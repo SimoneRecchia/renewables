@@ -409,10 +409,9 @@ altro agente).
     (resta vero che la taglia in kVA non limita nulla);
   * le letture lungo le linee degli impianti di esempio (IMPIANTO, IMPIANTO-SOLARE) cambiano: in MT e AT le perdite
     sono quasi nulle, in BT dipendono dalla potenza.
-* **Tensione MT** — `README.md` r. 25, `docs/getting-started.md` r. 45, `docs/items.md` r. 50, 64, 225,
-  `docs/GUIDA.md` r. 67: "24 kV" → 33 kV (isolato 36 kV); `docs/items.md` r. 128–129 e `docs/GUIDA.md` §6.3
-  (r. 251, 259): sezionatore e interruttore "24 kV", "sopra i 26 MW" → 36 kV (AB-36/630, VB-36/630), 36 MW,
-  720 kW di soglia per il sezionatore.
+* **Tensione MT** — fatto: README, `docs/getting-started.md`, `docs/items.md` e `docs/GUIDA.md` dicono 33 kV
+  (apparecchi da 36 kV, AB-36/630 e VB-36/630, sgancio sopra i 36 MW); nei tooltip lo controlla
+  `registry/LanguageFileTest` contro `ConductorSpec.VoltageClass.MEDIUM` e `SwitchgearCatalog`.
 * `docs/photovoltaics.md`:
   * r. 162–168: portafusibili CB-6 20 → 30 A; "IEC 62548 wants a string fuse at 1.4 times" → **1,5 volte** Isc,
     e non oltre il fusibile massimo del modulo.
