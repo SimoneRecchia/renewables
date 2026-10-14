@@ -31,6 +31,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * which positions were powered (so a machine that drops out is told zero), what the clients were last sent (so that
  * a steady reading is not repeated every tick) and the disturbance a turbine is in the middle of.
  *
+ * A machine that throws is left out of the calculation, not allowed to stop it; the failure is logged once a
+ * minute ({@link FaultLog}).
+ *
  * Chunks are never loaded from here.  A span with an end in a chunk that is not loaded is left alone and left out of
  * the graph until the chunk returns; a span whose end is in a loaded chunk but is no longer a machine of the kind it
  * was strung to is stale and goes, with its refund.
@@ -71,6 +74,7 @@ final class LevelGrid {
 	private Map<Integer, PowerDeliveryEvent> memory = new HashMap<>();
 	private long memoryTick = Long.MIN_VALUE;
 	private boolean running;
+	private final FaultLog faults = new FaultLog();
 
 	/** The solver for the graph last read, and that graph: the per-generator work it caches outlives a tick. */
 	@Nullable
@@ -82,6 +86,11 @@ final class LevelGrid {
 	/** Whether there is nothing left to remember, so the owner may let this go until the level has spans again. */
 	boolean idle() {
 		return powered.isEmpty() && sent.isEmpty() && memory.isEmpty();
+	}
+
+	/** Where this level's grid reports what went wrong. */
+	FaultLog faults() {
+		return faults;
 	}
 
 	/** Builds the graph, solves it and delivers.  Does nothing if a calculation is already under way (a delivery that triggers one). */
@@ -165,7 +174,7 @@ final class LevelGrid {
 		Set<Long> loads = new HashSet<>();
 		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
 			InsulatorHost host = entry.getValue();
-			if (host.losesInPassing()) passages.put(entry.getKey(), host::throughLossKw);
+			if (host.losesInPassing()) passages.put(entry.getKey(), through -> throughLoss(level, entry.getKey(), host, through));
 			if (host.isLoad()) loads.add(entry.getKey());
 		}
 
@@ -189,6 +198,16 @@ final class LevelGrid {
 		return network;
 	}
 
+	/** A transformer that fails to say what it burns is a broken one, and passes nothing on. */
+	private double throughLoss(ServerLevel level, long pos, InsulatorHost host, double throughKw) {
+		try {
+			return host.throughLossKw(throughKw);
+		} catch (RuntimeException e) {
+			faults.report(level, "the machine at " + BlockPos.of(pos).toShortString() + " failed to give its losses", e);
+			return throughKw;
+		}
+	}
+
 	private void addNode(Map<Integer, GridSolver.Node> nodes, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode,
 			int id, BlockPos pos, End end) {
 		if (nodes.containsKey(id)) return;
@@ -208,12 +227,20 @@ final class LevelGrid {
 		List<GridSolver.Source> sources = new ArrayList<>();
 		for (Map.Entry<Long, InsulatorHost> entry : hosts.entrySet()) {
 			InsulatorHost host = entry.getValue();
-			double power = host.getGeneratedPower();
+			double power;
+			WindSample wind;
+			try {
+				power = host.getGeneratedPower();
+				wind = power > 0.0 ? host.windSample() : null;
+			} catch (RuntimeException e) {
+				faults.report(level, "the machine at " + BlockPos.of(entry.getKey()).toShortString() + " failed to give its output", e);
+				continue;
+			}
+
 			if (!(power > 0.0)) continue;
 
 			int node = firstNode.get(entry.getKey());
 			PowerDeliveryEvent event = PowerDeliveryEvent.NONE;
-			WindSample wind = host.windSample();
 			if (wind != null) {
 				// one draw per game tick: a second calculation in the same tick (a switch moved) must not
 				// count the disturbance down twice
@@ -238,10 +265,16 @@ final class LevelGrid {
 			if (host == null) continue;
 
 			GridSolver.Reading reading = entry.getValue();
-			host.deliverPower(reading.powerKw());
-			host.deliverEvent(reading.event());
-			publish(level, entry.getKey(), reading.powerKw());
 			now.add(entry.getKey());
+			try {
+				host.deliverPower(reading.powerKw());
+				host.deliverEvent(reading.event());
+			} catch (RuntimeException e) {
+				faults.report(level, "the machine at " + BlockPos.of(entry.getKey()).toShortString() + " failed to take its power", e);
+				continue;
+			}
+
+			publish(level, entry.getKey(), reading.powerKw());
 		}
 
 		// positions that were powered and are no longer in the graph are told zero, once the chunk is there to be told
@@ -256,8 +289,12 @@ final class LevelGrid {
 			}
 
 			if (level.getBlockEntity(at) instanceof InsulatorHost host) {
-				host.deliverPower(0.0);
-				host.deliverEvent(PowerDeliveryEvent.NONE);
+				try {
+					host.deliverPower(0.0);
+					host.deliverEvent(PowerDeliveryEvent.NONE);
+				} catch (RuntimeException e) {
+					faults.report(level, "the machine at " + at.toShortString() + " failed to take its power", e);
+				}
 			}
 
 			if (sent.remove(pos) != null) sendNow(level, at, 0.0);
