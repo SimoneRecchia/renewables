@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "BBB",
+    "FFF"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "F": {
+      "item": "renewables:resin"
+    }
+  },
+  "result": {
+    "item": "renewables:dc_string_cable",
+    "count": 6
+  }
+}

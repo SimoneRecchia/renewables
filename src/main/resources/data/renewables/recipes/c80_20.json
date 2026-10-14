@@ -1,0 +1,34 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "zzz",
+    "XxY",
+    "ubE"
+  ],
+  "key": {
+    "E": {
+      "item": "renewables:enclosure"
+    },
+    "X": {
+      "item": "renewables:gearbox"
+    },
+    "Y": {
+      "item": "renewables:bearing"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    },
+    "u": {
+      "item": "renewables:slew_drive"
+    },
+    "x": {
+      "item": "renewables:generator_set"
+    },
+    "z": {
+      "item": "renewables:long_blade"
+    }
+  },
+  "result": {
+    "item": "renewables:c80_20"
+  }
+}

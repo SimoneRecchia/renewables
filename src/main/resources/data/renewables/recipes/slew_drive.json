@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " H ",
+    "YKY",
+    " b "
+  ],
+  "key": {
+    "H": {
+      "item": "renewables:gear_set"
+    },
+    "K": {
+      "item": "renewables:motor_core"
+    },
+    "Y": {
+      "item": "renewables:bearing"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    }
+  },
+  "result": {
+    "item": "renewables:slew_drive"
+  }
+}

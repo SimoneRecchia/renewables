@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PPP",
+    "n n",
+    "PPP"
+  ],
+  "key": {
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "n": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "result": {
+    "item": "renewables:turbine_tower",
+    "count": 2
+  }
+}

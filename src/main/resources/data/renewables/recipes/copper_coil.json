@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "BBB",
+    " n "
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "n": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "result": {
+    "item": "renewables:copper_coil"
+  }
+}

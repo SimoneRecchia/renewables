@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "STS",
+    "jSj"
+  ],
+  "key": {
+    "L": {
+      "item": "renewables:pv_laminate"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "T": {
+      "item": "renewables:mounting_rack"
+    },
+    "j": {
+      "item": "renewables:mc4_connector"
+    }
+  },
+  "result": {
+    "item": "renewables:pv_tilt_530"
+  }
+}

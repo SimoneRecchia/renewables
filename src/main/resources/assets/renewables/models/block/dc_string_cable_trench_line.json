@@ -1,0 +1,21 @@
+{
+  "loader": "forge:obj",
+  "model": "renewables:models/dc_string_cable/dc_string_cable_trench_line.obj",
+  "flip_v": false,
+  "automatic_culling": false,
+  "shade_quads": false,
+  "textures": {
+    "core": "renewables:block/dc_core",
+    "cleat": "renewables:block/dc_cleat",
+    "tie": "renewables:block/dc_tie",
+    "plug_plus": "renewables:block/dc_connector_plus",
+    "plug_minus": "renewables:block/dc_connector_minus",
+    "joint_plus": "renewables:block/dc_joint_plus",
+    "joint_minus": "renewables:block/dc_joint_minus",
+    "gland": "renewables:block/dc_gland",
+    "jbox": "renewables:block/dc_jbox",
+    "jbox_side": "renewables:block/dc_jbox_side",
+    "trench": "renewables:block/dc_trench",
+    "particle": "renewables:block/dc_core"
+  }
+}

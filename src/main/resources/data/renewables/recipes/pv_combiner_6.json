@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "fff",
+    " E ",
+    " Q "
+  ],
+  "key": {
+    "E": {
+      "item": "renewables:enclosure"
+    },
+    "Q": {
+      "item": "renewables:load_break_switch"
+    },
+    "f": {
+      "item": "renewables:gpv_fuse"
+    }
+  },
+  "result": {
+    "item": "renewables:pv_combiner_6"
+  }
+}

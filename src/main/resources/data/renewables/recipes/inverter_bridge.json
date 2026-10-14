@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "www",
+    "kbk",
+    "BeB"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    },
+    "e": {
+      "item": "renewables:magnetic_core"
+    },
+    "k": {
+      "item": "renewables:capacitor_bank"
+    },
+    "w": {
+      "item": "renewables:power_module"
+    }
+  },
+  "result": {
+    "item": "renewables:inverter_bridge"
+  }
+}

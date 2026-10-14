@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PPP",
+    "OOO",
+    "PPP"
+  ],
+  "key": {
+    "O": {
+      "item": "renewables:copper_coil"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    }
+  },
+  "result": {
+    "item": "renewables:magnetic_core"
+  }
+}

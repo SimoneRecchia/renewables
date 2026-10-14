@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " G ",
+    " E ",
+    " b "
+  ],
+  "key": {
+    "E": {
+      "item": "renewables:enclosure"
+    },
+    "G": {
+      "item": "renewables:inverter_bridge"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    }
+  },
+  "result": {
+    "item": "renewables:inverter_10"
+  }
+}

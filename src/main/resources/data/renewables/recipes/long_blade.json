@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "AAA",
+    "FsF",
+    "AAA"
+  ],
+  "key": {
+    "A": {
+      "item": "renewables:tempered_glass"
+    },
+    "F": {
+      "item": "renewables:resin"
+    },
+    "s": {
+      "item": "renewables:turbine_blade"
+    }
+  },
+  "result": {
+    "item": "renewables:long_blade"
+  }
+}

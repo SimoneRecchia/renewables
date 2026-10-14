@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GGG",
+    "DED",
+    "KbK"
+  ],
+  "key": {
+    "D": {
+      "item": "renewables:dc_section"
+    },
+    "E": {
+      "item": "renewables:enclosure"
+    },
+    "G": {
+      "item": "renewables:inverter_bridge"
+    },
+    "K": {
+      "item": "renewables:motor_core"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    }
+  },
+  "result": {
+    "item": "renewables:inverter_350"
+  }
+}

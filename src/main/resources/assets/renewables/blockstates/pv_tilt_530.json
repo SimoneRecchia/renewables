@@ -1,0 +1,9 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "renewables:block/glass_particle"
+      }
+    }
+  ]
+}

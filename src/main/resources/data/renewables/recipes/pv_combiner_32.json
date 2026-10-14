@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "fff",
+    "BEB",
+    "PQP"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "E": {
+      "item": "renewables:enclosure"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    },
+    "Q": {
+      "item": "renewables:load_break_switch"
+    },
+    "f": {
+      "item": "renewables:gpv_fuse"
+    }
+  },
+  "result": {
+    "item": "renewables:pv_combiner_32"
+  }
+}

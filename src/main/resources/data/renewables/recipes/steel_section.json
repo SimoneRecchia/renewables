@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "P",
+    "P"
+  ],
+  "key": {
+    "P": {
+      "item": "renewables:steel_plate"
+    }
+  },
+  "result": {
+    "item": "renewables:steel_section",
+    "count": 2
+  }
+}

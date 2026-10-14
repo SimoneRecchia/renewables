@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "sss",
+    " x ",
+    "SbS"
+  ],
+  "key": {
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    },
+    "s": {
+      "item": "renewables:turbine_blade"
+    },
+    "x": {
+      "item": "renewables:generator_set"
+    }
+  },
+  "result": {
+    "item": "renewables:sw_10"
+  }
+}

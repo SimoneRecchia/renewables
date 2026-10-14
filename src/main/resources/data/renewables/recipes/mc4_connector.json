@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "II",
+    "BB"
+  ],
+  "key": {
+    "B": {
+      "item": "renewables:busbar"
+    },
+    "I": {
+      "item": "renewables:insulator"
+    }
+  },
+  "result": {
+    "item": "renewables:mc4_connector",
+    "count": 4
+  }
+}

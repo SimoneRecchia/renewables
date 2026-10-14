@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "tut",
+    "jbj"
+  ],
+  "key": {
+    "L": {
+      "item": "renewables:pv_laminate"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    },
+    "j": {
+      "item": "renewables:mc4_connector"
+    },
+    "t": {
+      "item": "renewables:torque_tube"
+    },
+    "u": {
+      "item": "renewables:slew_drive"
+    }
+  },
+  "result": {
+    "item": "renewables:pv_track_700"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " p ",
+    "pbp",
+    "SRS"
+  ],
+  "key": {
+    "R": {
+      "item": "renewables:screen"
+    },
+    "S": {
+      "item": "renewables:steel_section"
+    },
+    "b": {
+      "item": "renewables:control_board"
+    },
+    "p": {
+      "item": "renewables:sensor_head"
+    }
+  },
+  "result": {
+    "item": "renewables:met_station"
+  }
+}

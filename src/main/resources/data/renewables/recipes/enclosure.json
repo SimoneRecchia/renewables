@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PPP",
+    "PIP",
+    "PPP"
+  ],
+  "key": {
+    "I": {
+      "item": "renewables:insulator"
+    },
+    "P": {
+      "item": "renewables:steel_plate"
+    }
+  },
+  "result": {
+    "item": "renewables:enclosure"
+  }
+}
