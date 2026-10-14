@@ -24,11 +24,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * The network of one level: builds the graph from the saved spans and the machines that are loaded, hands it to
  * {@link GridSolver}, and delivers the answer to every machine and to the clients that can see it.
  *
- * The graph is rebuilt from scratch on every calculation, because the things that decide it change without telling
- * anyone: a generator's output moves every tick, and a switch changes its buses.  What this object keeps between
- * calculations is only what has to survive them - which positions were powered (so a machine that drops out is told
- * zero), what the clients were last sent (so that a steady reading is not repeated every tick) and the disturbance a
- * turbine is in the middle of.
+ * The graph is read from the world on every calculation, because the things that decide it change without telling
+ * anyone: a switch changes its buses, a chunk goes and takes its machines with it.  What the solver works out from
+ * the graph alone is kept for as long as the graph reads the same ({@link #network}), so a steady tick only pushes
+ * the generators' output through.  The rest this object keeps between calculations is what has to survive them -
+ * which positions were powered (so a machine that drops out is told zero), what the clients were last sent (so that
+ * a steady reading is not repeated every tick) and the disturbance a turbine is in the middle of.
  *
  * Chunks are never loaded from here.  A span with an end in a chunk that is not loaded is left alone and left out of
  * the graph until the chunk returns; a span whose end is in a loaded chunk but is no longer a machine of the kind it
@@ -70,6 +71,13 @@ final class LevelGrid {
 	private Map<Integer, PowerDeliveryEvent> memory = new HashMap<>();
 	private long memoryTick = Long.MIN_VALUE;
 	private boolean running;
+
+	/** The solver for the graph last read, and that graph: the per-generator work it caches outlives a tick. */
+	@Nullable
+	private GridSolver network;
+	private List<GridSolver.Node> networkNodes = List.of();
+	private List<GridSolver.Edge> networkEdges = List.of();
+	private Set<Long> networkLoads = Set.of();
 
 	/** Whether there is nothing left to remember, so the owner may let this go until the level has spans again. */
 	boolean idle() {
@@ -162,10 +170,23 @@ final class LevelGrid {
 		}
 
 		List<GridSolver.Source> sources = sources(level, hosts, firstNode);
-		Map<Integer, GridSolver.Reading> readings = GridSolver.solve(nodes.values(), edges, sources, passages, loads);
-		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(nodes.values(), readings);
+		List<GridSolver.Node> graph = new ArrayList<>(nodes.values());
+		GridSolver.Solution solution = network(graph, edges, loads).solve(sources, passages);
+		Map<Long, GridSolver.Reading> byPosition = GridSolver.byPosition(graph, solution.readings());
 
 		deliver(level, hosts, byPosition);
+	}
+
+	/** The solver for this graph: the one already built if the graph reads exactly as it did, else a new one. */
+	private GridSolver network(List<GridSolver.Node> nodes, List<GridSolver.Edge> edges, Set<Long> loads) {
+		if (network == null || !nodes.equals(networkNodes) || !edges.equals(networkEdges) || !loads.equals(networkLoads)) {
+			network = GridSolver.network(nodes, edges, loads);
+			networkNodes = nodes;
+			networkEdges = edges;
+			networkLoads = loads;
+		}
+
+		return network;
 	}
 
 	private void addNode(Map<Integer, GridSolver.Node> nodes, Map<Long, InsulatorHost> hosts, Map<Long, Integer> firstNode,
