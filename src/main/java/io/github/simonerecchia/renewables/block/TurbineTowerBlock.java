@@ -40,7 +40,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * something steps on its top.  Either way the fall is {@link TowerCollapse}.  Nothing built to a turbine's own
  * limits (13 at the most) ever comes near these, so the rule is for bare towers.
  */
-public class TurbineTowerBlock extends Block implements EntityBlock {
+public class TurbineTowerBlock extends Block implements EntityBlock, MachineShell.Carrier {
 	/**
 	 * Nothing stands above this many segments.  Kept under this name for the code that already reads it; it is
 	 * {@link TurbineGeometry#SAFE_SEGMENTS}.
@@ -112,6 +112,13 @@ public class TurbineTowerBlock extends Block implements EntityBlock {
 	/** Whether this segment is the lowest of its pile. */
 	public static boolean isFoot(BlockGetter level, BlockPos pos) {
 		return !(level.getBlockState(pos.below()).getBlock() instanceof TurbineTowerBlock);
+	}
+
+	/** A click on any segment of a tower that carries a turbine is a click on the turbine, its fitting included. */
+	@Nullable
+	@Override
+	public BlockPos carriedMachine(BlockGetter level, BlockPos pos) {
+		return findTurbineAbove(level, pos);
 	}
 
 	// ---- shape and light ----
