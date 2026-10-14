@@ -265,3 +265,26 @@ Valgono dove le specifiche lasciavano scelta; chi implementa non le riapre.
 * Prima di consegnare: `./gradlew build` verde nel proprio worktree. Il nome dei test, se ci sono, è `*Test`.
 * Stile: come il codice portato (tab, commenti in inglese che spiegano il perché, niente riferimenti a progetti esterni).
 * Niente `System.out`; log con `Renewables.LOGGER`.
+
+## 6. Contratti aggiunti dopo la fondazione
+
+```java
+// RP.model (comune, scritto dall'architetto): la trasformazione extra del palo, UNA sola per disegno, picking e ancoraggi.
+interface ExtraPose { Vec3 poseOffset(); float poseYawDegrees(); float posePitchDegrees();
+                      static Vec3 toWorld(Vec3 local, BlockPos pos, Direction authored, Direction facing, @Nullable ExtraPose pose); }
+// UtilityPoleBlockEntity (B) la implementa. MachineRenderer / PartPicker (M) e gli ancoraggi (B) chiamano toWorld.
+
+// RP.client.model.PartPicker (M) - picking sui box per gruppo (models.md §11). Tutti i metodi sono client-only.
+final class PartPicker {
+    static boolean isPointed(Level level, BlockPos pos, String part, Vec3 origin, Vec3 direction);          // op. 1
+    static @Nullable String pointedFitting(Level level, BlockPos pos, Vec3 origin, Vec3 direction);        // op. 2: raccordi, il più vicino
+    static @Nullable String pointedAnyPart(Level level, BlockPos pos, Vec3 origin, Vec3 direction);        // op. 2, ripiego
+    static @Nullable Vec3 partCenter(Level level, BlockPos pos, String part);                              // op. 3
+    static @Nullable Vec3 nearestHit(Level level, BlockPos pos, Vec3 origin, Vec3 direction);              // op. 4: punto d'ingresso
+}
+// Se la block entity in pos implementa ExtraPose, il picker la applica (stessa trasformazione del disegno).
+// Facing e authored si ricavano dal blockstate e da ModelDefinitions.
+
+// RP.client.wire.ClientWires (C) espone per le campate: all(), pending(), ecc.; InsulatorIndex.find(id) -> InsulatorHost.
+// RP.client.render: ogni renderer ha static void init() (registra i modelli) chiamata da RenewablesClient.
+```
