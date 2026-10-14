@@ -46,7 +46,8 @@ public class MetStationScreen extends PlantScreen<MetStationBlockEntity> {
 		pair(graphics, row++, "diffuse_fraction", fmt("%.2f", station.diffuseFraction()), "clearness",
 				fmt("%.2f", station.getTelemetry().number("clearnessIndex")));
 		pair(graphics, row++, "albedo", fmt("%.2f", station.albedo()), "sun",
-				fmt("%.0f° at %.0f°", station.getTelemetry().number("sunElevation"), station.getTelemetry().number("sunAzimuth")));
+				Component.translatable("screen.renewables.met_station.sun_position", fmt("%.0f", station.getTelemetry().number("sunElevation")),
+						fmt("%.0f", station.getTelemetry().number("sunAzimuth"))).getString());
 		pair(graphics, row++, "air_temp", fmt("%.1f °C", station.ambientTempC()), "module_temp", fmt("%.1f °C", station.moduleTempC()));
 		pair(graphics, row++, "wind_speed", fmt("%.1f m/s", station.windSpeed()), "wind_dir", fmt("%.0f°", station.windDirection()));
 		pair(graphics, row++, "snow_distance", fmt("%.2f m", station.snowDistanceM()), "snow_height", fmt("%.2f m", station.snowHeightM()));

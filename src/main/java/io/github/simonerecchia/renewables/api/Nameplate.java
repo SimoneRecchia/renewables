@@ -32,6 +32,11 @@ public final class Nameplate {
 		return fmt("%.0f kW", kw);
 	}
 
+	/** A datasheet figure on a label: a whole number bare, anything else to one decimal ("6", "2.5"). */
+	public static String figure(double value) {
+		return value == Math.floor(value) ? String.valueOf((long) value) : fmt("%.1f", value);
+	}
+
 	/** The same, for a live reading: a decimal further, because a panel is watched while it changes. */
 	public static String reading(double kw) {
 		if (Math.abs(kw) >= 1000.0) return fmt("%.2f MW", kw / 1000.0);
