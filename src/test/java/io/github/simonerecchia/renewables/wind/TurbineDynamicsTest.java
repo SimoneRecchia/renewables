@@ -145,6 +145,20 @@ class TurbineDynamicsTest {
 		assertEquals(0.025, 1.0 - TurbineDynamics.alignment(TurbineDynamics.YAW_DEAD_BAND), 0.0005);
 	}
 
+	/** The rotor sees v cos(gamma), so below rated, where the curve is cubic, the power is cos cubed: 2.5 %, not 7.4. */
+	@Test
+	void theRotorWorksWithTheWindSquareToIt() {
+		assertEquals(10.0 * Math.cos(Math.toRadians(30.0)), TurbineDynamics.effectiveWind(10.0, 30.0), 1e-12);
+		assertEquals(TurbineDynamics.effectiveWind(10.0, 30.0), TurbineDynamics.effectiveWind(10.0, -30.0), 1e-12);
+		assertEquals(0.0, TurbineDynamics.effectiveWind(10.0, 90.0), 1e-12);
+		assertEquals(0.0, TurbineDynamics.effectiveWind(10.0, 135.0), 1e-12);
+
+		double off = TurbineDynamics.YAW_DEAD_BAND;
+		double ratio = Math.pow(TurbineDynamics.effectiveWind(8.0, off) / 8.0, 3);
+		assertEquals(TurbineDynamics.alignment(off), ratio, 1e-12);
+		assertEquals(0.0254, 1.0 - ratio, 0.0001);
+	}
+
 	// ---- cut-out ----
 
 	@Test
@@ -252,7 +266,7 @@ class TurbineDynamicsTest {
 
 	@Test
 	void workingRotorHoldsTipSpeedRatioEightWithinItsRange() {
-		// 8 * 10 m/s * 60 / (pi * 130 m) = 11.75 rpm, inside 5.5..14.0
+		// 8 * 10 m/s * 60 / (pi * 130 m) = 11.75 rpm, inside 7.9..14.0
 		double rpm = TurbineDynamics.rpmOf(TurbineDynamics.targetDegreesPerTick(false, false, 10.0, 4000.0, 3284.0, C130));
 		assertEquals(8.0 * 10.0 * 60.0 / (Math.PI * 130.0), rpm, 1e-6);
 

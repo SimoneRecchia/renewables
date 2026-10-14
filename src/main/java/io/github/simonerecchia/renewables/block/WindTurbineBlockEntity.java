@@ -377,7 +377,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		yawing = yaw.yawing();
 		cableTwist += yaw.twist();
 
-		alignedWind = instantWind * TurbineDynamics.alignment(TurbineDynamics.shortestAngle(windDirection, yawWind));
+		alignedWind = TurbineDynamics.effectiveWind(instantWind, TurbineDynamics.shortestAngle(windDirection, yawWind));
 		cutOut = TurbineDynamics.updateCutOut(cutOut, meanWind, gustWind, spec);
 		pollRedstone();
 

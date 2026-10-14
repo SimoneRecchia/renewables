@@ -188,7 +188,11 @@ public record TurbineSpec(
 	 * Tip speed ratio the rotor is held at while it can be: the blade tips travel about eight times the wind speed, which is where a modern three-bladed rotor takes the most out of the air - the optimum sits between seven and nine.
 	 */
 	private static final double TIP_SPEED_RATIO = 8.0;
-	/** Speed a four-pole generator runs at when the machine is at full load. */
+	/**
+	 * Generator speed at the top of the rotor's range.  A four-pole doubly-fed machine on a 50 Hz grid is
+	 * synchronous at 1500 rpm and runs some 20-30 % above it at full speed: a V52 reaches 1947 rpm, a V80 1909, a
+	 * SWT-4.0-130 1800.
+	 */
 	private static final double GENERATOR_RATED_RPM = 1800.0;
 	/** Tip speed ratio of a rotor that is idling rather than working. */
 	private static final double IDLING_TIP_SPEED_RATIO = 2.0;
@@ -231,8 +235,13 @@ public record TurbineSpec(
 		return realDegreesPerTick / atRated * DRAWN_REVOLUTIONS_PER_SECOND_AT_RATED * 360.0 / 20.0;
 	}
 
-	/** Gearbox step-up, derived so every machine reaches synchronous speed at its own rated wind. */
+	/**
+	 * Gearbox step-up, derived so every utility machine's generator reaches its rated speed at its own top rotor
+	 * speed.  A small wind turbine has no gearbox: its permanent-magnet alternator is on the rotor shaft.
+	 */
 	public double gearboxRatio() {
+		if (nacelle == Nacelle.SMALL_WIND) return 1.0;
+
 		return maxRotorRpm <= 0.0 ? 1.0 : GENERATOR_RATED_RPM / maxRotorRpm;
 	}
 
