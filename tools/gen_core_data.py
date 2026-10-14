@@ -319,6 +319,7 @@ LANG_ENTRIES = [
     ("message.renewables.wire.aim_at_insulator", "Aim at an insulator."),
     ("message.renewables.wire.out_of_reach", "Too far away to string that."),
     ("message.renewables.wire.too_many", "No more spans can be strung there: a fitting carries at most %s."),
+    ("message.renewables.wire.level_full", "This dimension already holds %s spans, the most it may."),
     ("message.renewables.machine.no_room", "There is not enough room here: the machine would stand inside something at (%s, %s, %s)."),
 
     # ---- game rule

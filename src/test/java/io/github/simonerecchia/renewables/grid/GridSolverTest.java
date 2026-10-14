@@ -756,6 +756,144 @@ class GridSolverTest {
 		assertTrue(delivered < 100.0 && delivered > 90.0, "delivered " + delivered);
 	}
 
+	/**
+	 * The review's "ladder": two lines of poles with a rung at every pole, the generator at one corner and a box at
+	 * the far end of each line.  The search that this replaced ran out of visits on the first rail it took, so the pole
+	 * across the first rung - one span from the source - read 2.2 kW; and which rail that was hung on the order the
+	 * spans were strung in.  Now both rails carry the flow, and stringing the same spans in the opposite order changes
+	 * nothing.
+	 */
+	@Test
+	void aLadderCarriesPowerDownBothRailsWhateverOrderItWasStrungIn() {
+		World ladder = ladder(24);
+		Map<Long, GridSolver.Reading> out = ladder.solve();
+
+		World reversed = ladder(24);
+		java.util.Collections.reverse(reversed.edges);
+		Map<Long, GridSolver.Reading> again = reversed.solve();
+
+		double first = out.get(10L).powerKw();
+		double across = out.get(10L + 24).powerKw();
+		assertTrue(across > 0.25 * first, "the pole across the first rung reads " + across + " against " + first);
+		out.forEach((pos, reading) -> assertEquals(reading.powerKw(), again.get(pos).powerKw(), 1e-9));
+
+		double delivered = ladder.delivered(out);
+		assertTrue(delivered > 90.0 && delivered <= 100.0, "delivered " + delivered);
+	}
+
+	/** Two rows of {@code length} poles 10 blocks apart, a rung at every pole, the source by (0, 0), a box at each far end. */
+	private static World ladder(int length) {
+		World w = new World();
+		w.machine(1, "source", 0, 0);
+		w.fitting(1, 1, "output");
+
+		int[][] ids = new int[2][length];
+		for (int row = 0; row < 2; row++) {
+			for (int c = 0; c < length; c++) {
+				long pos = 10L + row * length + c;
+				w.machine(pos, "pole", 10 * c, 10 * row);
+				ids[row][c] = 1000 + 10 * (row * length + c);
+				for (int f = 0; f < 4; f++) w.fitting(ids[row][c] + f, pos, "bidirectional");
+			}
+
+			w.machine(2 + row, "box", 10 * length, 10 * row);
+			w.fitting(2 + row, 2 + row, "bidirectional");
+		}
+
+		w.span(1, ids[0][0], MV);
+		for (int c = 0; c < length; c++) {
+			if (c + 1 < length) {
+				w.span(ids[0][c] + 1, ids[0][c + 1] + 2, MV);
+				w.span(ids[1][c] + 1, ids[1][c + 1] + 2, MV);
+			}
+
+			w.span(ids[0][c] + 3, ids[1][c] + 3, MV);
+		}
+
+		w.span(ids[0][length - 1] + 1, 2, MV);
+		w.span(ids[1][length - 1] + 1, 3, MV);
+		w.generator(1, 100.0);
+		return w;
+	}
+
+	/**
+	 * A line of 300 poles a block apart, a hundred 100 kW generators on the first and a box after the last.  The old
+	 * search stopped at 64 spans and the box read nothing; there is no depth limit any more, and 3 km of 33 kV line
+	 * at 10 MW loses a few tens of kW.
+	 */
+	@Test
+	void aLongLineIsCarriedToItsEnd() {
+		World w = new World();
+		int poles = 300;
+		for (int p = 0; p < poles; p++) {
+			w.machine(10L + p, "pole", p);
+			w.fitting(1000 + 2 * p, 10L + p, "bidirectional");
+			w.fitting(1001 + 2 * p, 10L + p, "bidirectional");
+			if (p > 0) w.span(999 + 2 * p, 1000 + 2 * p, MV);
+		}
+
+		w.machine(5, "box", poles);
+		w.fitting(5, 5, "bidirectional");
+		w.span(999 + 2 * poles, 5, MV);
+
+		for (int g = 0; g < 100; g++) {
+			w.machine(20_000L + g, "source", 0);
+			w.fitting(20_000 + g, 20_000L + g, "output");
+			w.span(20_000 + g, 1000, MV);
+			w.generator(20_000 + g, 100.0);
+		}
+
+		double received = w.solve().get(5L).powerKw();
+		assertTrue(received > 9_900.0 && received < 10_000.0, "the box receives " + received);
+	}
+
+	/**
+	 * A network kept from one tick to the next gives what a fresh one gives, whichever generators are running: the
+	 * per-generator work it keeps depends on the spans alone.
+	 */
+	@Test
+	void aKeptNetworkGivesWhatAFreshOneGives() {
+		World w = lattice(6, 10, 100.0);
+		w.kindAt.put(10L + 35, "box");
+		w.kindAt.put(10L + 5, "box");
+		w.machine(2, "source", 30, 30);
+		w.fitting(2, 2, "output");
+		w.span(2, 100 + 5 * 21 + 4);
+
+		GridSolver kept = GridSolver.network(w.nodes, w.edges, w.loads());
+		List<List<GridSolver.Source>> ticks = List.of(
+				List.of(new GridSolver.Source(1, 100.0, PowerDeliveryEvent.NONE)),
+				List.of(new GridSolver.Source(1, 80.0, PowerDeliveryEvent.NONE), new GridSolver.Source(2, 40.0, PowerDeliveryEvent.NONE)),
+				List.of(new GridSolver.Source(2, 60.0, PowerDeliveryEvent.NONE)),
+				List.of(new GridSolver.Source(1, 100.0, PowerDeliveryEvent.NONE)));
+
+		for (List<GridSolver.Source> sources : ticks) {
+			Map<Integer, GridSolver.Reading> fresh = GridSolver.solve(w.nodes, w.edges, sources, w.loads());
+			Map<Integer, GridSolver.Reading> again = kept.solve(sources, Map.of()).readings();
+			fresh.forEach((id, reading) -> assertEquals(reading.powerKw(), again.get(id).powerKw(), 1e-12));
+		}
+	}
+
+	/**
+	 * What the network takes from each generator, for its energy budget: all of it when a load can be reached, nothing
+	 * when none can - a generator on a dead line has spent nothing, and another mod may still have it.
+	 */
+	@Test
+	void aGeneratorGivesTheNetworkItsPowerOnlyWhenALoadCanBeReached() {
+		World w = baseChain(true);
+		w.machine(6, "source", 50);
+		w.fitting(60, 6, "output");
+		w.machine(7, "pole", 60);
+		w.fitting(70, 7, "bidirectional");
+		w.span(60, 70);
+		w.generator(60, 12.0);
+
+		Map<Integer, Double> drawn = GridSolver.network(w.nodes, w.edges, w.loads()).solve(w.sources, w.passages).drawn();
+
+		assertEquals(X, drawn.get(10), EPS);
+		assertEquals(0.0, drawn.get(60), EPS);
+	}
+
 	/** With every span lossless, the loads together receive exactly what the generators make: nothing made, nothing lost. */
 	@Test
 	void aLosslessNetworkDeliversExactlyWhatIsGenerated() {
