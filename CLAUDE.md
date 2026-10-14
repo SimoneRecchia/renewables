@@ -35,6 +35,14 @@ the distance a player is at. What that settled, measured over the whole mod:
 
 The lesson generalises: **the saving is where the count is, not where the sides are.**
 
+And a round thing has to *shade* round as well as be round: `Mesh.smooth` (run by `emit` and by every generator that
+writes its own mesh) gives each corner the normal of the faces round it that bend less than `CREASE`, 40°. Eighty flat
+strips lit one by one are eighty bands down a blade; a hexagon and a box keep their edges.
+
+**Nothing floats.** `check_connectivity.py` cuts every model into bodies and proves each one touches what holds it up,
+in every state and pose the renderer draws: a lattice member ends on a node, a disc touches its pin, a rotor touches its
+shaft. An exception (a blade tip, a finial) is declared in the tool with its reason.
+
 Vanilla JSON models **cannot** express a cylinder: an element with a rotation is a *union*, so three
 boxes at 22.5° make a twelve-pointed star, not a twelve-sided prism. Anything with a round body must
 therefore be OBJ. Anything that is all boxes may stay JSON and gets chunk batching, ambient occlusion
@@ -363,6 +371,7 @@ python3 tools/gen_example_site.py       # the whole site: two solar parks, a win
 
 ```bash
 python3 tools/check_hitboxes.py         # "the models and the tables agree, to a hundredth of a pixel"
+python3 tools/check_connectivity.py     # "every body rests on something, and every bar end on a node"
 python3 tools/check_winding.py          # "every face is wound the way its normal points"
 python3 tools/check_obj_loading.py      # "every part these models author is a part the game loads"
 python3 tools/check_turbine.py          # "the turbine is what its contract says"

@@ -231,6 +231,7 @@ def cab():
 
 def main():
     mesh = cab()
+    mesh.smooth()
     directory = os.path.join(OUT, 'electric_cab')
     mesh.write(os.path.join(directory, 'cab.obj'), 'cab.mtl', 'gen_cab_models.py')
     write_mtl(os.path.join(directory, 'cab.mtl'), mesh.materials(), MATERIALS, 'gen_cab_models.py')

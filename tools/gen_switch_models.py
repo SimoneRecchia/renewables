@@ -187,7 +187,10 @@ def disconnector_shaft(mesh):
     shaft through three hinges, so the three blades cannot be in different positions.
     """
     steel = mesh.faces('shaft', 'steel')
-    cylinder(mesh, steel, (0.0, HINGE_Y, REACH), 'x', 0.013, FRAME_HALF_X + 0.010, sides=FITTING,
+    # from inside the first hinge boss to the outboard bearing: past the boss there is nothing to carry it, and a
+    # shaft cut flush with the boss's face would share its plane
+    west, east = POLES[0] - 0.022, FRAME_HALF_X + 0.010
+    cylinder(mesh, steel, ((west + east) / 2.0, HINGE_Y, REACH), 'x', 0.013, (east - west) / 2.0, sides=FITTING,
              uv_scale=0.6, uv_along=5.0, caps=steel)
     # the outboard bearing, on a bracket off the frame's end
     angle(mesh, steel, (FRAME_HALF_X - 0.014, FRAME_TOP, REACH - 0.030),
@@ -270,10 +273,11 @@ def breaker_poles(mesh):
         # the pole: a cast column with sheds down it, and the bottle inside where it cannot be seen
         cylinder(mesh, epoxy, (x, (base + head) * 0.5, 0.0), 'y', POLE_RADIUS, POLE_HEIGHT * 0.5,
                  sides=FITTING, uv_scale=1.0, uv_along=2.0)
+        # the sheds are closed discs the column runs through, not open bands floating round it
         for i in range(3):
             y = base + POLE_HEIGHT * (0.22 + i * 0.26)
             cylinder(mesh, epoxy, (x, y, 0.0), 'y', POLE_RADIUS * 1.26, 0.009, sides=FITTING,
-                     uv_scale=0.6, taper=0.80)
+                     uv_scale=0.6, taper=0.80, caps=epoxy)
         # the head the two terminals come out of, and the skirt where it meets the box
         cylinder(mesh, epoxy, (x, head + 0.020, 0.0), 'y', POLE_RADIUS * 1.10, 0.020, sides=FITTING,
                  uv_scale=0.8, caps=epoxy)
@@ -290,7 +294,7 @@ def breaker_poles(mesh):
             # insulator reads as a copper pipe, which is what this looked like when they were half the size
             for at in (0.30, 0.58, 0.86):
                 cylinder(mesh, porcelain, (x, head + 0.020, z * at), 'z', POLE_RADIUS * 1.04, 0.010,
-                         sides=FITTING, uv_scale=0.6)
+                         sides=FITTING, uv_scale=0.6, caps=porcelain)
             cylinder(mesh, porcelain, (x, head + 0.020, z), 'z', POLE_RADIUS * 0.62, 0.012,
                      sides=FITTING, uv_scale=0.5, caps=porcelain)
             palm(mesh, fitting, (x, head + 0.020 + POLE_RADIUS * 0.62, z))

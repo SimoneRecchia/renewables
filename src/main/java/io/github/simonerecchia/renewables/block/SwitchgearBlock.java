@@ -57,9 +57,9 @@ public class SwitchgearBlock extends MachineBlock {
 	// ---- 1 cell(s), printed by tools/check_hitboxes.py --java ----
 	private static final List<Cell> DISCONNECTOR_CELLS = List.of(
 			new Cell(0, 0, 0, Shapes.or(Block.box(0.80, 0.00, 4.16, 15.20, 1.95, 11.84),
-					Block.box(1.28, 1.28, 10.00, 14.85, 5.73, 11.15),
 					Block.box(2.98, 1.28, 9.78, 4.38, 5.70, 11.18),
 					Block.box(2.98, 1.28, 4.82, 4.38, 5.73, 6.22),
+					Block.box(3.33, 1.28, 10.00, 14.85, 5.73, 11.15),
 					Block.box(7.30, 1.28, 9.78, 8.70, 5.70, 11.18),
 					Block.box(7.30, 1.28, 4.82, 8.70, 5.73, 6.22),
 					Block.box(11.62, 1.28, 9.78, 13.02, 5.70, 11.18),
