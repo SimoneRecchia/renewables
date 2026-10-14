@@ -167,13 +167,20 @@ public final class Shading {
 
 	// ---- the array shading itself ----
 
-	/** Fraction of a row that the row in front of it is shading, at a given sun elevation. */
-	public static double rowShadedFraction(double groundCoverRatio, double tiltDeg, double sunElevationDeg) {
-		if (groundCoverRatio <= 0.0 || tiltDeg <= 0.0 || sunElevationDeg <= 0.0) return 0.0;
+	/**
+	 * Fraction of a row that the row in front of it is shading.  The geometry is the one across the rows, so what
+	 * counts is the sun's profile angle in that plane, {@code tan(ap) = tan(a) / cos(sun azimuth - plane azimuth)}: a
+	 * sun beside the rows or behind them casts no row's shadow on the next.
+	 */
+	public static double rowShadedFraction(double groundCoverRatio, double tiltDeg, double planeAzimuthDeg, SunPosition sun) {
+		if (groundCoverRatio <= 0.0 || tiltDeg <= 0.0 || !sun.up()) return 0.0;
+
+		double across = Math.cos(Math.toRadians(sun.azimuthDeg() - planeAzimuthDeg));
+		if (across <= 1.0e-6) return 0.0;
 
 		double tilt = Math.toRadians(tiltDeg);
-		double elevation = Math.toRadians(Math.min(89.99, sunElevationDeg));
-		double reach = Math.cos(tilt) + Math.sin(tilt) / Math.tan(elevation);
+		double profile = Math.atan(Math.tan(Math.toRadians(Math.min(89.99, sun.elevationDeg()))) / across);
+		double reach = Math.cos(tilt) + Math.sin(tilt) / Math.tan(profile);
 		double clear = groundCoverRatio * reach;
 		if (clear <= 1.0) return 0.0;
 
