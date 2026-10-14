@@ -25,10 +25,6 @@ import objlib                                                                   
 
 MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'models')
 
-# The turbine's own model came with the mod and is not generated - see CLAUDE.md section 6.  Its normals
-# are what they are, and the mod's own renderer draws it, which does not cull.
-INHERITED = {'wind_turbine.obj'}
-
 
 def faces(path):
     """Every face that states a normal, as (group, points, that normal).
@@ -57,7 +53,7 @@ def main():
     problems, checked = [], 0
     for folder, _, names in os.walk(MODELS):
         for name in sorted(names):
-            if not name.endswith('.obj') or name in INHERITED:
+            if not name.endswith('.obj'):
                 continue
 
             counts, total = {}, 0

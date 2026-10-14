@@ -160,6 +160,12 @@ class Mesh:
         check_winding.py fails the build on it now; this is where it cannot happen in the first place.
         """
         corners, uvs = list(corners), list(uvs)
+        # A corner repeated next to itself is a triangle drawn as a quad, which is how a lathe closes onto its
+        # axis and a loft onto a point.  Left in, a repeat among the *first two* corners made the winding
+        # test below see no area and drop the whole face - a missing disc under every pin insulator.
+        kept = [k for k in range(len(corners))
+                if tuple(round(c, 6) for c in corners[k]) != tuple(round(c, 6) for c in corners[k - 1])]
+        corners, uvs = [corners[k] for k in kept], [uvs[k] for k in kept]
         if len(corners) >= 3:
             a = tuple(corners[1][i] - corners[0][i] for i in range(3))
             b = tuple(corners[2][i] - corners[0][i] for i in range(3))

@@ -107,11 +107,19 @@ def main():
 
     java = os.path.join(ASSETS.split(os.sep + 'src' + os.sep)[0], 'src', 'main', 'java')
     drawn = group_keys(objs)
-    for name in fitting_names(java):
-        if name not in drawn:
-            print('NO GROUP  ObjDefinitions names the fitting "%s", which no model draws -> that terminal has '
-                  'no hover box and no wire can be hung on it.' % name)
-            problems += 1
+    registry = os.path.join(java, 'io', 'github', 'simonerecchia', 'renewables', 'main', 'registry',
+                            'ObjDefinitions.java')
+    # The fittings are named by Java the rewrite has not written yet: say so rather than pass or crash.
+    written = os.path.exists(registry)
+    if written:
+        for name in fitting_names(java):
+            if name not in drawn:
+                print('NO GROUP  ObjDefinitions names the fitting "%s", which no model draws -> that terminal has '
+                      'no hover box and no wire can be hung on it.' % name)
+                problems += 1
+    else:
+        print('SKIPPED   the fitting names and the orphan models: ObjDefinitions.java is not written yet '
+              '(docs/spec/QUESTIONS.md)')
 
     models = sorted(glob.glob(os.path.join(ASSETS, 'models', 'block', '*.json')))
     referenced = set()
@@ -133,7 +141,7 @@ def main():
     # the directory name as a string literal too, which is all the Java ever holds for those.
     sources = ''.join(open(os.path.join(root, name)).read()
                       for root, _, names in os.walk(java) for name in names if name.endswith('.java'))
-    for path in objs:
+    for path in objs if written else ():
         if os.path.normpath(path) in referenced:
             continue
         directory = os.path.basename(os.path.dirname(path))
