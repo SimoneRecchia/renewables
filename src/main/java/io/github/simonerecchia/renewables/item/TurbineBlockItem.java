@@ -2,7 +2,11 @@ package io.github.simonerecchia.renewables.item;
 
 import io.github.simonerecchia.renewables.api.Nameplate;
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
+import io.github.simonerecchia.renewables.block.MachineBlock;
+import io.github.simonerecchia.renewables.block.ModelFacing;
+import io.github.simonerecchia.renewables.block.RotorClearance;
 import io.github.simonerecchia.renewables.block.TurbineTowerBlock;
+import io.github.simonerecchia.renewables.block.WindTurbineBlock;
 import io.github.simonerecchia.renewables.catalog.TurbineCatalog;
 
 import java.util.List;
@@ -18,6 +22,7 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 /** A turbine in the hand, showing its nameplate the way a datasheet header reads. */
 public class TurbineBlockItem extends BlockItem {
@@ -33,7 +38,8 @@ public class TurbineBlockItem extends BlockItem {
 	}
 
 	/**
-	 * Refuses to mount on a tower that is not a height this model is built for, and says why.
+	 * Refuses to mount on a tower that is not a height this model is built for, or where its rotor would not be out in
+	 * the air - something over the nacelle, or its hub inside a block or under water - and says why.
 	 *
 	 * The refusal consumes nothing.  The message is sent from the server only: the client runs this too, and would
 	 * otherwise show it twice.
@@ -45,16 +51,28 @@ public class TurbineBlockItem extends BlockItem {
 		int segments = TurbineTowerBlock.countBelow(level, pos);
 
 		if (!spec.acceptsTowerHeight(segments)) {
-			Player player = context.getPlayer();
-			if (player != null && !level.isClientSide()) {
-				player.displayClientMessage(Component.translatable("message.renewables.turbine.tower_height",
-						spec.displayName(), spec.minTowerSegments(), spec.maxTowerSegments(), segments).withStyle(ChatFormatting.RED), true);
-			}
+			return refuse(context, Component.translatable("message.renewables.turbine.tower_height",
+					spec.displayName(), spec.minTowerSegments(), spec.maxTowerSegments(), segments));
+		}
 
-			return InteractionResult.FAIL;
+		BlockState state = getBlock().getStateForPlacement(context);
+		if (state != null && state.hasProperty(MachineBlock.FACING)) {
+			double modelYaw = ModelFacing.degrees(WindTurbineBlock.AUTHORED, state.getValue(MachineBlock.FACING));
+			RotorClearance clearance = RotorClearance.survey(level, pos, segments, spec, modelYaw);
+			if (clearance.covered()) return refuse(context, Component.translatable("message.renewables.turbine.covered", spec.displayName()));
+			if (clearance.jammed()) return refuse(context, Component.translatable("message.renewables.turbine.jammed", spec.displayName()));
 		}
 
 		return super.place(context);
+	}
+
+	private static InteractionResult refuse(BlockPlaceContext context, Component why) {
+		Player player = context.getPlayer();
+		if (player != null && !context.getLevel().isClientSide()) {
+			player.displayClientMessage(why.copy().withStyle(ChatFormatting.RED), true);
+		}
+
+		return InteractionResult.FAIL;
 	}
 
 	@Override

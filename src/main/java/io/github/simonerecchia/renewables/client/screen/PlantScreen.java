@@ -4,6 +4,8 @@ import io.github.simonerecchia.renewables.api.Nameplate;
 
 import javax.annotation.Nullable;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -44,8 +46,16 @@ public abstract class PlantScreen<T extends BlockEntity> extends Screen {
 	/** The sky's own share of the light, against the beam's. */
 	protected static final int VIOLET = 0xFF7E6BA8;
 
+	/** The bar drawn beside a panel taller than the screen. */
+	private static final int SCROLL_BAR_GAP = 3;
+	private static final int SCROLL_BAR_WIDTH = 2;
+	private static final int SCROLL_TRACK_COLOUR = 0x40FFFFFF;
+	private static final int SCROLL_THUMB_COLOUR = 0xC0FFFFFF;
+
 	private final ResourceLocation texture;
 	private final Class<T> machineType;
+	/** Kept across a resize, which runs init again. */
+	private final PanelScroll scroll = new PanelScroll();
 	protected final int imageWidth;
 	protected final int imageHeight;
 	/**
@@ -75,7 +85,27 @@ public abstract class PlantScreen<T extends BlockEntity> extends Screen {
 	@Override
 	protected void init() {
 		leftPos = (width - imageWidth) / 2;
-		topPos = (height - imageHeight) / 2;
+		topPos = scroll.top(height, imageHeight);
+	}
+
+	/**
+	 * A panel taller than the screen (the inverter's 252 px on the default window's 240) scrolls with the wheel, its
+	 * widgets with it; a wheel over a widget that takes the wheel is that widget's.
+	 */
+	@Override
+	public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+		if (super.mouseScrolled(mouseX, mouseY, delta)) return true;
+		if (!PanelScroll.overflows(height, imageHeight)) return false;
+
+		int moved = scroll.wheel(delta, height, imageHeight);
+		if (moved == 0) return true;
+
+		topPos += moved;
+		for (GuiEventListener child : children()) {
+			if (child instanceof AbstractWidget widget) widget.setY(widget.getY() + moved);
+		}
+
+		return true;
 	}
 
 	/** The machine this panel is open on, or null if it has gone. */
@@ -106,10 +136,36 @@ public abstract class PlantScreen<T extends BlockEntity> extends Screen {
 		}
 
 		super.render(graphics, mouseX, mouseY, partialTick);
+		drawScrollBar(graphics);
+	}
+
+	/** Beside a panel that does not fit: how much of it is on screen, and where. */
+	private void drawScrollBar(GuiGraphics graphics) {
+		if (!PanelScroll.overflows(height, imageHeight)) return;
+
+		int x = leftPos + imageWidth + SCROLL_BAR_GAP;
+		int thumb = Math.max(8, height * height / imageHeight);
+		int thumbTop = (height - thumb) * scroll.scroll() / (imageHeight - height);
+		graphics.fill(x, 0, x + SCROLL_BAR_WIDTH, height, SCROLL_TRACK_COLOUR);
+		graphics.fill(x, thumbTop, x + SCROLL_BAR_WIDTH, thumbTop + thumb, SCROLL_THUMB_COLOUR);
 	}
 
 	/** Everything inside the panel. */
 	protected abstract void drawPanel(GuiGraphics graphics);
+
+	/**
+	 * A drag on a slider ends where the button is let go, on the slider or off it: vanilla hands a release only to the
+	 * widget under the pointer, so a drag carried past the end of the slider would otherwise never send.
+	 */
+	@Override
+	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		if (button == 0 && getFocused() instanceof SetpointSlider slider && slider.release(mouseX, mouseY)) {
+			setDragging(false);
+			return true;
+		}
+
+		return super.mouseReleased(mouseX, mouseY, button);
+	}
 
 	@Override
 	public boolean isPauseScreen() {

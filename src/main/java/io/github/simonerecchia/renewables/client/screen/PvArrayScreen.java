@@ -105,7 +105,7 @@ public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 		PvModuleSpec module = spec.module();
 
 		graphics.drawString(font, PvCatalog.fullName(spec), leftPos + MARGIN, topPos + 6, VALUE_COLOUR, false);
-		String nameplate = power(spec.dcPowerKw()) + " DC";
+		String nameplate = Component.translatable("screen.renewables.pv_array.nameplate", power(spec.dcPowerKw())).getString();
 		graphics.drawString(font, nameplate, leftPos + WIDTH - MARGIN - font.width(nameplate), topPos + 6, FAINT_COLOUR, false);
 
 		label(graphics, Component.translatable("screen.renewables.pv_array.module",
@@ -161,8 +161,8 @@ public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 	/** The light on the plane */
 	private void drawIrradiance(GuiGraphics graphics, PvArrayBlockEntity array) {
 		label(graphics, Component.translatable("screen.renewables.pv_array.poa"), 56);
-		value(graphics, fmt("%.0f W/m²", array.poaFront())
-				+ (array.poaRear() > 1.0 ? fmt("  + %.0f rear", array.poaRear()) : ""), 56);
+		value(graphics, fmt("%.0f W/m²", array.poaFront()) + (array.poaRear() > 1.0 ? "  "
+				+ Component.translatable("screen.renewables.pv_array.rear", fmt("%.0f", array.poaRear())).getString() : ""), 56);
 
 		// beam green, sky violet, ground amber - and the order is the order they matter in, so the stripe
 		// that a shadow takes away is the one at the left where it is easiest to watch
@@ -196,7 +196,8 @@ public class PvArrayScreen extends PlantScreen<PvArrayBlockEntity> {
 
 		if (tracker == null) {
 			label(graphics, Component.translatable("screen.renewables.pv_array.fixed"), 112);
-			value(graphics, fmt("tilt %.0f°  ·  bearing %.0f°", array.tiltDeg(), array.planeAzimuthDeg()), 112);
+			value(graphics, Component.translatable("screen.renewables.pv_array.plane",
+					fmt("%.0f", array.tiltDeg()), fmt("%.0f", array.planeAzimuthDeg())).getString(), 112);
 
 			zone(graphics, TRACKER_BAR_Y, 0, barSpan, 0xFF5A5A5A);
 			needle(graphics, TRACKER_BAR_Y, centre + (int) Math.round(array.tiltDeg() / 90.0 * centre), 0xFFF0F0F0);

@@ -16,6 +16,9 @@ import javax.annotation.Nullable;
  */
 public final class PoleConfigText {
 	private static final Pattern NUMBER = Pattern.compile("[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?");
+	/** Between a label and its field, and a field and its range. */
+	public static final int LABEL_GAP = 4;
+	private static final int COLUMN_GAP = 12;
 
 	private PoleConfigText() {
 	}
@@ -59,5 +62,33 @@ public final class PoleConfigText {
 
 	public static float clamp(float value, float limit) {
 		return Math.max(-limit, Math.min(limit, value));
+	}
+
+	/** Whether a typed number is inside what the server takes, so that it is sent as typed and not as its limit. */
+	public static boolean within(float typed, float limit) {
+		return Math.abs(typed) <= limit;
+	}
+
+	/** The same for an angle typed in degrees against a limit in radians, to a ten-thousandth of a degree. */
+	public static boolean withinDegrees(float typedDegrees, float limitRadians) {
+		return Math.abs(typedDegrees) <= Math.toDegrees(limitRadians) + 1.0e-4;
+	}
+
+	/** Where the two columns' fields go: x of the left one and of the right one. */
+	public record Layout(int leftField, int rightField) {
+	}
+
+	/**
+	 * Two columns of label, field and range, centred together on the screen's real width.
+	 *
+	 * Each column is as wide as its longest label, the field and its range note; between them a gap.  On a screen
+	 * too narrow for both the block starts at the left edge rather than off it.
+	 */
+	public static Layout layout(int screenWidth, int field, int leftLabel, int leftRange, int rightLabel, int rightRange) {
+		int left = leftLabel + LABEL_GAP + field + LABEL_GAP + leftRange;
+		int right = rightLabel + LABEL_GAP + field + LABEL_GAP + rightRange;
+		int start = Math.max(0, (screenWidth - left - COLUMN_GAP - right) / 2);
+
+		return new Layout(start + leftLabel + LABEL_GAP, start + left + COLUMN_GAP + rightLabel + LABEL_GAP);
 	}
 }

@@ -1,5 +1,7 @@
 package io.github.simonerecchia.renewables.weather;
 
+import io.github.simonerecchia.renewables.core.ModGameRules;
+
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
@@ -9,8 +11,8 @@ import net.minecraft.server.level.ServerLevel;
  * The weather of one server level, and where machines in it ask for a reading.
  *
  * The atmosphere itself ({@link Atmosphere}, {@link WeatherNoise}) is pure physics and {@link WeatherSampler}
- * strings it together for one mast; what this class adds is everything that needs the level: the seed, the clock,
- * rain on the spot, the survey of the ground, and a cache of those surveys so a hundred machines on the same hill
+ * strings it together for one mast; what this class adds is everything that needs the level: the seed, the clocks,
+ * the region's rain, the survey of the ground, and a cache of those surveys so a hundred machines on the same hill
  * do not each walk the terrain every tick.
  *
  * One manager per level, created on first use and dropped when the level unloads or the server stops.  The Nether
@@ -22,7 +24,7 @@ public final class LevelWeather {
 	/** Past this many remembered sites the old ones are dropped. */
 	private static final int SITE_CACHE_LIMIT = 4096;
 	/** Terrain is surveyed for squares of this many blocks on a side (a shift, so 8). */
-	private static final int SITE_CELL_SHIFT = 3;
+	private static final int SITE_CELL_SHIFT = SiteConditions.CELL_SHIFT;
 
 	private static final Map<ServerLevel, LevelWeather> BY_LEVEL = new ConcurrentHashMap<>();
 
@@ -83,11 +85,11 @@ public final class LevelWeather {
 
 	private WeatherSnapshot sample(BlockPos pos, int towerBlocks, boolean withSky) {
 		BlockPos ground = pos.below(Math.max(0, towerBlocks));
-		boolean raining = level.isRainingAt(pos.above());
+		boolean precipitation = precipitationAt(pos);
 
 		return WeatherSampler.sample(new WeatherSampler.Input(level.getSeed(), pos.getX(), pos.getZ(), ground.getY(),
-				seaLevel(), towerBlocks, level.getDayTime(), level.getGameTime(), raining,
-				raining && level.isThundering(), siteAt(ground), withSky, sunPhase()));
+				seaLevel(), towerBlocks, level.getDayTime(), level.getGameTime(), weatherClock(), precipitation,
+				precipitation && level.isThundering(), siteAt(ground), withSky, sunPhase()));
 	}
 
 	/**
@@ -99,6 +101,33 @@ public final class LevelWeather {
 		if (!level.dimensionType().hasSkyLight()) return Double.NaN;
 
 		return Atmosphere.sunPhase(level.dimensionType().timeOfDay(level.getDayTime()));
+	}
+
+	/**
+	 * Whether rain or snow is falling on the country around {@code pos}: the level is raining and the biome has any
+	 * precipitation at all.  It is a fact of the region, not of the block: {@code isRainingAt} answered no under a roof
+	 * and in snow, so two machines a block apart saw different skies and a blizzard read as sunshine.
+	 */
+	public boolean precipitationAt(BlockPos pos) {
+		return level.isRaining() && level.getBiome(pos).value().hasPrecipitation();
+	}
+
+	/** A thunderstorm over the country around {@code pos}. */
+	public boolean thunderAt(BlockPos pos) {
+		return level.isThundering() && precipitationAt(pos);
+	}
+
+	/**
+	 * The clock the weather systems run on: the level's game clock, which neither {@code /time set} nor sleeping moves
+	 * and which runs with the day cycle switched off.  Under the real-time clock rule the day clock is the wall clock,
+	 * which is just as steady, and the weather then keeps the same pace as the sun.
+	 */
+	public long weatherClock() {
+		if (ModGameRules.REAL_TIME_CLOCK != null && level.getGameRules().getBoolean(ModGameRules.REAL_TIME_CLOCK)) {
+			return level.getDayTime();
+		}
+
+		return level.getGameTime();
 	}
 
 	/**
@@ -118,7 +147,8 @@ public final class LevelWeather {
 		CachedSite cached = sites.get(key);
 		if (cached != null && now - cached.surveyedAt() <= SITE_TTL_TICKS) return cached.site();
 
-		SiteConditions surveyed = SiteConditions.survey(level, groundPos);
+		// the lie of the land comes from the terrain generator and never changes: only the ground cover is looked at again
+		SiteConditions surveyed = SiteConditions.survey(level, groundPos, cached == null ? null : cached.site());
 		sites.put(key, new CachedSite(now, surveyed));
 
 		return surveyed;

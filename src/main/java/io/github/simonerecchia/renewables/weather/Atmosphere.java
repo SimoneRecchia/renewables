@@ -16,7 +16,7 @@ public final class Atmosphere {
 	private static final double MAP_METRES_PER_BLOCK = 400.0;
 	/** One high-and-low pair across, in blocks. */
 	private static final double SYSTEM_BLOCKS = 6000.0;
-	/** How long a system takes to deepen and fill, in day-clock ticks. */
+	/** How long a system takes to deepen and fill, in ticks of the weather clock ({@link LevelWeather#weatherClock}). */
 	private static final double SYSTEM_TICKS = 24000.0 * 4.0;
 	/** Speed the whole pattern travels at, in m/s. */
 	private static final double STEERING_MS = 11.0;
@@ -84,13 +84,16 @@ public final class Atmosphere {
 
 	// ---- the pressure map ----
 
-	/** Mean sea level pressure at a block column, in hPa. */
-	public static double pressureAt(long seed, double blockX, double blockZ, long dayTime) {
-		double travel = STEERING_MS * SECONDS_PER_DAY_TICK * dayTime / MAP_METRES_PER_BLOCK;
+	/**
+	 * Mean sea level pressure at a block column, in hPa, at a reading of the weather clock: the systems move with a clock
+	 * that never jumps, not with the day clock, which {@code /time set} and sleeping move at will.
+	 */
+	public static double pressureAt(long seed, double blockX, double blockZ, long weatherTime) {
+		double travel = STEERING_MS * SECONDS_PER_DAY_TICK * weatherTime / MAP_METRES_PER_BLOCK;
 		double heading = Math.toRadians(prevailingDirection(seed));
 		double u = (blockX - Math.cos(heading) * travel) / SYSTEM_BLOCKS;
 		double v = (blockZ - Math.sin(heading) * travel) / SYSTEM_BLOCKS;
-		double w = dayTime / SYSTEM_TICKS;
+		double w = weatherTime / SYSTEM_TICKS;
 
 		double n = WeatherNoise.sample(seed, u, v, w);
 		n += 0.42 * WeatherNoise.sample(seed ^ 0x51EDL, u * 2.3, v * 2.3, w * 1.7);
@@ -111,12 +114,12 @@ public final class Atmosphere {
 	 * its left (Buys Ballot): with x east and z south, u = (1/ρf) ∂p/∂z and w = -(1/ρf) ∂p/∂x.  It used to have the
 	 * signs of the southern hemisphere, with the lows on the right.
 	 */
-	public static Flow geostrophicWind(long seed, double blockX, double blockZ, long dayTime) {
+	public static Flow geostrophicWind(long seed, double blockX, double blockZ, long weatherTime) {
 		double step = GRADIENT_STEP_BLOCKS;
-		double east = pressureAt(seed, blockX + step, blockZ, dayTime);
-		double west = pressureAt(seed, blockX - step, blockZ, dayTime);
-		double south = pressureAt(seed, blockX, blockZ + step, dayTime);
-		double north = pressureAt(seed, blockX, blockZ - step, dayTime);
+		double east = pressureAt(seed, blockX + step, blockZ, weatherTime);
+		double west = pressureAt(seed, blockX - step, blockZ, weatherTime);
+		double south = pressureAt(seed, blockX, blockZ + step, weatherTime);
+		double north = pressureAt(seed, blockX, blockZ - step, weatherTime);
 
 		// hPa per block into Pa per metre
 		double scale = 100.0 / MAP_METRES_PER_BLOCK / (WorldConditions.REFERENCE_AIR_DENSITY * CORIOLIS);
@@ -281,7 +284,7 @@ public final class Atmosphere {
 	/** Overcast floors. */
 	private static final double RAIN_COVER_FLOOR = 0.90;
 	private static final double STORM_COVER_FLOOR = 0.97;
-	/** How long a cumulus field takes to grow and dissolve in place, in day-clock ticks. */
+	/** How long a cumulus field takes to grow and dissolve in place, in ticks of the weather clock. */
 	private static final double CUMULUS_TICKS = 6000.0;
 
 	/**
@@ -340,15 +343,15 @@ public final class Atmosphere {
 	 * times time; the surface wind times the whole game clock, which this used to be, jumped the field kilometres at
 	 * every change of the wind once the clock had run for a few hours.
 	 */
-	public static double cloudCover(long seed, double blockX, double blockZ, long dayTime, long gameTime, double downfall,
+	public static double cloudCover(long seed, double blockX, double blockZ, long weatherTime, long gameTime, double downfall,
 			boolean raining, boolean thundering) {
-		double lift = LIFT_AT_MEAN_PRESSURE - (pressureAt(seed, blockX, blockZ, dayTime) - WorldConditions.SEA_LEVEL_PRESSURE) / PRESSURE_TO_LIFT;
+		double lift = LIFT_AT_MEAN_PRESSURE - (pressureAt(seed, blockX, blockZ, weatherTime) - WorldConditions.SEA_LEVEL_PRESSURE) / PRESSURE_TO_LIFT;
 
 		double drift = STEERING_MS * gameTime / 20.0 / WorldConditions.METRES_PER_BLOCK;
 		double heading = Math.toRadians(prevailingDirection(seed));
 		double cx = (blockX - Math.cos(heading) * drift) / CUMULUS_BLOCKS;
 		double cz = (blockZ - Math.sin(heading) * drift) / CUMULUS_BLOCKS;
-		lift += CUMULUS_AMPLITUDE * WeatherNoise.sample(seed ^ 0xC10DL, cx, cz, dayTime / CUMULUS_TICKS) / CLOUD_NOISE_SD;
+		lift += CUMULUS_AMPLITUDE * WeatherNoise.sample(seed ^ 0xC10DL, cx, cz, weatherTime / CUMULUS_TICKS) / CLOUD_NOISE_SD;
 
 		double cover = (MOISTURE_BASE + MOISTURE_PER_DOWNFALL * Mth.clamp(downfall, 0.0, 1.0)) * lift;
 		if (thundering) return Mth.clamp(cover, STORM_COVER_FLOOR, 1.0);
