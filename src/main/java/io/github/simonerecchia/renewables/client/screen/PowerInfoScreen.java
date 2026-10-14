@@ -29,11 +29,8 @@ public class PowerInfoScreen extends Screen {
 	private static final int LINE_GAP = 2;
 	private static final int TITLE_GAP = 8;
 
-	/** What a power box can pass to its neighbours: a tank this big, handed out this fast. */
-	private static final int KIOSK_CAPACITY_FE = 100_000;
+	/** The most a power box hands one neighbour in a tick. */
 	private static final int KIOSK_TRANSFER_FE_PER_TICK = 2_000;
-	/** Forge Energy per kilowatt delivered. */
-	private static final int FE_PER_KW = 50;
 
 	private final BlockPos target;
 
@@ -96,8 +93,7 @@ public class PowerInfoScreen extends Screen {
 		}
 
 		if (machine instanceof PowerBoxBlockEntity kiosk) {
-			long available = Math.min(KIOSK_CAPACITY_FE, (long) Math.floor(Math.max(0.0, kiosk.getCurrentPower()) * FE_PER_KW));
-			lines.add(Component.translatable("tooltip.renewables.power.fe", available, KIOSK_TRANSFER_FE_PER_TICK));
+			lines.add(Component.translatable("tooltip.renewables.power.fe", kiosk.energyStored(), KIOSK_TRANSFER_FE_PER_TICK));
 		}
 
 		if (machine instanceof UtilityPoleBlockEntity pole) {

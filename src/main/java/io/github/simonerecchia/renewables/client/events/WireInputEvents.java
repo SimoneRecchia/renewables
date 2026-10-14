@@ -1,7 +1,7 @@
 package io.github.simonerecchia.renewables.client.events;
 
 import io.github.simonerecchia.renewables.Renewables;
-import io.github.simonerecchia.renewables.client.hooks.ClientHooks;
+import io.github.simonerecchia.renewables.client.hooks.ClientInput;
 import io.github.simonerecchia.renewables.client.hooks.WireLinker;
 import io.github.simonerecchia.renewables.client.wire.ClientWires;
 import io.github.simonerecchia.renewables.item.ConductorItem;
@@ -45,7 +45,7 @@ public final class WireInputEvents {
 		boolean mainHoldsReel = event.getEntity().getMainHandItem().getItem() instanceof ConductorItem;
 		if (hand == InteractionHand.OFF_HAND && mainHoldsReel) return;
 
-		ClientHooks.conductorInAir(event.getEntity(), hand);
+		ClientInput.conductorInAir(event.getEntity(), hand);
 	}
 
 	@SubscribeEvent
