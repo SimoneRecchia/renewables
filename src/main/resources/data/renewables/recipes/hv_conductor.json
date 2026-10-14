@@ -1,16 +1,16 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "BBB",
+    "ccc",
     "SSS",
-    "BBB"
+    "ccc"
   ],
   "key": {
-    "B": {
-      "item": "renewables:busbar"
-    },
     "S": {
       "item": "renewables:steel_section"
+    },
+    "c": {
+      "tag": "forge:ingots/copper"
     }
   },
   "result": {

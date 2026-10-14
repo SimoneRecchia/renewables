@@ -86,13 +86,15 @@ public final class PartCatalog {
 			new Part("slew_drive", Tier.ASSEMBLY, "Slew Drive",
 					"A geared bearing with a motor on it: what turns a tracker, a yaw deck or a pitch hub."),
 			new Part("generator_set", Tier.ASSEMBLY, "Generator Set",
-					"Stator windings round a rotor. Turns a shaft into three-phase current."),
+					"About a megawatt of stator and rotor on its cast frame. Turns a shaft into three-phase current."),
 			new Part("gearbox", Tier.ASSEMBLY, "Gearbox",
 					"Three stages of gearing: takes a rotor's fifteen revolutions to a generator's fifteen hundred."),
 			new Part("turbine_blade", Tier.ASSEMBLY, "Turbine Blade",
 					"Glass fibre in resin over a steel spar. One of the three."),
 			new Part("long_blade", Tier.ASSEMBLY, "Long Turbine Blade",
-					"A blade extended: more fibre, a stronger spar, and the rotor that reaches low wind."));
+					"A blade extended: more fibre, a stronger spar, and the rotor that reaches low wind."),
+			new Part("tower_section", Tier.ASSEMBLY, "Tower Section",
+					"Rolled steel cans flanged together, the cables inside: a utility turbine brings its tower in its own recipe."));
 
 	private PartCatalog() {
 	}

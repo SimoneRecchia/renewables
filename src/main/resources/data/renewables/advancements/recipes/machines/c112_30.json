@@ -1,37 +1,13 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
-    "has_bearing": {
+    "has_gearbox": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
             "items": [
-              "renewables:bearing"
-            ]
-          }
-        ]
-      }
-    },
-    "has_control_board": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:control_board"
-            ]
-          }
-        ]
-      }
-    },
-    "has_enclosure": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:enclosure"
+              "renewables:gearbox"
             ]
           }
         ]
@@ -73,6 +49,18 @@
         ]
       }
     },
+    "has_tower_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:tower_section"
+            ]
+          }
+        ]
+      }
+    },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -82,13 +70,12 @@
   },
   "requirements": [
     [
-      "has_bearing",
-      "has_control_board",
-      "has_enclosure",
+      "has_gearbox",
       "has_generator_set",
       "has_long_blade",
       "has_slew_drive",
-      "has_the_recipe"
+      "has_the_recipe",
+      "has_tower_section"
     ]
   ],
   "rewards": {

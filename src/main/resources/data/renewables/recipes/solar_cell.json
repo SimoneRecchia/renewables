@@ -2,8 +2,7 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "ZZZ",
-    " r ",
-    "BBB"
+    "rBr"
   ],
   "key": {
     "B": {
@@ -18,6 +17,6 @@
   },
   "result": {
     "item": "renewables:solar_cell",
-    "count": 3
+    "count": 12
   }
 }

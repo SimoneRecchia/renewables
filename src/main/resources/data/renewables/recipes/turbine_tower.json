@@ -1,9 +1,9 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "PPP",
-    "n n",
-    "PPP"
+    "P P",
+    "PnP",
+    "P P"
   ],
   "key": {
     "P": {
@@ -15,6 +15,6 @@
   },
   "result": {
     "item": "renewables:turbine_tower",
-    "count": 2
+    "count": 8
   }
 }

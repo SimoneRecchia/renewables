@@ -25,13 +25,13 @@
         ]
       }
     },
-    "has_metal_casing": {
+    "has_resin": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
             "items": [
-              "renewables:metal_casing"
+              "renewables:resin"
             ]
           }
         ]
@@ -48,7 +48,7 @@
     [
       "has_bypass_diode",
       "has_mc4_connector",
-      "has_metal_casing",
+      "has_resin",
       "has_the_recipe"
     ]
   ],

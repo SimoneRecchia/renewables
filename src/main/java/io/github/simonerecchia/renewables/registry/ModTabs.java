@@ -13,7 +13,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
 
-/** The one creative tab, listing every item in the order a player meets them (76 entries, none repeated). */
+/** The one creative tab, listing every item in the order a player meets them (77 entries, none repeated). */
 public final class ModTabs {
 	public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, Renewables.MOD_ID);
 

@@ -2,24 +2,21 @@
   "type": "minecraft:crafting_shaped",
   "pattern": [
     "III",
-    "ete",
-    "PQP"
+    "l$l",
+    "lQl"
   ],
   "key": {
+    "$": {
+      "tag": "forge:storage_blocks/copper"
+    },
     "I": {
       "item": "renewables:insulator"
-    },
-    "P": {
-      "item": "renewables:steel_plate"
     },
     "Q": {
       "item": "renewables:load_break_switch"
     },
-    "e": {
-      "item": "renewables:magnetic_core"
-    },
-    "t": {
-      "item": "renewables:torque_tube"
+    "l": {
+      "tag": "forge:storage_blocks/iron"
     }
   },
   "result": {

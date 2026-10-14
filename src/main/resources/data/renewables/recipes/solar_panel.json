@@ -1,9 +1,9 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "LLL",
-    " T ",
-    "jSj"
+    "LL",
+    "SS",
+    "jj"
   ],
   "key": {
     "L": {
@@ -11,9 +11,6 @@
     },
     "S": {
       "item": "renewables:steel_section"
-    },
-    "T": {
-      "item": "renewables:mounting_rack"
     },
     "j": {
       "item": "renewables:mc4_connector"

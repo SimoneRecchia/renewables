@@ -1,18 +1,6 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
-    "has_busbar": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:busbar"
-            ]
-          }
-        ]
-      }
-    },
     "has_control_board": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
@@ -20,6 +8,18 @@
           {
             "items": [
               "renewables:control_board"
+            ]
+          }
+        ]
+      }
+    },
+    "has_dc_section": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "renewables:dc_section"
             ]
           }
         ]
@@ -49,18 +49,6 @@
         ]
       }
     },
-    "has_motor_core": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:motor_core"
-            ]
-          }
-        ]
-      }
-    },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -70,11 +58,10 @@
   },
   "requirements": [
     [
-      "has_busbar",
       "has_control_board",
+      "has_dc_section",
       "has_enclosure",
       "has_inverter_bridge",
-      "has_motor_core",
       "has_the_recipe"
     ]
   ],

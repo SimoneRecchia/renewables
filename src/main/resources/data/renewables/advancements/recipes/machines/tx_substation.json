@@ -1,6 +1,26 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
+    "has_storage_blocks_copper": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/copper"
+          }
+        ]
+      }
+    },
+    "has_storage_blocks_iron": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "tag": "forge:storage_blocks/iron"
+          }
+        ]
+      }
+    },
     "has_insulator": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
@@ -25,42 +45,6 @@
         ]
       }
     },
-    "has_magnetic_core": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:magnetic_core"
-            ]
-          }
-        ]
-      }
-    },
-    "has_steel_plate": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:steel_plate"
-            ]
-          }
-        ]
-      }
-    },
-    "has_torque_tube": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "renewables:torque_tube"
-            ]
-          }
-        ]
-      }
-    },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -72,10 +56,9 @@
     [
       "has_insulator",
       "has_load_break_switch",
-      "has_magnetic_core",
-      "has_steel_plate",
-      "has_the_recipe",
-      "has_torque_tube"
+      "has_storage_blocks_copper",
+      "has_storage_blocks_iron",
+      "has_the_recipe"
     ]
   ],
   "rewards": {

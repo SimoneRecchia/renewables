@@ -63,8 +63,8 @@ LANG_ENTRIES = [
     ("tooltip.renewables.cpu", "Simple control unit for Renewables builds."),
     ("tooltip.renewables.screen", "A backlit glass display on its own board: the face of the met station's logger."),
     ("tooltip.renewables.insulator", "Ceramic insulator used for attaching wires to a device."),
-    ("tooltip.renewables.metal_casing", "Pressed sheet metal: the shell of a cabin, a power box and a junction box."),
-    ("tooltip.renewables.motor_core", "Rotor coil for the turbine head and other powered parts."),
+    ("tooltip.renewables.metal_casing", "Pressed sheet metal: the shell of a cabin and of a power box."),
+    ("tooltip.renewables.motor_core", "A small motor or alternator: an inverter's fans, a slew drive's motor, the SW-10's generator."),
     ("tooltip.renewables.power.amount", "Power: %s kW"),
     ("tooltip.renewables.power.fe", "FE: %s / %s FE/t"),
     ("tooltip.renewables.turbine.class", "IEC class %s"),
@@ -339,23 +339,23 @@ FLAT_ITEMS = [
 # materials only; the machines after them are the ones the parts tree does not cover.
 CORE_RECIPES = [
     # a printed board: redstone traces, copper pads, gold contacts
-    ('circuit_board', 2, ['rrr', 'cgc']),
+    ('circuit_board', 16, ['rrr', 'cgc']),
     # a die on a board, with iron pins
-    ('cpu', 1, ['qqq', 'rCr', 'nnn']),
+    ('cpu', 12, ['qqq', 'rCr', 'nnn']),
     # glass, a redstone backlight, and a board to drive it
-    ('screen', 1, ['yyy', 'yry', 'nCn']),
-    # a ring of iron: the body of a cabinet or a nacelle
-    ('metal_casing', 2, ['iii', 'i i', 'iii']),
+    ('screen', 4, ['yyy', 'yry', 'nCn']),
+    # a ring of iron: the body of a cabinet
+    ('metal_casing', 16, ['iii', 'i i', 'iii']),
     # a copper winding round an iron core
-    ('motor_core', 1, [' c ', 'cic', ' c ']),
+    ('motor_core', 16, [' c ', 'cic', ' c ']),
     # a ceramic body held on iron pins: glass stands in for the porcelain
     ('insulator', 3, ['n n', 'nWn', 'n n']),
     ('power_wrench', 1, ['i', 'i', 'i']),
     # three insulators on a stone-footed post
     ('utility_pole', 2, ['III', ' v ', ' v ']),
-    # two casings a side round the insulators, boards to either side of a busbar
-    ('electric_cabin', 1, ['MIM', 'CBC', 'MIM']),
-    ('power_box', 1, ['MMM', 'CUC', 'MIM']),
+    # a casing a side round the insulators, boards to either side of a busbar
+    ('electric_cabin', 1, ['MIM', 'CBC', 'M M']),
+    ('power_box', 1, [' M ', 'CUC', ' I ']),
 ]
 
 

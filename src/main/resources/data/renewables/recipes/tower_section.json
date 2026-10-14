@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "lll",
+    "lOl",
+    "lll"
+  ],
+  "key": {
+    "O": {
+      "item": "renewables:copper_coil"
+    },
+    "l": {
+      "tag": "forge:storage_blocks/iron"
+    }
+  },
+  "result": {
+    "item": "renewables:tower_section"
+  }
+}

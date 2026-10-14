@@ -41,7 +41,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 /**
- * Every item the mod registers (76), with the per-family maps the rest of the code looks them up in.
+ * Every item the mod registers (77), with the per-family maps the rest of the code looks them up in.
  *
  * Maps are keyed by catalogue spec id and keep catalogue order, like {@link ModBlocks}'s.  The shell and the
  * ground-laid conductors have no item: a run is laid with its reel.
@@ -60,7 +60,7 @@ public final class ModItems {
 	public static final Map<ResourceLocation, RegistryObject<Item>> TRANSFORMERS = new LinkedHashMap<>();
 	public static final Map<ResourceLocation, RegistryObject<Item>> SWITCHGEARS = new LinkedHashMap<>();
 	public static final Map<ResourceLocation, RegistryObject<Item>> TURBINES = new LinkedHashMap<>();
-	/** The 32 parts, by their string id, in catalogue order. */
+	/** The 33 parts, by their string id, in catalogue order. */
 	public static final Map<String, RegistryObject<Item>> PARTS = new LinkedHashMap<>();
 
 	public static final RegistryObject<Item> POWER_WRENCH;

@@ -1,12 +1,14 @@
 {
   "parent": "minecraft:recipes/root",
   "criteria": {
-    "has_ingots_copper": {
+    "has_busbar": {
       "trigger": "minecraft:inventory_changed",
       "conditions": {
         "items": [
           {
-            "tag": "forge:ingots/copper"
+            "items": [
+              "renewables:busbar"
+            ]
           }
         ]
       }
@@ -80,9 +82,9 @@
   },
   "requirements": [
     [
+      "has_busbar",
       "has_control_board",
       "has_enclosure",
-      "has_ingots_copper",
       "has_load_break_switch",
       "has_steel_plate",
       "has_steel_section",

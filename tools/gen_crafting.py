@@ -4,14 +4,24 @@ language keys of the parts, which gen_core_data writes.
 
     python3 tools/gen_crafting.py
 
+Every machine's recipe costs what the real one weighs, at TONNES_PER_UNIT tonnes of steel, conductor metal, glass or
+silicon to the ingot - the formula and its sources are under "what a recipe costs" below, and
+
+    python3 tools/gen_crafting.py --costs
+
+prints every machine's bill against its recipe without writing anything.
+
 Every file is planned first and checked before any is written (tree_problems): every item the mod registers has
 a recipe, an item model whose sprite is on disk and a name; every block a blockstate and, but the shell, a loot
 table; every part is used; no two recipes share a grid; every recipe has the advancement that puts it in the
-recipe book; and nothing is left on disk in recipes/ or advancements/ that no generator writes.  Any of those
-exits 1 with nothing written.
+recipe book; nothing is left on disk in recipes/ or advancements/ that no generator writes; and every machine
+costs its bill within COST_BAND (or no more than FLOOR over it), each family dearer as it grows.  Any of those exits
+1 with nothing written.
 """
 
+import collections
 import json
+import math
 import os
 import re
 import sys
@@ -22,6 +32,8 @@ BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', '
 LOOT = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'loot_tables', 'blocks')
 TAGS = os.path.join('src', 'main', 'resources', 'data', 'minecraft', 'tags', 'blocks')
 SPRITES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'textures')
+# The C130 kept the registry name of the machine the mod started with (ModBlocks).
+TURBINE_ALIASES = {'c130_40': 'wind_turbine'}
 JAVA = os.path.join('src', 'main', 'java', 'io', 'github', 'simonerecchia', 'renewables')
 CATALOGUE = os.path.join(JAVA, 'catalog', 'PartCatalog.java')
 
@@ -48,6 +60,7 @@ ITEMS = {
     'h': 'minecraft:honeycomb',
     'm': '#forge:slimeballs',
     'l': '#forge:storage_blocks/iron',
+    '$': '#forge:storage_blocks/copper',
     # the mod's own older parts
     'C': 'renewables:circuit_board',
     'U': 'renewables:cpu',
@@ -90,136 +103,132 @@ ITEMS = {
     'X': 'renewables:gearbox',
     's': 'renewables:turbine_blade',
     'z': 'renewables:long_blade',
+    '%': 'renewables:tower_section',
 }
 
-# (result, count, type, pattern) - the tree, top to bottom.
+# (result, count, type, pattern) - the tree, top to bottom.  What each one costs is held to the real machine by
+# cost_problems(); `python3 tools/gen_crafting.py --costs` prints the table.
 RECIPES = [
     # ------------------------------------------------------------------------- raw stock
-    ('steel_plate', 3, SHAPED, ['iii', 'ooo']),
+    # Stock comes out by the dozen: an ingot is TONNES_PER_UNIT of metal, and a plate is a twelfth of one.
+    ('steel_plate', 12, SHAPED, ['iii', 'ooo']),
     ('steel_section', 2, SHAPED, ['P', 'P']),
-    ('busbar', 2, SHAPED, ['ccc']),
-    ('copper_coil', 1, SHAPED, ['BBB', ' n ']),
-    # a film of polymer and a wax: what a laminate is glued together with and what a blade's fibre is
-    # bound in
+    ('busbar', 24, SHAPED, ['ccc']),
+    ('copper_coil', 2, SHAPED, ['BBB', ' n ']),
+    # a film of polymer and a wax: what a laminate is glued together with and what a blade's fibre is bound in
     ('resin', 2, SHAPED, ['mh']),
     # sawn from the ingot, which is where every cell and every switching die starts
-    ('silicon_wafer', 4, SHAPED, ['N']),
+    ('silicon_wafer', 8, SHAPED, ['N']),
 
     # ------------------------------------------------------------------------ components
-    ('solar_cell', 3, SHAPED, ['ZZZ', ' r ', 'BBB']),
-    ('bypass_diode', 2, SHAPED, ['q', 'r', 'g']),
-    ('mc4_connector', 4, SHAPED, ['II', 'BB']),
-    # three diodes, because a sixty-cell module has three substrings and each one gets its own
-    ('junction_box', 1, SHAPED, [' d ', 'dMd', ' j ']),
+    ('solar_cell', 12, SHAPED, ['ZZZ', 'rBr']),
+    ('bypass_diode', 4, SHAPED, ['Z', 'r', 'g']),
+    ('mc4_connector', 8, SHAPED, ['II', 'BB']),
+    # three diodes, one per substring, potted in resin
+    ('junction_box', 4, SHAPED, [' d ', 'dFd', ' j ']),
     # switching dies on a substrate over a baseplate
-    ('power_module', 1, SHAPED, [' Z ', 'BCB', ' P ']),
+    ('power_module', 8, SHAPED, [' Z ', 'CBC', ' P ']),
     # a film capacitor bank in a steel can: polymer film, charge
-    ('capacitor_bank', 1, SHAPED, ['FrF', 'FrF', 'PPP']),
+    ('capacitor_bank', 8, SHAPED, ['FrF', 'FrF', 'PPP']),
     # laminated iron with a winding through it
-    ('magnetic_core', 1, SHAPED, ['PPP', 'OOO', 'PPP']),
-    ('control_board', 1, SHAPED, [' U ', 'CBC']),
-    ('bearing', 2, SHAPED, [' P ', 'nPn', ' P ']),
-    ('gear_set', 2, SHAPED, [' S ', 'SPS', ' S ']),
+    ('magnetic_core', 16, SHAPED, ['PPP', 'OOO', 'PPP']),
+    ('control_board', 4, SHAPED, [' U ', 'CBC']),
+    ('bearing', 4, SHAPED, [' P ', 'nPn', ' P ']),
+    ('gear_set', 4, SHAPED, [' S ', 'SPS', ' S ']),
     # a glass barrel, silver element and sand filler
-    ('gpv_fuse', 4, SHAPED, ['yay', ' B ']),
+    ('gpv_fuse', 8, SHAPED, ['yay', ' B ']),
     # contacts, an arc chamber and the snap mechanism that makes it break rather than draw
-    ('load_break_switch', 1, SHAPED, [' I ', 'BSB', ' H ']),
-    ('sensor_head', 2, SHAPED, [' A ', 'CBC']),
+    ('load_break_switch', 4, SHAPED, [' I ', 'BSB', ' H ']),
+    ('sensor_head', 2, SHAPED, [' y ', 'CBC']),
 
     # ------------------------------------------------------------------------ assemblies
-    ('pv_laminate', 1, SHAPED, ['AFA', 'VVV', 'SJS']),
-    # eight plates and a gasket: an enclosure is mostly steel, which is why a cabinet costs what it does
-    ('enclosure', 1, SHAPED, ['PPP', 'PIP', 'PPP']),
-    ('dc_section', 1, SHAPED, ['fff', 'BQB', 'PPP']),
-    ('inverter_bridge', 1, SHAPED, ['www', 'kbk', 'BeB']),
-    ('mounting_rack', 1, SHAPED, ['S S', 'SSS', 'P P']),
-    ('torque_tube', 1, SHAPED, ['SSS', 'YPY']),
-    ('slew_drive', 1, SHAPED, [' H ', 'YKY', ' b ']),
-    # stator windings round a rotor, in a frame
-    ('generator_set', 1, SHAPED, ['OOO', 'ele', 'SSS']),
-    ('gearbox', 1, SHAPED, ['HHH', 'YPY', 'PPP']),
+    # Twelve to a craft: two front sheets make about 33 m2 of module, a sixth of a tonne of glass a laminate.
+    ('pv_laminate', 12, SHAPED, ['AFA', 'VVV', 'SJS']),
+    ('enclosure', 8, SHAPED, ['PPP', 'PIP', 'PPP']),
+    ('dc_section', 4, SHAPED, ['fff', 'BQB', 'PPP']),
+    ('inverter_bridge', 2, SHAPED, ['www', 'kbk', 'BeB']),
+    ('mounting_rack', 4, SHAPED, ['S S', 'SSS', 'P P']),
+    ('torque_tube', 8, SHAPED, ['SSS', 'YPY']),
+    ('slew_drive', 4, SHAPED, [' H ', 'YKY', ' b ']),
+    # A megawatt of generator: windings round a rotor on a cast frame.  The utility machines take one a megawatt
+    # or so, which is where their copper comes from.
+    ('generator_set', 1, SHAPED, ['OcO', 'ele', 'SSS']),
+    ('gearbox', 1, SHAPED, ['HHH', 'YlY', 'PPP']),
     # glass fibre in resin over a steel spar, which is how a blade is actually built
-    ('turbine_blade', 1, SHAPED, ['AAA', 'FSF', 'AAA']),
+    ('turbine_blade', 1, SHAPED, ['A', 'F', 'S']),
     # the same blade with more fibre on a stronger spar: a longer rotor for a quieter site
-    ('long_blade', 1, SHAPED, ['AAA', 'FsF', 'AAA']),
+    ('long_blade', 1, SHAPED, ['AFA', 'AsA', 'AFA']),
+    # Eight blocks of steel and the cables inside: 145 t of tower.  A utility machine brings its tower in its own
+    # recipe, because a turbine_tower block carries every machine, the SW-10 included - see real_tonnes().
+    ('tower_section', 1, SHAPED, ['lll', 'lOl', 'lll']),
 
     # ------------------------------------------------------------------- the line conductors
+    # A reel is one phase.  The quad bundle is solid metal: 1.3 t a reel, where the other two are a few kilograms.
     ('abc_conductor', 8, SHAPED, ['BBB', 'FFF', 'SSS']),
     ('mv_conductor', 6, SHAPED, ['BBB', 'PPP']),
-    ('hv_conductor', 4, SHAPED, ['BBB', 'SSS', 'BBB']),
+    ('hv_conductor', 4, SHAPED, ['ccc', 'SSS', 'ccc']),
 
     # --------------------------------------------------------------------------- the cables
     ('dc_string_cable', 6, SHAPED, ['BBB', 'FFF']),
     ('dc_trunk_cable', 4, SHAPED, ['BBB', 'FFF', 'PPP']),
 
     # --------------------------------------------------------------------------- the arrays
-    ('solar_panel', 1, SHAPED, ['LLL', ' T ', 'jSj']),
-    ('pv_flat_430', 1, SHAPED, ['LLL', 'PTP', 'jSj']),
-    ('pv_tilt_530', 1, SHAPED, ['LLL', 'STS', 'jSj']),
-    # the 580 W module is the large-format one, so it is the same rack with a fourth laminate of silicon
-    ('pv_tilt_580', 1, SHAPED, ['LLL', 'STS', 'jLj']),
-    ('pv_track_700', 1, SHAPED, ['LLL', 'tut', 'jbj']),
-    # two slew drives, because a dual-axis frame has two axes to turn
-    ('pv_dual_440', 1, SHAPED, ['LLL', 'uSu', 'jbj']),
+    # Laminates by the glass a block really carries (two for the forty-four-module tables and the thin film, one
+    # for the rest), over its mounting: a ballast tray, a fixed rack, a torque tube, a pedestal head.
+    ('solar_panel', 1, SHAPED, ['LL', 'SS', 'jj']),
+    ('pv_flat_430', 1, SHAPED, ['LL', 'PP', 'jj']),
+    ('pv_tilt_530', 1, SHAPED, ['LL', 'T ', 'jj']),
+    ('pv_tilt_580', 1, SHAPED, [' L ', ' T ', 'j j']),
+    ('pv_track_700', 1, SHAPED, [' L ', 'tut', 'jbj']),
+    ('pv_dual_440', 1, SHAPED, [' L ', 'uSu', 'jbj']),
 
     # ------------------------------------------------------------------------- the inverters
-    # Bridges over an enclosure with a control board under it.
-    ('inverter_10', 1, SHAPED, [' G ', ' E ', ' b ']),
-    ('inverter_110', 1, SHAPED, ['GGG', ' E ', 'KbK']),
-    ('inverter_350', 1, SHAPED, ['GGG', 'DED', 'KbK']),
-    ('inverter_2500', 1, SHAPED, ['GGG', 'BEB', 'KbK']),
+    # Power electronics by the rating - a module for the wall box, a module and its fans for the 110, a bridge
+    # and two fused DC sections for the 350, five bridges for the container - over a cabinet and a board.
+    ('inverter_10', 1, SHAPED, [' w ', 'kEe', ' b ']),
+    ('inverter_110', 1, SHAPED, [' w ', 'kEe', 'KbK']),
+    ('inverter_350', 1, SHAPED, [' G ', 'DED', 'KbK']),
+    ('inverter_2500', 1, SHAPED, ['GGG', 'DED', 'GbG']),
 
     # ------------------------------------------------------------------------- the combiners
-    # the output, and the thirty-two way box is the one built to IP66.
+    # Fuse ways over an enclosure with a load-break switch under it; the thirty-two way box is built to IP66.
     ('pv_combiner_6', 1, SHAPED, ['fff', ' E ', ' Q ']),
     ('pv_combiner_16', 1, SHAPED, ['fff', 'BEB', ' Q ']),
     ('pv_combiner_32', 1, SHAPED, ['fff', 'BEB', 'PQP']),
 
-    # ------------------------------------------------------------------- the met station
-    # A logger with a display on it, which is what the model draws and what put the screen back in the tree:
-    # nothing else consumed one, so it was an item a player could craft and never use.
+    # A logger with a display on it, which is what the model draws and what put the screen back in the tree.
     ('met_station', 1, SHAPED, [' p ', 'pbp', 'SRS']),
-
-    # -------------------------------------------------------------- the plant controller
-    # A cabinet with a controller and a screen in it, over the switchgear it is wired to.  Two control
-    # boards rather than one: the controller and the gateways behind the same door are two devices.
-    ('plant_controller', 1, SHAPED, ['ScS', 'bEb', 'PQP']),
+    # A cabinet with a controller and the gateways behind the same door, over the switchgear it is wired to.
+    ('plant_controller', 1, SHAPED, ['SBS', 'bEb', 'PQP']),
 
     # ------------------------------------------------------------------- the transformers
-    # A tank, a core with windings on it, and the bushings the windings leave through.  The substation
-    # unit is the same machine with radiators, a conservator and a tap changer on it.
+    # Bushings over a core and its windings, in a tank.  The 63 MVA unit is iron and copper by the block.
     ('tx_machine', 1, SHAPED, ['III', 'OeO', 'PPP']),
-    ('tx_substation', 1, SHAPED, ['III', 'ete', 'PQP']),
+    ('tx_substation', 1, SHAPED, ['III', 'l$l', 'lQl']),
 
-    # ------------------------------------------------------------------------ the switches
-    # A disconnector is three post insulators a side, a copper blade and a frame: no arc-breaking parts at
-    # all, which is exactly why it cannot be opened under load.  A breaker is the same posts over three
-    # load-break interrupters and the mechanism that throws them.
+    # A disconnector is post insulators, a copper blade and a frame; a breaker is the same posts over three
+    # interrupters and the mechanism that throws them.
     ('mv_disconnector', 1, SHAPED, ['III', 'BSB', 'SSS']),
     ('mv_breaker', 1, SHAPED, ['III', 'QQQ', 'PbP']),
 
     # ---------------------------------------------------------------- the transmission towers
-    # Steel sections, plate gussets and the insulator strings the phases hang from.  The duty is what
-    # costs: a suspension tower is only holding weight, a tension tower is braced for the difference
-    # between two pulls, and a terminal tower takes all of it from one side.
-    ('lattice_suspension', 1, SHAPED, ['SIS', 'SPS', 'S S']),
-    ('lattice_tension', 1, SHAPED, ['SIS', 'SPS', 'SPS']),
-    ('lattice_terminal', 1, SHAPED, ['SIS', 'PPP', 'SPS']),
+    # Fifty, seventy-five and a hundred tonnes of lattice: a suspension tower holds weight, a tension tower the
+    # difference between two pulls, a terminal tower all of one.
+    ('lattice_suspension', 1, SHAPED, ['SIS', 'lSl', 'S S']),
+    ('lattice_tension', 1, SHAPED, ['SIS', 'lll', 'S S']),
+    ('lattice_terminal', 1, SHAPED, ['lIl', 'lll', 'S S']),
 
     # ------------------------------------------------------------------- towers and turbines
-    ('turbine_tower', 2, SHAPED, ['PPP', 'n n', 'PPP']),
-    # Three blades over a drivetrain, and the drivetrain is where the machines differ.
-    ('sw_10', 1, SHAPED, ['sss', ' x ', 'SbS']),
-    ('c52_085', 1, SHAPED, ['sss', 'XxY', 'ubE']),
-    # long blades: an eighty metre rotor on the same drivetrain
-    ('c80_20', 1, SHAPED, ['zzz', 'XxY', 'ubE']),
-    # three megawatts: the generator doubles
-    ('c90_30', 1, SHAPED, ['zzz', 'Xxx', 'ubE']),
-    # the same generator pair as the C90 and no gearbox - a second main bearing instead
-    # direct drive is, and the reason these two share a nameplate on different rotors
-    ('c112_30', 1, SHAPED, ['zzz', 'Yxx', 'ubE']),
-    # four megawatts, direct drive, and all generator
-    ('wind_turbine', 1, SHAPED, ['zzz', 'xxx', 'ubE']),
+    # Ten metres of the SW-10's guyed lattice a block: what every machine stands on.
+    ('turbine_tower', 8, SHAPED, ['P P', 'PnP', 'P P']),
+    # A 7 m rotor of pultruded fibre on an alternator: no blade item, no gearbox, no yaw drive.
+    ('sw_10', 1, SHAPED, ['FSF', ' K ', 'SbS']),
+    # Three blades over a gearbox, a generator a megawatt and a yaw drive, and the machine's tower in sections.
+    ('c52_085', 1, SHAPED, ['sss', 'XxY', 'lu ']),
+    ('c80_20', 1, SHAPED, ['zzz', 'xXx', ' % ']),
+    ('c90_30', 1, SHAPED, ['zzz', 'XxX', 'x%u']),
+    ('c112_30', 1, SHAPED, ['zzz', 'xXx', '%%u']),
+    ('wind_turbine', 1, SHAPED, ['z%z', 'xXx', 'z%%']),
 ]
 
 
@@ -372,6 +381,247 @@ def recipe_files():
     return out
 
 
+# ------------------------------------------------------------------------------ what a recipe costs
+#
+# The formula.  Every machine's recipe costs, in ingots, glass and quartz, what the real machine weighs in steel,
+# conductor metal, glass and silicon, at TONNES_PER_UNIT tonnes an ingot:
+#
+#     units(material) = real tonnes of that material / TONNES_PER_UNIT
+#
+# real_tonnes() is the bill of materials, every figure from a datasheet or a published intensity (sources in
+# docs/data-sources.md, "Costo delle ricette"); recipe_units() resolves a recipe down to vanilla stock; and
+# cost_problems() holds each machine to its bill within COST_BAND, or, below FLOOR units, to no more than its bill
+# plus FLOOR - an inverter weighs twenty kilograms, but its recipe still has a cabinet and a board in it.
+
+# One iron ingot, one copper ingot, one glass block, one quartz: two tonnes of steel (and the cast iron and the
+# structural aluminium the game has no metal for), of conductor metal (copper, and the aluminium of a line),
+# of glass (and a blade's glass fibre), of silicon.  The one figure here that is a choice and not a fact: at one
+# tonne the C130 would need more than a crafting grid holds; at four the arrays would vanish under the floor.
+TONNES_PER_UNIT = 2.0
+MATERIALS = ('steel', 'copper', 'glass', 'silicon')
+
+# A recipe within this factor of its bill passes; FLOOR is the most a machine lighter than that may cost above it.
+COST_BAND = 1.5
+FLOOR = 3.0
+
+# What one of each vanilla ingredient is, in units.  Coal, redstone, gold, sand, stone, slime and honeycomb are
+# the chemistry and the electronics: they cost what they cost and weigh nothing here.
+RAW = {
+    '#forge:ingots/iron': {'steel': 1.0}, '#forge:nuggets/iron': {'steel': 1 / 9},
+    '#forge:storage_blocks/iron': {'steel': 9.0},
+    '#forge:ingots/copper': {'copper': 1.0}, '#forge:storage_blocks/copper': {'copper': 9.0},
+    '#forge:glass/colorless': {'glass': 1.0}, '#forge:glass_panes/colorless': {'glass': 6 / 16},
+    '#forge:gems/quartz': {'silicon': 1.0},
+}
+
+
+def recipe_units(recipes):
+    """{item: {material: units}} for every item a recipe makes, resolved down to the vanilla stock in RAW.
+
+    recipes is {path: recipe json}, gen_core_data's and this file's together.
+    """
+    made = {}
+    for recipe in recipes.values():
+        result = recipe['result']['item'] if isinstance(recipe['result'], dict) else recipe['result']
+        count = recipe['result'].get('count', 1) if isinstance(recipe['result'], dict) else 1
+        if 'pattern' in recipe:
+            taking = collections.Counter(name_of(recipe['key'][c]) for row in recipe['pattern'] for c in row if c != ' ')
+        else:
+            taking = collections.Counter([name_of(recipe['ingredient'])])
+        made[result] = (count, taking)
+
+    memo = {}
+
+    def units(name, path=()):
+        if name in memo:
+            return memo[name]
+        if name in RAW:
+            return RAW[name]
+        if name not in made:
+            return {}
+        if name in path:
+            raise SystemExit('gen_crafting: %s is made from itself' % name)
+        count, taking = made[name]
+        total = collections.Counter()
+        for ingredient, n in taking.items():
+            for material, amount in units(ingredient, path + (name,)).items():
+                total[material] += amount * n / count
+        memo[name] = dict(total)
+        return memo[name]
+
+    return {name.split(':')[1]: units(name) for name in made}
+
+
+# ---- the bills of materials, in tonnes (docs/data-sources.md, "Costo delle ricette", has every source)
+
+# A module by mass, IRENA/IEA-PVPS "End-of-Life Management: Solar Photovoltaic Panels" (2016): c-Si 76 % glass,
+# 8 % aluminium (the frame, counted as steel), 5 % silicon, 1 % copper, 10 % polymer; CdTe 97 % glass.
+MODULE_SHARES = {'c-Si': {'glass': 0.76, 'steel': 0.08, 'silicon': 0.05, 'copper': 0.01}, 'CDTE': {'glass': 0.97}}
+
+# Mounting steel, t per kWp: a ballasted table's substructure (97 kg under 5.46 kWp), a fixed rack (5200 short
+# tons for 71 MWdc), a single-axis row (1070 kg against a fixed rack's 962 for the same 26 modules).  A dual-axis
+# pedestal is one tracker head whatever it carries: DEGERtraker 5000NT, 650 kg without its mast.
+MOUNTING_T_PER_KWP = {'FLAT': 97 / 5460, 'FIXED_TILT': 5200 * 0.9072 / 71000,
+                      'SINGLE_AXIS': 5200 * 0.9072 / 71000 * 1070 / 962}
+DUAL_AXIS_HEAD = 0.65
+
+# The wind line: NREL/TP-500-40566 (Fingersh, Hand, Laxson 2006), the advanced blade, the three-stage drive, and
+# the baseline tower scaled to the 160 t Vestas publishes for a V90-3.0 on 80 m (which the same formulas give a
+# 64 t nacelle and a 42 t rotor for, against 70 and 41).  Conductor metal 2.5 t/MW (USGS, Wilburn 2011).
+TOWER_CALIBRATION = 160.0 / ((0.3973 * math.pi * 45 ** 2 * 80 - 1414) / 1000)
+WIND_COPPER_T_PER_MW = 2.5
+# The SW-10 is a Bergey Excel 10: 545 kg on the tower top, three blades 180 lb in their carton, and a 100 ft
+# guyed lattice tower of 4000 lb - so a turbine_tower block, ten metres of it, is 0.59 t.
+SMALL_WIND = {'head': 0.545, 'blades': 180 * 0.4536 / 1000}
+SEGMENT_TONNES = 4000 * 0.4536 / 1000 / 3.048
+
+# Datasheet masses: SUN2000-10KTL-M1 high-current, SG110CX, SG350HX, Sunny Central 2200-3000-EV (under 3400 kg).
+INVERTER_TONNES = {'inverter_10': 0.0212, 'inverter_110': 0.089, 'inverter_350': 0.116, 'inverter_2500': 3.4}
+
+# A 2500 kVA oil transformer, 5900 kg (Legrand); a 63 MVA one, 89.8 t of which 15.3 t oil and 58.5 t active part
+# (SGB DOTR 63000/123).  The oil is not a material here; the windings are taken as a third of the active part.
+TRANSFORMER_TONNES = {'tx_machine': 5.9, 'tx_substation': 89.8}
+OIL_SHARE, ACTIVE_SHARE = 15.3 / 89.8, 58.5 / 89.8
+
+# Eight new 380 kV masts, 600 t of steel (TenneT, Doerpen - West): 75 t a mast, shared out by duty.
+LATTICE_TONNES = {'lattice_suspension': 50.0, 'lattice_tension': 75.0, 'lattice_terminal': 100.0}
+
+# A reel's conductor, kg per metre of one phase: NFA2X 4x70 (its aluminium), Aster 228, four Curlew.
+CONDUCTOR_KG_PER_M = {'abc_conductor': 4 * 70 * 2.703 / 1000, 'mv_conductor': 0.627, 'hv_conductor': 4 * 1.978}
+CABLE_MM2 = {'dc_string_cable': 6, 'dc_trunk_cable': 240}
+
+# Under the floor whatever they weigh, and estimated rather than looked up: a wall box, a mast, a cabinet, an
+# outdoor switch, a pole, the steel of a prefabricated kiosk.
+ESTIMATED_TONNES = {'pv_combiner_6': 0.012, 'pv_combiner_16': 0.045, 'pv_combiner_32': 0.08, 'met_station': 0.15,
+                    'plant_controller': 0.25, 'mv_disconnector': 0.3, 'mv_breaker': 0.9, 'utility_pole': 0.8,
+                    'electric_cabin': 3.0, 'power_box': 0.15}
+
+
+def catalogue_source(name):
+    return open(os.path.join(JAVA, 'catalog', name + '.java')).read()
+
+
+def nrel_turbine(kw, diameter, rated_rpm, hub_m):
+    """(rotor, nacelle, tower, blades) in tonnes for a three-stage geared machine: NREL/TP-500-40566 section 3."""
+    radius = diameter / 2.0
+    blade = 0.4948 * radius ** 2.53
+    hub = 0.954 * blade + 5680.3
+    pitch = (0.1295 * 3 * blade + 491.31) * 1.328 + 555.0
+    nose = 18.5 * diameter - 520.5
+    torque = kw / (2 * math.pi * rated_rpm / 60.0)
+    nacelle = (70.94 * torque ** 0.759 + 6.47 * kw ** 0.9223 + 2.233 * diameter ** 1.953 * 1.125
+               + 0.0142 * diameter ** 2.888 + 2 * (diameter * 8 / 600 - 0.033) * 0.0092 * diameter ** 2.5
+               + 1.6 * 0.0009 * diameter ** 3.314 + (11.537 * kw + 3849.7) / 10 + 0.08 * kw)
+    tower = TOWER_CALIBRATION * (0.3973 * math.pi * radius ** 2 * hub_m - 1414) / 1000
+    return (3 * blade + hub + pitch + nose) / 1000, nacelle / 1000, tower, 3 * blade / 1000
+
+
+def real_tonnes():
+    """{registry id: {material: tonnes}} - the bill of materials every recipe is held to."""
+    out = {}
+    modules = {}
+    for const, cell, mass, watts in re.findall(r'(\w+) = new PvModuleSpec\(\s*id\("\w+"\), "[^"]+", PvModuleSpec\.Cell\.(\w+), '
+                                               r'\d+,\s*[\d.]+, [\d.]+, [\d.]+, ([\d.]+),\s*([\d.]+)',
+                                               catalogue_source('PvModuleCatalog')):
+        modules[const] = (cell, float(mass) / 1000, float(watts) / 1000)
+    for array, module, mounting, per_string, strings in re.findall(
+            r'id\("(\w+)"\), "[^"]+", PvModuleCatalog\.(\w+), PvMounting\.(\w+), [\w.]+,\s*(\d+), (\d+)\)',
+            catalogue_source('PvCatalog')):
+        cell, mass, kwp = modules[module]
+        count = int(per_string) * int(strings)
+        bill = {m: share * mass * count for m, share in MODULE_SHARES['CDTE' if cell == 'CDTE' else 'c-Si'].items()}
+        rack = DUAL_AXIS_HEAD if mounting == 'DUAL_AXIS' else MOUNTING_T_PER_KWP[mounting] * kwp * count
+        bill['steel'] = bill.get('steel', 0.0) + rack
+        out[array] = bill
+
+    for name, kw, diameter, rated, low, high, nacelle in re.findall(
+            r'id\("(\w+)"\), "[^"]+", "[^"]*",\s*([\d.]+), ([\d.]+), [\d.]+,\s*[\d.]+, [\d.]+, [\d.]+,\s*[\d.]+, '
+            r'([\d.]+), [\d.]+,\s*(\d+), (\d+),\s*[\d.]+, TurbineSpec\.Nacelle\.(\w+)', catalogue_source('TurbineCatalog')):
+        kw, diameter, rated = float(kw), float(diameter), float(rated)
+        segments = (int(low) + int(high)) / 2.0
+        copper = WIND_COPPER_T_PER_MW * kw / 1000
+        if nacelle == 'SMALL_WIND':
+            total, blades = SMALL_WIND['head'], SMALL_WIND['blades']
+        else:
+            rotor, head, tower, blades = nrel_turbine(kw, diameter, rated, segments * 10.0)
+            # the tower blocks it stands on carry SEGMENT_TONNES each; the machine brings the rest of its tower
+            total = rotor + head + tower - segments * SEGMENT_TONNES
+        out[TURBINE_ALIASES.get(name, name)] = {'steel': total - copper - blades, 'copper': copper, 'glass': blades}
+    out['turbine_tower'] = {'steel': SEGMENT_TONNES}
+
+    out.update({name: {'steel': tonnes} for name, tonnes in INVERTER_TONNES.items()})
+    for name, tonnes in TRANSFORMER_TONNES.items():
+        copper = tonnes * ACTIVE_SHARE / 3
+        out[name] = {'steel': tonnes * (1 - OIL_SHARE) - copper, 'copper': copper}
+    out.update({name: {'steel': tonnes} for name, tonnes in LATTICE_TONNES.items()})
+
+    conductors = catalogue_source('ConductorCatalog')
+    for name, blocks in re.findall(r'id\("(\w+)"\),.*?, (\d+)\)\);', conductors, re.S):
+        out[name] = {'copper': CONDUCTOR_KG_PER_M[name] * int(blocks) * 10 / 1000}
+    for name, mm2 in CABLE_MM2.items():
+        # two conductors, plus and minus, ten metres a block
+        out[name] = {'copper': 2 * mm2 * 8.96e-3 * 10 / 1000}
+    out.update({name: {'steel': tonnes} for name, tonnes in ESTIMATED_TONNES.items()})
+    return out
+
+
+# Families that must cost more as they grow, in order of rating.
+MONOTONE = [
+    ['inverter_10', 'inverter_110', 'inverter_350', 'inverter_2500'],
+    ['sw_10', 'c52_085', 'c80_20', 'c90_30', 'c112_30', 'wind_turbine'],
+    ['tx_machine', 'tx_substation'],
+    ['pv_combiner_6', 'pv_combiner_16', 'pv_combiner_32'],
+    ['lattice_suspension', 'lattice_tension', 'lattice_terminal'],
+]
+
+
+def total(units):
+    return sum(units.get(material, 0.0) for material in MATERIALS)
+
+
+def cost_rows(recipes):
+    """(item, bill in units, recipe in units) for every item with a bill."""
+    have = recipe_units(recipes)
+    return [(item, {m: t / TONNES_PER_UNIT for m, t in bill.items()}, have.get(item, {}))
+            for item, bill in sorted(real_tonnes().items())]
+
+
+def cost_problems(recipes):
+    """Every machine against its bill: the formula at the top of this section."""
+    problems = []
+    rows = cost_rows(recipes)
+    # a bill read out of a catalogue whose layout moved is a bill that silently is not there
+    billed = {item for item, _, _ in rows}
+    for item in sorted(set(DROPS.values()) - billed):
+        problems.append('%s has no bill of materials, so nothing holds its recipe to the real thing' % item)
+    for item, want, got in rows:
+        # the two metals each, and everything together: a blade's glass is in the total (two blade classes for
+        # five rotors cannot match each, see docs/data-sources.md)
+        for material in ('total', 'steel', 'copper'):
+            need = total(want) if material == 'total' else want.get(material, 0.0)
+            cost = total(got) if material == 'total' else got.get(material, 0.0)
+            if need >= FLOOR and not need / COST_BAND <= cost <= need * COST_BAND:
+                problems.append('%s costs %.1f units of %s, and its bill is %.1f (%.0f t)'
+                                % (item, cost, material, need, need * TONNES_PER_UNIT))
+            elif need < FLOOR and cost > need + FLOOR:
+                problems.append('%s costs %.1f units of %s, more than the floor over a bill of %.2f'
+                                % (item, cost, material, need))
+    costs = {item: total(got) for item, _, got in rows}
+    for family in MONOTONE:
+        for small, large in zip(family, family[1:]):
+            if costs[large] < costs[small]:
+                problems.append('%s costs less than %s (%.1f units against %.1f)' % (large, small, costs[large], costs[small]))
+    return problems
+
+
+def print_costs(recipes):
+    print('%-20s %8s %8s   %s' % ('item', 'bill', 'recipe', 'by material, bill/recipe (units of %.0f t)' % TONNES_PER_UNIT))
+    for item, want, got in cost_rows(recipes):
+        parts = '  '.join('%s %.2f/%.2f' % (m[:2], want.get(m, 0.0), got.get(m, 0.0)) for m in MATERIALS
+                          if want.get(m) or got.get(m))
+        print('%-20s %8.2f %8.2f   %s' % (item, total(want), total(got), parts))
+
+
 def tree_problems(own, core):
     """Everything the tree must be, checked on what is about to be written, before any of it is.
 
@@ -449,6 +699,9 @@ def tree_problems(own, core):
         recipe_id = os.path.basename(path)[:-5]
         if advancement_path(recipe_id, blocks) not in planned:
             problems.append('%s has no advancement, so the recipe book never shows it' % recipe_id)
+
+    # and what each machine costs, against what the real one weighs
+    problems.extend(cost_problems(recipes))
     return problems
 
 
@@ -657,6 +910,11 @@ def planned():
 def main():
     import gen_core_data
     own = planned()
+    if '--costs' in sys.argv:
+        core = {path: data for path, data in gen_core_data.planned().items() if os.path.dirname(path) == DATA}
+        core.update({path: data for path, data in own.items() if os.path.dirname(path) == DATA})
+        print_costs(core)
+        return
     problems = tree_problems(own, gen_core_data.planned())
     if problems:
         for line in problems:

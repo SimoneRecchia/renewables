@@ -370,30 +370,38 @@ significati.
 
 Tutto si fa al banco da lavoro, in tre livelli.
 
-**Materia prima:** piastra d'acciaio (ferro + carbone), profilato (da due piastre), sbarra di rame
-(3 rame), matassa (3 sbarre + pepita), resina (favo + slime), lingotto e wafer di silicio (dal quarzo
-fuso), vetro temperato.
+**Materia prima:** piastra d'acciaio (3 ferro + 3 carbone o carbone di legna: 12 piastre), profilato (da due
+piastre), sbarra di rame (3 rame: 24 sbarre), matassa (3 sbarre + pepita), resina (favo + slime), lingotto e wafer
+di silicio (dal quarzo fuso), vetro temperato. Ferro, rame, quarzo, slime e vetro di altre mod vanno bene: le
+ricette usano i tag.
 
 **Componenti:** cella solare, diodo di bypass, connettore DC, scatola di giunzione, modulo di potenza,
 banco di condensatori, nucleo magnetico, scheda di controllo, cuscinetto, ingranaggi, fusibile gPV,
 sezionatore in carico, testa di sensore.
 
 **Assiemi:** laminato PV, armadio, sezione DC, ponte inverter, rastrelliera, tubo di torsione, rotismo,
-gruppo generatore, riduttore, pala (e pala lunga).
+gruppo generatore (circa un megawatt), riduttore, pala (e pala lunga), tronco di torre (8 blocchi di ferro).
 
-**Macchine:** ogni macchina si compone dagli assiemi. Per esempio:
-* **FT-430** = 3 laminati + 2 piastre + profilato + rastrelliera + 2 connettori
-* **HX-700** = 3 laminati + 2 tubi di torsione + un motoriduttore + scheda + 2 connettori
-* **VX-350K** = armadio + 3 ponti + 2 sezioni DC + 2 nuclei + scheda
+**Macchine:** ogni macchina costa quanto pesa quella vera, a 2 tonnellate per lingotto (la formula e le fonti
+sono in `docs/data-sources.md`, "Costo delle ricette"). Per esempio:
+* **FT-415** = 2 laminati + 2 profilati + 2 connettori; **TR-580** = un laminato su una rastrelliera
+* **HX-700** = laminato + 2 tubi di torsione + motoriduttore + scheda + 2 connettori
+* **VX-10K** = modulo di potenza + condensatori + nucleo + armadio + scheda; **VX-350K** = un ponte + 2 sezioni DC
+  + armadio + 2 ventole + scheda; **VC-2500K** = 5 ponti + 2 sezioni DC + armadio + scheda
 * **CB-16** = armadio + sezionatore in carico + 3 fusibili + 2 sbarre
-* **C130-4.0** = armadio + scheda + motoriduttore + 3 gruppi generatore + 3 pale lunghe
-* **Machine Transformer** = 3 isolatori + 2 matasse + 3 piastre + nucleo
-* **Substation Transformer** = 3 isolatori + 2 piastre + sezionatore + 2 nuclei + tubo di torsione
-* **Plant Controller** = armadio + 2 schede di controllo + sezionatore + 2 piastre + 2 profilati + rame
+* **SW-10** = pale di resina e profilato + alternatore + scheda; **C52-0.85** = 3 pale + riduttore + generatore +
+  cuscinetto + motoriduttore + un blocco di ferro; **C130-4.0** = 3 pale lunghe + riduttore + 2 generatori +
+  3 tronchi di torre: la torre di una turbina grande sta nella sua ricetta, i blocchi Turbine Tower costano poco
+* **Machine Transformer** = 3 isolatori + 2 matasse + nucleo + 3 piastre; **Substation Transformer** = 3 isolatori
+  + un blocco di rame + 4 blocchi di ferro + sezionatore
+* **Plant Controller** = armadio + 2 schede di controllo + sezionatore + piastre, profilati e una sbarra
 * **Meteorological Mast** = schermo + scheda + 3 teste di sensore + 2 profilati
 
-Le bobine di conduttore e i cavi DC si fanno a mazzette: 8 bundle, 6 MT, 4 AT, 6 cavi solari, 4 dorsali
-per ricetta.
+Le bobine di conduttore e i cavi DC si fanno a mazzette: 8 bundle, 6 MT, 4 AT (sei lingotti di rame: una bobina
+AT è 1,3 tonnellate di conduttore), 6 cavi solari, 4 dorsali per ricetta.
+
+Il ricettario si riempie da solo: ogni ricetta si sblocca appena hai in inventario uno dei suoi ingredienti, e
+funziona anche con la regola `doLimitedCrafting`.
 
 **Attenzione all'attrezzo:** ogni macchina va rotta col piccone. Le macchine di acciaio pesante (pali,
 cabine, kiosk, torri, turbine, tralicci, trasformatori, sezionatori) vogliono almeno il **piccone di
