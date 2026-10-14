@@ -44,8 +44,8 @@ import net.minecraftforge.eventbus.api.Event;
  * <li>each id belongs to a fitting of the machine at that position ({@code failed_insulator});</li>
  * <li>the machine type the client named is the machine's real one;</li>
  * <li>both anchors can be worked out ({@code anchor_unavailable});</li>
- * <li>the pair is not already joined, in either order ({@code already_connected}), and neither fitting nor the level
- *     is full;</li>
+ * <li>the pair is not already joined, in either order ({@code already_connected}), the level is not full
+ *     ({@code level_full}) and neither fitting is ({@code too_many});</li>
  * <li>both fittings take the reel's voltage class ({@code wrong_class});</li>
  * <li>the anchors are no further apart than the conductor spans ({@code too_far}), and are within the player's
  *     reach;</li>
@@ -129,9 +129,14 @@ public final class SpanPlanner {
 			return;
 		}
 
+		if (WireLedger.size(level) >= WireLedger.MAX_PER_LEVEL) {
+			say(player, Component.translatableWithFallback("message.renewables.wire.level_full",
+					"This dimension already holds %s spans, the most it may.", WireLedger.MAX_PER_LEVEL));
+			return;
+		}
+
 		if (WireLedger.countAt(level, request.startId()) >= WireLedger.MAX_PER_FITTING
-				|| WireLedger.countAt(level, request.endId()) >= WireLedger.MAX_PER_FITTING
-				|| WireLedger.size(level) >= WireLedger.MAX_PER_LEVEL) {
+				|| WireLedger.countAt(level, request.endId()) >= WireLedger.MAX_PER_FITTING) {
 			say(player, Component.translatableWithFallback("message.renewables.wire.too_many",
 					"No more spans can be strung there: a fitting carries at most %s.", WireLedger.MAX_PER_FITTING));
 			return;
