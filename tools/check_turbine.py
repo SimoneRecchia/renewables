@@ -285,6 +285,7 @@ def main():
 def clearances(objects, n, rotor_scale, nacelle_scale, hub, floor):
     """Lowest blade point, nearest approach to the tower, and the farthest sideways reach, over a full turn."""
     blade_faces = [p for f in objects['rotate_1'] for p in f.points][::3]
+    tower = turbine.tower_scale(n, nacelle_scale)
     lowest, nearest, overhang = 1e9, 1e9, 0.0
     for angle in range(0, 120, 6):
         turned = turbine.group_matrix('rotate_1', n, rotor_scale, nacelle_scale, hub, floor, rotor=float(angle))
@@ -293,7 +294,7 @@ def clearances(objects, n, rotor_scale, nacelle_scale, hub, floor):
             lowest = min(lowest, y)
             overhang = max(overhang, math.hypot(x, z))
             if y < n:
-                shaft_here = nacelle_scale * turbine.shaft_radius(y * turbine.H_POLE / n)
+                shaft_here = tower * turbine.shaft_radius(y * turbine.H_POLE / n)
                 nearest = min(nearest, math.hypot(x, z) - shaft_here)
     return lowest, nearest, overhang
 

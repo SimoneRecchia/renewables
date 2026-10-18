@@ -21,28 +21,23 @@ class TurbineGeometryTest {
 	@Test
 	void nacelleOfEveryModelIsTheTabulatedBox() {
 		List<double[]> sw = TurbineGeometry.nacelleBoxes(TurbineCatalog.SW_10);
-		assertPixels(sw.get(0), 6.89, 0.00, 4.45, 9.12, 2.40, 10.64, "sw_10 hull");
-		assertPixels(sw.get(1), 7.22, 2.32, 4.70, 8.78, 3.14, 6.58, "sw_10 cooler");
+		assertPixels(sw.get(0), 6.42, 0.00, 2.95, 9.59, 3.41, 11.75, "sw_10 hull");
+		assertPixels(sw.get(1), 6.89, 3.30, 3.30, 9.11, 4.47, 5.99, "sw_10 cooler");
 
 		List<double[]> c52 = TurbineGeometry.nacelleBoxes(TurbineCatalog.C52_085);
-		assertPixels(c52.get(0), 6.22, 0.00, 2.32, 9.79, 3.84, 12.22, "c52 hull");
-		assertPixels(c52.get(1), 6.75, 3.71, 2.71, 9.25, 5.03, 5.73, "c52 cooler");
+		assertPixels(c52.get(0), 4.44, 0.00, 0.00, 11.58, 7.68, 16.00, "c52 hull");
+		assertPixels(c52.get(1), 5.49, 7.42, 0.00, 10.51, 10.06, 3.47, "c52 cooler");
 
 		List<double[]> c80 = TurbineGeometry.nacelleBoxes(TurbineCatalog.C80_20);
-		assertPixels(c80.get(0), 5.26, 0.00, 0.00, 10.76, 5.91, 14.50, "c80 hull");
-		assertPixels(c80.get(1), 6.07, 5.71, 0.00, 9.93, 7.74, 4.51, "c80 cooler");
+		assertPixels(c80.get(0), 2.53, 0.00, 0.00, 13.51, 11.82, 16.00, "c80 hull");
+		assertPixels(c80.get(1), 4.14, 11.42, 0.00, 11.86, 15.48, 1.03, "c80 cooler");
 
 		List<double[]> c90 = TurbineGeometry.nacelleBoxes(TurbineCatalog.C90_30);
-		assertPixels(c90.get(0), 4.92, 0.00, 0.00, 11.10, 6.65, 15.31, "c90 hull");
-		assertPixels(c90.get(1), 5.83, 6.42, 0.00, 10.17, 8.71, 4.08, "c90 cooler");
+		assertPixels(c90.get(0), 1.84, 0.00, 0.00, 14.20, 13.29, 16.00, "c90 hull");
 
-		List<double[]> c112 = TurbineGeometry.nacelleBoxes(TurbineCatalog.C112_30);
-		assertPixels(c112.get(0), 4.17, 0.00, 0.00, 11.86, 8.27, 16.00, "c112 hull");
-		assertPixels(c112.get(1), 5.30, 8.00, 0.00, 10.70, 10.83, 3.12, "c112 cooler");
-
+		// the two largest heads fill their block: the hull is the whole cell and the cooler is above it
 		List<double[]> c130 = TurbineGeometry.nacelleBoxes(TurbineCatalog.C130_40);
-		assertPixels(c130.get(0), 3.55, 0.00, 0.00, 12.48, 9.60, 16.00, "c130 hull");
-		assertPixels(c130.get(1), 4.86, 9.28, 0.00, 11.14, 12.58, 2.34, "c130 cooler");
+		assertPixels(c130.get(0), 0.00, 0.00, 0.00, 16.00, 16.00, 16.00, "c130 hull");
 	}
 
 	@Test
@@ -62,9 +57,9 @@ class TurbineGeometryTest {
 		assertEquals(0.311, TurbineGeometry.towerRadius(2, 13, 1.0), 0.0006);
 		assertEquals(0.196, TurbineGeometry.towerRadius(12, 13, 1.0), 0.0005);
 		// SW-10 on two: a tube 2.4 px across at the foot block
-		double small = TurbineCatalog.SW_10.nacelleRenderScale();
-		assertEquals(0.076, TurbineGeometry.towerRadius(0, 2, small), 0.0005);
-		assertEquals(0.057, TurbineGeometry.towerRadius(1, 2, small), 0.0005);
+		double small = TurbineGeometry.towerScale(2, TurbineCatalog.SW_10);
+		assertEquals(0.0889, TurbineGeometry.towerRadius(0, 2, small), 0.0005);
+		assertEquals(0.0669, TurbineGeometry.towerRadius(1, 2, small), 0.0005);
 	}
 
 	@Test
@@ -94,12 +89,42 @@ class TurbineGeometryTest {
 	}
 
 	@Test
-	void bareTowerIsAQuarterAtTwoBlocksAndFullFromThirteen() {
-		assertEquals(0.25, TurbineGeometry.bareTowerScale(2), 1e-9);
+	void aBareTowerWidensWithItsHeight() {
 		assertEquals(0.25, TurbineGeometry.bareTowerScale(1), 1e-9);
-		assertEquals(1.0, TurbineGeometry.bareTowerScale(13), 1e-9);
-		assertEquals(1.0, TurbineGeometry.bareTowerScale(20), 1e-9);
-		assertEquals(0.25 + 3.0 / 11.0 * 0.75, TurbineGeometry.bareTowerScale(5), 1e-9);
+		assertEquals(0.294, TurbineGeometry.bareTowerScale(2), 1e-9);
+		assertEquals(0.735, TurbineGeometry.bareTowerScale(5), 1e-9);
+		assertEquals(1.911, TurbineGeometry.bareTowerScale(13), 1e-9);
+		assertEquals(2.0, TurbineGeometry.bareTowerScale(20), 1e-9);
+	}
+
+	/** Under a machine the tower grows with its pile up to the nacelle's scale: a tall C130 is wider than a block at the foot. */
+	@Test
+	void aTowerUnderAMachineStopsAtItsNacelle() {
+		double tall = TurbineGeometry.towerScale(13, TurbineCatalog.C130_40);
+		assertEquals(1.911, tall, 1e-9);
+		assertTrue(2.0 * TurbineGeometry.towerRadius(0, 13, tall) > 1.0);
+
+		assertEquals(TurbineCatalog.C80_20.nacelleRenderScale(), TurbineGeometry.towerScale(10, TurbineCatalog.C80_20), 1e-9);
+		assertEquals(TurbineCatalog.SW_10.nacelleRenderScale(), TurbineGeometry.towerScale(4, TurbineCatalog.SW_10), 1e-9);
+		// the head of the shaft always fits the nacelle's flat floor, 0.19 either side of the axis as authored
+		for (TurbineSpec spec : TurbineCatalog.all()) {
+			for (int n = spec.minTowerSegments(); n <= spec.maxTowerSegments(); n++) {
+				assertTrue(TurbineGeometry.towerScale(n, spec) <= spec.nacelleRenderScale() + 1e-9, spec.displayName() + " on " + n);
+			}
+		}
+	}
+
+	/** The insulator stays where it was authored until the plinth would reach it, then keeps its plate clear of it. */
+	@Test
+	void theInsulatorMovesOutOfAWidePlinth() {
+		assertEquals(0.0, TurbineGeometry.insulatorOffset(0.5), 0.0);
+		assertEquals(0.0, TurbineGeometry.insulatorOffset(0.95), 0.0);
+
+		double scale = TurbineGeometry.towerScale(13, TurbineCatalog.C130_40);
+		double[] box = TurbineGeometry.insulatorBox(TurbineGeometry.insulatorOffset(scale));
+		double centre = Math.hypot((box[0] + box[3]) / 2.0 - 0.5, (box[2] + box[5]) / 2.0 - 0.5);
+		assertEquals(0.42 * scale + 0.10 + 0.02, centre, 1e-9);
+		assertEquals(TurbineGeometry.INSULATOR_BOX[4], box[4], 0.0);
 	}
 
 	@Test
@@ -130,21 +155,21 @@ class TurbineGeometryTest {
 
 	// ---- the rotor ----
 
-	/** The hub is pivot H of docs/turbine-model.md: 0.30 over the nacelle floor and 1.04 ahead of the axis, at the nacelle's scale. */
+	/** The hub is pivot H of docs/turbine-model.md: 0.30 over the nacelle floor and 1.04 ahead of the axis, at the nacelle's scale (2 on the C130). */
 	@Test
 	void theHubIsAheadOfTheTowerAtTheNacellesScale() {
 		TurbineSpec c130 = TurbineCatalog.C130_40;
 		double[] south = TurbineGeometry.hubOffset(c130, 0.0);
 		assertEquals(0.0, south[0], 1e-9);
-		assertEquals(0.300, south[1], 1e-9);
-		assertEquals(1.040, south[2], 1e-9);
+		assertEquals(0.600, south[1], 1e-9);
+		assertEquals(2.080, south[2], 1e-9);
 		// turned 90 the front of the model points to +x, the way MachineShell turns a cell
 		double[] east = TurbineGeometry.hubOffset(c130, 90.0);
-		assertEquals(1.040, east[0], 1e-9);
+		assertEquals(2.080, east[0], 1e-9);
 		assertEquals(0.0, east[2], 1e-9);
 
 		TurbineSpec sw10 = TurbineCatalog.SW_10;
-		assertEquals(0.26, TurbineGeometry.hubOffset(sw10, 0.0)[2], 1e-9);
+		assertEquals(1.040 * sw10.nacelleRenderScale(), TurbineGeometry.hubOffset(sw10, 0.0)[2], 1e-9);
 		assertEquals(1.155, TurbineGeometry.rotorRadius(sw10), 0.001);
 		assertEquals(6.5, TurbineGeometry.rotorRadius(c130), 1e-9);
 	}
@@ -229,17 +254,17 @@ class TurbineGeometryTest {
 	}
 
 	/**
-	 * The review's case: a C130 placed facing south and yawed a quarter turn draws its hull across x 0..16 px and z
-	 * 3.55..12.48 px, and collided the other way round.  The collision is now where the hull is drawn.
+	 * The review's case: a C52 placed facing south and yawed a quarter turn draws its hull across x 0..16 px and z
+	 * 4.42..11.56 px, and collided the other way round.  The collision is now where the hull is drawn.
 	 */
 	@Test
 	void aYawedNacelleCollidesWhereItIsDrawn() {
-		List<double[]> hull = TurbineGeometry.nacelleBoxes(TurbineCatalog.C130_40, 90.0).stream().filter(b -> b[1] == 0.0).toList();
+		List<double[]> hull = TurbineGeometry.nacelleBoxes(TurbineCatalog.C52_085, 90.0).stream().filter(b -> b[1] == 0.0).toList();
 		double[] got = bounds(hull);
 		assertEquals(0.0, got[0] * 16.0, 0.01);
 		assertEquals(16.0, got[3] * 16.0, 0.01);
-		assertEquals(3.55, got[2] * 16.0, 0.05);
-		assertEquals(12.48, got[5] * 16.0, 0.05);
+		assertEquals(4.42, got[2] * 16.0, 0.05);
+		assertEquals(11.56, got[5] * 16.0, 0.05);
 	}
 
 	/** Off the axes it is a staircase that holds every point of the turned nacelle in the cell, and adds little air. */

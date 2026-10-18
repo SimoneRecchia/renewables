@@ -12,6 +12,7 @@ import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.model.ExtraPose;
 import io.github.simonerecchia.renewables.model.PartBox;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
+import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
@@ -39,9 +40,9 @@ import org.joml.Matrix4f;
  * prefix:
  * <ul>
  * <li>{@code pole_base*}: the door, flange and nuts at the foot, scaled uniformly and never stretched;</li>
- * <li>{@code pole*}: the tower, stretched to the height of the tower and as wide as the turbine's scale;</li>
- * <li>{@code insulator*}: the wire fitting at the foot, as authored.  Neither of these two follows the wind, so
- *     the fitting stays where the picker and the wire anchor are;</li>
+ * <li>{@code pole*}: the tower, stretched to the height of the tower and as wide as {@link TurbineGeometry#towerScale};</li>
+ * <li>{@code insulator*}: the wire fitting at the foot, never scaled, moved clear of a wide plinth.  Neither of these
+ *     two follows the wind, so the fitting stays where the picker and the wire anchor are;</li>
  * <li>{@code rotate_1*}: the blades, about the hub, at the rotor's scale;</li>
  * <li>{@code rotate_2*}: the hub's cone, about the hub, at the nacelle's scale;</li>
  * <li>anything else is the nacelle, brought down to sit on the top of the tower.  These three turn about the axis of
@@ -77,17 +78,19 @@ public class WindTurbineRenderer extends MachineRenderer {
 	 * What the turbine's groups are posed with, from its specification and its tower: the two scales, the height of the
 	 * tower, and where the model's hub is and where the drawn one is.
 	 */
-	record Layout(float nacelleScale, float rotorScale, int segments, float authoredHeight, float nacelleBottom, Vec3 hubCentre,
-			Vec3 hub) {
+	record Layout(float nacelleScale, float rotorScale, float towerScale, float insulatorOffset, int segments, float authoredHeight,
+			float nacelleBottom, Vec3 hubCentre, Vec3 hub) {
 		static Layout of(MeshModel model, WindTurbineBlockEntity turbine) {
 			TurbineSpec spec = turbine.spec();
 			int segments = Math.max(0, turbine.towerHeight());
 			float nacelleScale = (float) spec.nacelleRenderScale();
+			double towerScale = TurbineGeometry.towerScale(segments, spec);
 			Vec3 hubCentre = centerOf(model, "rotate_2", HUB_FALLBACK);
 			float nacelleBottom = WindTurbineRenderer.nacelleBottom(model, (float) hubCentre.y);
 			// the hub rides on the nacelle: the same height above its underside, scaled with it
 			Vec3 hub = new Vec3(hubCentre.x * nacelleScale, segments + nacelleScale * (hubCentre.y - nacelleBottom), hubCentre.z * nacelleScale);
-			return new Layout(nacelleScale, (float) spec.renderScale(), segments, authoredTowerHeight(model), nacelleBottom, hubCentre, hub);
+			return new Layout(nacelleScale, (float) spec.renderScale(), (float) towerScale, (float) TurbineGeometry.insulatorOffset(towerScale),
+					segments, authoredTowerHeight(model), nacelleBottom, hubCentre, hub);
 		}
 	}
 
@@ -129,7 +132,7 @@ public class WindTurbineRenderer extends MachineRenderer {
 			// the fitting is what the picker and the wire anchor stand on
 			if (layout.segments() <= 0) return false;
 
-			float s = layout.nacelleScale();
+			float s = layout.towerScale();
 			// the base (door, flange, nuts) is a thing of fixed size: stretching it with the tube would squash the door
 			if (groupName.startsWith("pole_base")) {
 				pose.scale(s);
@@ -139,8 +142,11 @@ public class WindTurbineRenderer extends MachineRenderer {
 			return true;
 		}
 
-		// stays at the foot, as it was authored
-		if (groupName.startsWith("insulator")) return true;
+		// stays at the foot, never scaled; moved out along its diagonal as far as a wide foot's plinth needs
+		if (groupName.startsWith("insulator")) {
+			pose.translate(layout.insulatorOffset(), 0.0f, layout.insulatorOffset());
+			return true;
+		}
 
 		// everything that is up at the machine turns about the axis of the tower to face into the wind
 		if (relativeYaw != 0.0f) pose.rotate(Axis.YP.rotationDegrees(relativeYaw));

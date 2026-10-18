@@ -1056,6 +1056,37 @@ def scene_turbine_small():
     return triangles, (-1.8, 2.6, 4.8), (0.5, 2.3, 0.6)
 
 
+def figure(at, texture='renewables:block/pole_concrete', size=(0.6, 1.8, 0.6)):
+    """A box a player's size standing at ``at``: what a scene is judged against when the question is scale."""
+    tile = Texture.get(texture_path(texture))
+    x0, y0, z0 = at[0] + 0.5 - size[0] / 2, at[1], at[2] + 0.5 - size[2] / 2
+    x1, y1, z1 = x0 + size[0], y0 + size[1], z0 + size[2]
+    faces = (((x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1), (0.0, 1.0, 0.0)),
+             ((x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1), (0.0, 0.0, 1.0)),
+             ((x1, y0, z0), (x0, y0, z0), (x0, y1, z0), (x1, y1, z0), (0.0, 0.0, -1.0)),
+             ((x1, y0, z1), (x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (1.0, 0.0, 0.0)),
+             ((x0, y0, z0), (x0, y0, z1), (x0, y1, z1), (x0, y1, z0), (-1.0, 0.0, 0.0)))
+    out = []
+    for a, b, c, d, normal in faces:
+        corners = ((a, (0.0, 1.0)), (b, (1.0, 1.0)), (c, (1.0, 0.0)), (d, (0.0, 0.0)))
+        for i in (1, 2):
+            out.append(('figure', tile, (corners[0], corners[i], corners[i + 1]), normal, True, False))
+    return out
+
+
+def scene_turbine_lineup():
+    """The six machines on their tallest towers, side by side, with a player beside each foot: how big is big."""
+    import gen_turbine_models as turbine
+
+    triangles = ground(-8, -10, 74, 12, SAND)
+    x = 0
+    for ident, _, _, _, high in turbine.CATALOGUE:
+        triangles += turbine_triangles(ident, high, rotor=20.0, at=(x, 0, 0))
+        triangles += figure((x + 1.6, 0, 1.6))
+        x += 13
+    return triangles, (32.5, 9.0, 88.0), (32.5, 7.5, 0.0)
+
+
 def scene_turbine_hitbox():
     """The tower's collision, block by block, over the drawn shaft: F3+B for a tower of thirteen."""
     import gen_turbine_models as turbine
@@ -1063,8 +1094,9 @@ def scene_turbine_hitbox():
     triangles = ground(-4, -4, 6, 6, SAND)
     triangles += turbine_triangles()
     edges = []
+    scale = turbine.tower_scale(13, turbine.scales(130.0, 1.0)[1])
     for index in range(13):
-        radius = turbine.tower_radius(index, 13, 1.0)
+        radius = turbine.tower_radius(index, 13, scale)
         boxes = [((-w, index, -h), (w, index + 1, h)) for w, h in turbine.tower_boxes(radius)]
         boxes += [((-h, index, -w), (h, index + 1, w)) for w, h in turbine.tower_boxes(radius)]
         edges += outline([((lo[0] + 0.5, lo[1], lo[2] + 0.5), (hi[0] + 0.5, hi[1], hi[2] + 0.5))
@@ -1119,6 +1151,7 @@ SCENES = {
     'turbine_foot': scene_turbine_foot,
     'turbine_small': scene_turbine_small,
     'turbine_hitbox': scene_turbine_hitbox,
+    'turbine_lineup': scene_turbine_lineup,
     'ground_conductor': scene_ground_conductor,
     'tx_machine': scene_tx_machine,
     'tx_substation': scene_tx_substation,
