@@ -1,6 +1,7 @@
 plugins {
     id 'eclipse'
     id 'idea'
+    id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
 
@@ -123,6 +124,25 @@ tasks.named('jar', Jar).configure {
     }
 
     finalizedBy 'reobfJar'
+}
+
+// publish-package.yml uploads this to GitHub Packages; the repository comes from
+// .github/publish-github-packages.init.gradle, so the build itself never names one
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            // stated, or the artifact id is the name of the checkout directory
+            groupId = mod_group_id
+            artifactId = mod_id
+            version = mod_version
+            artifact jar
+        }
+    }
+}
+
+// jar is only finalizedBy reobfJar, which leaves an upload free to take the jar before it is reobfuscated
+tasks.withType(PublishToMavenRepository).configureEach {
+    dependsOn 'reobfJar'
 }
 
 tasks.named('test', Test).configure {

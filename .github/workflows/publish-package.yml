@@ -1,0 +1,110 @@
+name: publish package
+on:
+  # a release published by hand from the github ui
+  release:
+    types: [published]
+  # release.yml calls this one, because a release created with the repository's GITHUB_TOKEN never fires the
+  # release event above
+  workflow_call:
+    inputs:
+      tag:
+        description: tag of the release to build and publish
+        required: true
+        type: string
+  # re-running a failed publish without cutting a new release
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: tag of an existing release to build and publish
+        required: true
+        type: string
+
+permissions:
+  # contents: write is for attaching the jar to the release
+  contents: write
+  packages: write
+
+# github packages rejects a second upload of the same coordinates, so two runs for one tag leave one red for nothing
+concurrency:
+  group: publish-package-${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: resolve release version
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: setup jdk
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'microsoft'
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      # the release is the source of truth for the version: it goes to gradle as -Pmod_version, into the jar's
+      # name, the maven coordinates and mods.toml. gradle.properties only says what a local build produces
+      - name: report the version being published
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if [ -z "$VERSION" ]; then
+            echo "::error::could not work out a version from the release tag"
+            exit 1
+          fi
+          case "$VERSION" in
+            */*|*' '*)
+              echo "::error::version '$VERSION' cannot be used as a maven version or a file name"
+              exit 1 ;;
+          esac
+          declared=$(sed -n 's/^mod_version=//p' gradle.properties)
+          if [ "$declared" != "$VERSION" ]; then
+            echo "::notice::publishing $VERSION from the release; gradle.properties says mod_version=$declared and is being overridden"
+          fi
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+      - name: build
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: ./gradlew build "-Pmod_version=$VERSION"
+      # the only place the jar is attached, so a release cut from the ui gets the same assets as one from
+      # release.yml. it runs before the package publish, so a rejected re-publish still leaves the download
+      - name: attach the jar to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          jars=(build/libs/*.jar)
+          if [ ${#jars[@]} -ne 1 ]; then
+            echo "::error::expected exactly one jar in build/libs, found ${#jars[@]}"
+            exit 1
+          fi
+          # a second copy under a name that never changes, so a download url only varies by tag:
+          # .../releases/download/<tag>/renewables.jar
+          mod_id=$(sed -n 's/^mod_id=//p' gradle.properties)
+          mkdir -p build/release-assets
+          cp "${jars[0]}" "build/release-assets/${mod_id}.jar"
+          gh release upload "$TAG" "${jars[0]}" "build/release-assets/${mod_id}.jar" --clobber
+      # the registry comes from the init script, so build.gradle never names where it is published; the script
+      # reads GITHUB_ACTOR and GITHUB_REPOSITORY from the runner
+      - name: publish to github packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: >
+          ./gradlew publishMavenJavaPublicationToGitHubPackagesRepository
+          "-Pmod_version=$VERSION"
+          --init-script .github/publish-github-packages.init.gradle
