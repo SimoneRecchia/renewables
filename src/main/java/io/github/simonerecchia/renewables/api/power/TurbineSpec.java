@@ -60,6 +60,11 @@ public record TurbineSpec(
 	public static final double MODEL_ROTOR_DIAMETER_BLOCKS = 13.0;
 	/** Height of the authored tower, in blocks. */
 	public static final double MODEL_TOWER_HEIGHT_BLOCKS = 13.0;
+	/**
+	 * How much bigger than the rotor's scale the head is drawn.  At a block to 10 m a true nacelle is a third of a
+	 * player tall; gen_turbine_models.NACELLE_EXAGGERATION is the same figure.
+	 */
+	public static final double NACELLE_EXAGGERATION = 2.0;
 	/** Smallest the nacelle is ever drawn, so the small-wind machine keeps a body worth texturing. */
 	private static final double SMALL_WIND_NACELLE_FLOOR = 0.25;
 
@@ -111,9 +116,9 @@ public record TurbineSpec(
 		return rotorDiameterBlocks() / MODEL_ROTOR_DIAMETER_BLOCKS;
 	}
 
-	/** Scale for the nacelle and the tower, which is not always the rotor's. */
+	/** Scale for the nacelle and the hub: the rotor's, exaggerated.  The tower's is {@code TurbineGeometry.towerScale}. */
 	public double nacelleRenderScale() {
-		double scale = renderScale();
+		double scale = renderScale() * NACELLE_EXAGGERATION;
 		return nacelle == Nacelle.SMALL_WIND ? Math.max(scale, SMALL_WIND_NACELLE_FLOOR) : scale;
 	}
 

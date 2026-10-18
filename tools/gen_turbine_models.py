@@ -116,7 +116,7 @@ INSULATOR_BASE_Y = 0.25                # the porcelain's bottom centre
 INSULATOR_D = 0.18
 POST_R = 0.026
 PLATE_R, PLATE_H = 0.10, 0.012
-DUCT_W, DUCT_H = 0.05, 0.016           # the cable trough from the tower's foot to the post
+DUCT_W, DUCT_H = 0.05, 0.010           # the cable trough from the tower's foot to the post
 
 # The catalogue, for the scale table and the clearance proof: id, rotor diameter m, rotor exaggeration,
 # tower segments min and max.  wind.md section 2.
@@ -130,10 +130,35 @@ CATALOGUE = (
 )
 
 
+# At a block to 10 m the C130's nacelle is 0.6 blocks tall, a third of a player, and its tower is thinner than one:
+# the rotor stays true to the metre, the head and the tower are drawn bigger.  TurbineSpec and TurbineGeometry agree.
+NACELLE_EXAGGERATION = 2.0
+SMALL_NACELLE_FLOOR = 0.25
+# A tower is as wide as it is tall: its scale grows by this much a block of pile, up to its nacelle's scale (its head
+# then fits the nacelle's floor as authored), so a tall one is more than a block across at the foot.
+TOWER_SCALE_PER_BLOCK = 0.147
+BARE_TOWER_SCALE = (0.25, 2.0)
+INSULATOR_CLEARANCE = 0.02             # between the post's plate and the edge of the widest plinth
+
+
 def scales(diameter_m, exaggeration, small=False):
     """(rotor scale, nacelle scale): the contract's s_r and s_n, with the authored rotor of ROTOR_D blocks."""
     rotor = diameter_m / 10.0 * exaggeration / ROTOR_D
-    return rotor, (max(rotor, 0.25) if small else rotor)
+    nacelle = rotor * NACELLE_EXAGGERATION
+    return rotor, (max(nacelle, SMALL_NACELLE_FLOOR) if small else nacelle)
+
+
+def tower_scale(n, nacelle_scale=None):
+    """The scale the shaft and its foot are drawn at on a pile of n blocks: under a machine, or bare (None)."""
+    low, high = BARE_TOWER_SCALE
+    if nacelle_scale is not None:
+        high = nacelle_scale
+    return max(min(low, high), min(high, TOWER_SCALE_PER_BLOCK * n))
+
+
+def insulator_shift(scale):
+    """How far the insulator stands out along its diagonal, so a wide foot's plinth never swallows its plate."""
+    return max(0.0, PLINTH_R * scale + PLATE_R + INSULATOR_CLEARANCE - math.hypot(*INSULATOR_AT))
 
 
 def shaft_radius(y):
@@ -744,8 +769,8 @@ def insulator(mesh):
     # The cable's way from the tower to the post: a precast trough at grade from under the post's plate to the
     # tower's axis.  Never scaled, like the insulator, so whatever size the renderer draws the foot at, the trough
     # runs into its plinth: on the C130 it is all but buried in it, on the SW-10 it is what ties a post 0.53 from
-    # the axis to a tower 0.085 across.  DUCT_H keeps its top off every machine's plinth and flange top (0.045 and
-    # 0.075 times the nacelle scale), so no size of the six puts two faces in one plane.
+    # the axis to a tower 0.085 across.  DUCT_H keeps its top under every machine's plinth top (0.045 times the
+    # tower scale, 0.013 at the least), so no size of the six puts two faces in one plane.
     duct = mesh.faces('insulator_duct', 'concrete')
     reach = math.hypot(x, z)
     along = (x / reach, 0.0, z / reach)
@@ -834,11 +859,14 @@ def hub_and_floor(path):
 def group_matrix(group, n, rotor_scale, nacelle_scale, hub, floor, rotor=0.0, yaw=0.0):
     """The point mapper the renderer applies to one group (models.md 8.3, with the clean-room fixes).
 
-    ``n`` tower segments.  pole is stretched to n blocks and scaled radially by the nacelle scale; pole_base
-    scaled uniformly; insulator left alone; nacelle, blades and hub carried to the top of the tower and,
-    unlike the old renderer, yawed about the tower axis - the foot never is.  ``rotor`` is degrees clockwise
-    seen from the front.
+    ``n`` tower segments.  pole is stretched to n blocks and scaled radially by tower_scale; pole_base scaled
+    uniformly by it; insulator moved out along its diagonal by insulator_shift, never scaled; nacelle, blades
+    and hub carried to the top of the tower and yawed about the tower axis - the foot never is.  ``rotor`` is
+    degrees clockwise seen from the front.
     """
+    tower = tower_scale(n, nacelle_scale)
+    shift = insulator_shift(tower) / math.sqrt(2.0)
+
     def turn(point, degrees, about=(0.0, 0.0, 0.0), axis='y'):
         a = math.radians(degrees)
         x, y, z = sub(point, about)
@@ -852,11 +880,11 @@ def group_matrix(group, n, rotor_scale, nacelle_scale, hub, floor, rotor=0.0, ya
     hub_at = (0.0, top, nacelle_scale * hub[2])
 
     if group.startswith('pole_base'):
-        return lambda p: mul(p, nacelle_scale)
+        return lambda p: mul(p, tower)
     if group.startswith('pole'):
-        return lambda p: (p[0] * nacelle_scale, p[1] * n / H_POLE, p[2] * nacelle_scale)
+        return lambda p: (p[0] * tower, p[1] * n / H_POLE, p[2] * tower)
     if group.startswith('insulator'):
-        return lambda p: p
+        return lambda p: (p[0] + shift, p[1], p[2] + shift)
     if group.startswith('rotate_1') or group.startswith('rotate_2'):
         scale = rotor_scale if group.startswith('rotate_1') else nacelle_scale
         return lambda p: turn(add(turn(add(mul(sub(p, hub), scale), hub_at), -rotor, hub_at, 'z'), (0, 0, 0)),

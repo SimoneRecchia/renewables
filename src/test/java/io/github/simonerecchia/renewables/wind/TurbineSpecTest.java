@@ -43,9 +43,10 @@ class TurbineSpecTest {
 		assertEquals(13.0, TurbineSpec.MODEL_ROTOR_DIAMETER_BLOCKS, 0.0);
 		assertEquals(13.0, TurbineSpec.MODEL_TOWER_HEIGHT_BLOCKS, 0.0);
 
-		// the small machine's nacelle is held at a quarter so it keeps a body worth drawing
-		assertEquals(0.25, TurbineCatalog.SW_10.nacelleRenderScale(), 1e-9);
-		assertEquals(TurbineCatalog.C90_30.renderScale(), TurbineCatalog.C90_30.nacelleRenderScale(), 1e-9);
+		// the head is drawn twice the rotor's scale, and the small machine's never under a quarter
+		assertEquals(0.3554, TurbineCatalog.SW_10.nacelleRenderScale(), 0.0001);
+		assertEquals(2.0 * TurbineCatalog.C90_30.renderScale(), TurbineCatalog.C90_30.nacelleRenderScale(), 1e-9);
+		assertEquals(2.0, TurbineCatalog.C130_40.nacelleRenderScale(), 1e-9);
 	}
 
 	@Test
