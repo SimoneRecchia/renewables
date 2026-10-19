@@ -83,10 +83,11 @@ public final class InsulatorIds {
 			InsulatorIdData data = storage.computeIfAbsent(InsulatorIdData::load, InsulatorIdData::new, InsulatorIdData.NAME);
 			server = overworld.getServer();
 			// a reservation is on disk before the first id under it is out (see IdPool), so it is saved there and then
+			// nothing a world hands out reaches the client's range, so an id there in a block's data is not one
 			world = new IdPool(data.highest(), true, reserved -> {
 				data.setHighest(reserved);
 				storage.save();
-			});
+			}, CLIENT_BASE);
 		}
 	}
 

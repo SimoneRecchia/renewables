@@ -28,6 +28,8 @@ final class IdPool {
 	private final boolean detectDuplicates;
 	@Nullable
 	private final IntConsumer persist;
+	/** Ids at or above this are not ones this pool hands out: read from a block's data, they are somebody's NBT. */
+	private final int ceiling;
 	private int highest;
 	/** No id above this has been handed out or written down anywhere this pool knows of. */
 	private int reserved;
@@ -42,7 +44,17 @@ final class IdPool {
 	 *                         when it returns
 	 */
 	IdPool(int persisted, boolean detectDuplicates, @Nullable IntConsumer persist) {
-		this.highest = Math.max(0, persisted);
+		this(persisted, detectDuplicates, persist, Integer.MAX_VALUE);
+	}
+
+	/**
+	 * @param ceiling the first id that is never real: claimed, it is replaced; adopted, it is ignored.  A counter
+	 *                persisted at or above it was pushed there by such an id before this check, and starts again from
+	 *                nought - the saved spans are adopted when the world opens and bring it back over every id in use
+	 */
+	IdPool(int persisted, boolean detectDuplicates, @Nullable IntConsumer persist, int ceiling) {
+		this.ceiling = ceiling;
+		this.highest = persisted >= ceiling ? 0 : Math.max(0, persisted);
 		this.reserved = highest;
 		this.detectDuplicates = detectDuplicates;
 		this.persist = persist;
@@ -72,6 +84,8 @@ final class IdPool {
 	synchronized void claim(int[] ids, IntPredicate foreign) {
 		for (int i = 0; i < ids.length; i++) {
 			int id = ids[i];
+			// one id at the top of the range from a crafted item's NBT would wrap every id after it to negative
+			if (id >= ceiling) id = 0;
 
 			if (id > 0 && detectDuplicates && (heldElsewhere(id, ids) || repeatedBefore(ids, i) || foreign.test(id))) id = 0;
 
@@ -89,7 +103,7 @@ final class IdPool {
 
 	/** An id read back from disk is in use, whether or not its machine is loaded: nothing may hand it out again. */
 	synchronized void adopt(int id) {
-		if (id > 0) raise(id);
+		if (id > 0 && id < ceiling) raise(id);
 	}
 
 	/** The machine is gone: its ids no longer have a holder.  They are not reused. */

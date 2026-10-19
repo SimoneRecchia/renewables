@@ -46,6 +46,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -253,13 +254,14 @@ public abstract class MachineRenderer {
 
 		for (T machine : ClientBlockEntities.of(type)) {
 			if (machine.isRemoved() || machine.getLevel() != level) continue;
-			if (filter != null && !filter.test(machine)) continue;
 
 			BlockPos pos = machine.getBlockPos();
 			double dx = pos.getX() + 0.5 - camera.x;
 			double dy = pos.getY() + 0.5 - camera.y;
 			double dz = pos.getZ() + 0.5 - camera.z;
 			if (dx * dx + dy * dy + dz * dz > maxDistanceSq) continue;
+			// after the range: a filter may walk the world (a bare tower counts its column), and not for every machine loaded
+			if (filter != null && !filter.test(machine)) continue;
 
 			BlockState state = machine.getBlockState();
 			MeshModel model = ModelBindings.model(state.getBlock());
@@ -401,22 +403,35 @@ public abstract class MachineRenderer {
 		batches.computeIfAbsent(texture, key -> new ArrayList<>()).add(new Batch(buffer, drawn));
 	}
 
-	/** One render state per texture, however many groups share it; the lights are turned into each group's frame. */
+	/**
+	 * One render state per texture, however many groups share it; the lights are turned into each group's frame.
+	 *
+	 * The entity shader fogs by {@code IViewRotMat * Position}, which vanilla's vertices need because they are already in
+	 * the camera's frame.  These buffers are in the model's, with the whole transform in the model-view matrix, so the
+	 * rotation is identity while they draw: otherwise a machine is fogged at the wrong distance, and differently as the
+	 * player turns their head.
+	 */
 	private static void drawBatches(Map<ResourceLocation, List<Batch>> batches, RenderContext context) {
-		for (Map.Entry<ResourceLocation, List<Batch>> entry : batches.entrySet()) {
-			RenderType type = RenderType.entityCutoutNoCull(entry.getKey());
-			type.setupRenderState();
-			try {
-				ShaderInstance shader = RenderSystem.getShader();
-				if (shader == null) continue;
+		Matrix3f viewRotation = new Matrix3f(RenderSystem.getInverseViewRotationMatrix());
+		RenderSystem.setInverseViewRotationMatrix(new Matrix3f());
+		try {
+			for (Map.Entry<ResourceLocation, List<Batch>> entry : batches.entrySet()) {
+				RenderType type = RenderType.entityCutoutNoCull(entry.getKey());
+				type.setupRenderState();
+				try {
+					ShaderInstance shader = RenderSystem.getShader();
+					if (shader == null) continue;
 
-				for (Batch batch : entry.getValue()) {
-					context.lighting.applyTo(batch.pose());
-					batch.buffer().draw(batch.pose(), context.projection, shader);
+					for (Batch batch : entry.getValue()) {
+						context.lighting.applyTo(batch.pose());
+						batch.buffer().draw(batch.pose(), context.projection, shader);
+					}
+				} finally {
+					type.clearRenderState();
 				}
-			} finally {
-				type.clearRenderState();
 			}
+		} finally {
+			RenderSystem.setInverseViewRotationMatrix(viewRotation);
 		}
 	}
 

@@ -105,18 +105,22 @@ public class WindTurbineRenderer extends MachineRenderer {
 		float rotor = -turbine.rotorAngleDegrees(partialTick);
 
 		poseStack.pushPose();
-		// the model starts at the foot of the tower; if the block entity does not already say so, lower it
-		if (!(turbine instanceof ExtraPose)) poseStack.translate(0.0, -layout.segments(), 0.0);
+		try {
+			// the model starts at the foot of the tower; if the block entity does not already say so, lower it
+			if (!(turbine instanceof ExtraPose)) poseStack.translate(0.0, -layout.segments(), 0.0);
 
-		Matrix4f base = poseStack.last().pose();
-		Map<String, Matrix4f> poses = new HashMap<>();
-		for (String groupName : model.groups.keySet()) {
-			Matrix4f pose = new Matrix4f(base);
-			if (groupPose(groupName, layout, relativeYaw, rotor, true, pose)) poses.put(groupName, pose);
+			Matrix4f base = poseStack.last().pose();
+			Map<String, Matrix4f> poses = new HashMap<>();
+			for (String groupName : model.groups.keySet()) {
+				Matrix4f pose = new Matrix4f(base);
+				if (groupPose(groupName, layout, relativeYaw, rotor, true, pose)) poses.put(groupName, pose);
+			}
+
+			renderGrouped(context, poses);
+		} finally {
+			// drawAll catches a throw and pops only its own entry: a stack left deep here fails the whole frame
+			poseStack.popPose();
 		}
-
-		renderGrouped(context, poses);
-		poseStack.popPose();
 	}
 
 	/**
