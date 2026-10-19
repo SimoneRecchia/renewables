@@ -715,8 +715,8 @@ def tree_problems(own, core):
 # half of each one's states resolved to no model at all.
 #
 # The sprite is not always the block's own name, because a family shares one drawing: four inverters are one
-# cabinet and six arrays are four mountings.  None means the block has no item - the shell cell is placed by
-# its machine and never held.
+# cabinet, six arrays are four mountings and the five C turbines are the C130.  None means the block has no item -
+# the shell cell is placed by its machine and never held.
 MACHINES = {
     'utility_pole': ('stone_particle', 'utility_pole'),
     'electric_cabin': ('stone_particle', 'cab'),
@@ -726,10 +726,10 @@ MACHINES = {
     'plant_controller': ('metal_particle', 'plant_controller'),
     'machine_shell': ('metal_particle', None),
     'sw_10': ('stone_particle', 'sw_10'),
-    'c52_085': ('stone_particle', 'c52_085'),
-    'c80_20': ('stone_particle', 'c80_20'),
-    'c90_30': ('stone_particle', 'c90_30'),
-    'c112_30': ('stone_particle', 'c112_30'),
+    'c52_085': ('stone_particle', 'wind_turbine'),
+    'c80_20': ('stone_particle', 'wind_turbine'),
+    'c90_30': ('stone_particle', 'wind_turbine'),
+    'c112_30': ('stone_particle', 'wind_turbine'),
     'wind_turbine': ('stone_particle', 'wind_turbine'),
     'solar_panel': ('glass_particle', 'pv_flat'),
     'pv_flat_430': ('glass_particle', 'pv_flat'),

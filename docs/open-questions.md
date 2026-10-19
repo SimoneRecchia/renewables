@@ -84,7 +84,7 @@ trasformatori, generatore non simulato.
 | 5.4 | SW-10: l'isolatore è collegato alla torre con un cunicolo in calcestruzzo. Estetica ok, o il renderer avvicina l'isolatore? | cunicolo |
 | 5.5 | Luce delle macchine alte presa alla base: una lanterna ai piedi illumina il palo fino in cima. Va bene, o una luce per altezza? | alla base |
 | 5.6 | Vertex buffer condivisi per (modello, gruppo, luce) invece che per (posizione, gruppo)? Molto più veloce con molte macchine, ma cambia `models.md` §6.8. | per posizione |
-| 5.7 | ~~Sprite delle turbine a 32×32, mentre tutti gli altri item sono a 16×16. Voluto?~~ Risolta: tutti i settanta sprite sono 16×16, ridisegnati in stile vanilla da `tools/gen_item_sprites.py`, e le sei turbine sono un disegno a sei taglie | 16×16 |
+| 5.7 | ~~Sprite delle turbine a 32×32, mentre tutti gli altri item sono a 16×16. Voluto?~~ Risolta: tutti i settanta sprite sono 16×16, ridisegnati in stile vanilla da `tools/gen_item_sprites.py`; le cinque turbine C usano lo sprite della C130, la SW-10 il suo | 16×16 |
 
 ## 6. Gioco e interazione
 
