@@ -109,8 +109,15 @@ public final class DcNetwork {
 		return starts;
 	}
 
-	/** Everywhere one run reaches, filtered down to what is in memory. */
+	/**
+	 * Everywhere one run reaches, filtered down to what is in memory.  A run at the edge of what is reaches nothing:
+	 * working out its ways reads its neighbours, and reading one in an unloaded chunk loads it, every rescan.
+	 */
 	private static List<BlockPos> reached(Level level, DcCableBlock run, BlockState state, BlockPos pos) {
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			if (!level.isLoaded(pos.relative(direction))) return List.of();
+		}
+
 		List<BlockPos> targets = new ArrayList<>();
 		run.collectReached(state, level, pos, target -> {
 			if (level.isLoaded(target)) targets.add(target);
