@@ -243,4 +243,19 @@ class IdPoolTest {
 			for (int id : ids) assertTrue(seen.add(id));
 		}
 	}
+
+	/** An id from a crafted item's NBT at the top of the range would wrap every later id to negative; it is not taken. */
+	@Test
+	void anIdAtTheCeilingIsNotAnId() {
+		IdPool pool = new IdPool(0, true, null, 1000);
+		int[] crafted = {Integer.MAX_VALUE, 1000};
+		pool.claim(crafted);
+		assertArrayEquals(new int[] {1, 2}, crafted);
+
+		pool.adopt(Integer.MAX_VALUE);
+		assertEquals(2, pool.highest());
+
+		// a counter a crafted id pushed past the ceiling before this check starts again
+		assertEquals(0, new IdPool(Integer.MAX_VALUE, true, null, 1000).highest());
+	}
 }

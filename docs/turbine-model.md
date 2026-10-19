@@ -18,7 +18,7 @@ python3 tools/render_blocks.py turbine turbine_head turbine_foot ...   # e poi *
 
 C'è **un solo** `wind_turbine/wind_turbine.obj`, la C130-4.0 in scala 1:1 (un blocco = 10 m). Le altre cinque sono la
 stessa mesh scalata dal renderer con le scale del catalogo (par. 5). Motivi: il contratto di `wind.md` par. 15 è
-costruito su questo (due scale, `s_r` per il rotore e `s_n` per navicella, torre e mozzo, e un solo elenco di
+costruito su questo (le scale del par. 5: `s_r` per il rotore, `s_n` per navicella e mozzo, `s_t` per la torre, e un solo elenco di
 raccordi); sei OBJ da 1.4 MB sarebbero 8 MB di mesh che differiscono solo per un fattore; e le sei macchine sono
 davvero la stessa macchina a taglie diverse (stessa famiglia di pale, stesso mozzo). Il prezzo è che la SW-10 ha
 la stessa faccia delle altre (raffreddatore, plance, sensori in scala 0.25), che è quello che già dice `wind.md`
@@ -67,14 +67,14 @@ Il renderer chiama gruppo la coppia **oggetto + "_" + materiale** (`models.md` p
 
 | oggetto | gruppi (oggetto_materiale) → texture | trasformazione (dopo la posa 14.1 di `wind.md`) |
 |---|---|---|
-| `pole` | `pole_tower` → `turbine_tower`, `pole_flange` → `turbine_flange` | scala (s_n, n / **13.0**, s_n) dal piede. **Altezza authored = 13.0** (il riquadro del gruppo è y 0..13.0): era 12.43 |
-| `pole_base` | `pole_base_concrete` → `pole_concrete`, `_flange` → `turbine_flange`, `_door` → `turbine_door`, `_plate` → `turbine_plate` | **scala uniforme s_n dal piede**, mai stirata (par. 4.1) |
+| `pole` | `pole_tower` → `turbine_tower`, `pole_flange` → `turbine_flange` | scala (s_t, n / **13.0**, s_t) dal piede, con s_t la scala della torre (par. 5). **Altezza authored = 13.0** (il riquadro del gruppo è y 0..13.0): era 12.43 |
+| `pole_base` | `pole_base_concrete` → `pole_concrete`, `_flange` → `turbine_flange`, `_door` → `turbine_door`, `_plate` → `turbine_plate` | **scala uniforme s_t dal piede**, mai stirata (par. 4.1) |
 | `motor` | `motor_nacelle` → `turbine_nacelle`, `motor_flange`, `motor_vent` → `turbine_louvre`, `motor_plate` → `turbine_plate` | traslazione a y = n, scala uniforme s_n, traslazione di -b. **b = 13.0** (minimo y di tutti i gruppi `motor*`, ed è anche il minimo del solo `motor_nacelle`) |
 | `motor_shaft`, `motor_hatch`, `motor_cooler`, `motor_sensors`, `motor_beacon` | `_flange`, `_nacelle`, `_vent`, `_sensor` → `turbine_sensor`, `_beacon` → `turbine_beacon` | come la navicella (qualunque nome che non cominci per `pole`, `insulator`, `rotate_1`, `rotate_2`, `pivot_`). `motor_shaft` è un solido di rivoluzione attorno all'asse del rotore, quindi non serve ruotarlo |
 | `rotate_2` | `rotate_2_hub` → `turbine_hub` | traslazione all'hub, scala uniforme **s_n**, rotazione attorno a z, traslazione di -H |
 | `rotate_1` | `rotate_1_blade` → `turbine_blade`, `rotate_1_seal` → `turbine_seal` | traslazione all'hub, scala uniforme **s_r**, rotazione attorno a z, traslazione di -H |
-| `insulator` | `insulator_insulator_porcelain` → `porcelain_brown`, `insulator_insulator_steel` → `pv_steel` | **nessuna** matrice: resta com'è authored, al piede |
-| `insulator_duct` | `insulator_duct_concrete` → `pole_concrete` | **nessuna** matrice, come `insulator` (il prefisso basta): il cunicolo dal palo dell'isolatore all'asse della torre (par. 6) |
+| `insulator` | `insulator_insulator_porcelain` → `porcelain_brown`, `insulator_insulator_steel` → `pv_steel` | **mai scalato**: solo la traslazione (o, 0, o) lungo la sua diagonale, o = `TurbineGeometry.insulatorOffset(s_t)` (par. 6) |
+| `insulator_duct` | `insulator_duct_concrete` → `pole_concrete` | come `insulator` (il prefisso basta): il cunicolo dal palo dell'isolatore all'asse della torre (par. 6) |
 | `pivot_rotor` | `pivot_rotor_flange` (tre vertici coincidenti, non si disegna) | nessuna; segna H, per gli strumenti |
 
 **Pivot dei gruppi rotanti: H = (0.000, 13.300, 1.040)**, centro del riquadro di `rotate_2`; **asse = la retta parallela a
@@ -86,7 +86,7 @@ Il raggio delle pale è **esattamente 6.500** in pianta dal punto H (diametro au
 
 ### 4.1 Cosa il renderer deve fare e che il vecchio non faceva
 
-1. **`pole_base*` si scala uniformemente** (s_n, s_n, s_n), non come `pole`. Il prefisso `pole_base` va riconosciuto
+1. **`pole_base*` si scala uniformemente** (s_t, s_t, s_t), non come `pole`. Il prefisso `pole_base` va riconosciuto
    *prima* del prefisso `pole`. Se non lo si fa, `pole_base` segue la scala non uniforme di `pole`: porta, flangia e
    dadi si schiacciano di n/13 in altezza (a n = 9 sono il 69 %, a n = 2 il 15 %), e il modello resta comunque
    leggibile, ma la porta della SW-10 diventa una fessura.
@@ -100,26 +100,34 @@ Il raggio delle pale è **esattamente 6.500** in pianta dal punto H (diametro au
    `check_turbine.py` la usano, e il renderer Java può essere confrontato con essa.
 
 Torre nuda (blocco torre senza turbina): disegna solo i gruppi `pole*`, senza facing, altezza H, scala radiale
-`w = clamp(0.25 + (H - 2) / 11 · 0.75, 0.25, 1.0)`; `pole` come sopra con la nuova costante 13.0, `pole_base` a (w, w, w).
+`w = clamp(0.147 · H, 0.25, 2.0)` (`TurbineGeometry.bareTowerScale`); `pole` come sopra con la costante 13.0, `pole_base`
+a (w, w, w).
 
 ## 5. Scala per modello
 
-`s_r = D/10 · esagerazione / 13.0`; `s_n = s_r`, tranne la SW-10: `max(s_r, 0.25)`. Aggiornano la tabella di `wind.md` par. 2.
+Tre scale, tutte in `TurbineSpec` / `TurbineGeometry` e, uguali, in `gen_turbine_models.py`:
 
-| modello | s_r | s_n | raggio punta R (blocchi) | navicella L x l x h (blocchi) | raggio torre piede / cima | asse a y = | in avanti dall'asse torre |
-|---|---:|---:|---:|---|---|---|---:|
-| SW-10 | 0.1777 | 0.2500 | 1.155 | 0.387 x 0.140 x 0.150 | 0.085 / 0.048 | n + 0.075 | 0.260 |
-| C52-0.85 | 0.4000 | 0.4000 | 2.600 | 0.619 x 0.223 x 0.240 | 0.136 / 0.076 | n + 0.120 | 0.416 |
-| C80-2.0 | 0.6154 | 0.6154 | 4.000 | 0.953 x 0.343 x 0.369 | 0.209 / 0.117 | n + 0.185 | 0.640 |
-| C90-3.0 | 0.6923 | 0.6923 | 4.500 | 1.072 x 0.386 x 0.415 | 0.235 / 0.132 | n + 0.208 | 0.720 |
-| C112-3.0 | 0.8615 | 0.8615 | 5.600 | 1.334 x 0.481 x 0.517 | 0.293 / 0.164 | n + 0.258 | 0.896 |
-| C130-4.0 | 1.0000 | 1.0000 | 6.500 | 1.548 x 0.558 x 0.600 | 0.340 / 0.190 | n + 0.300 | 1.040 |
+* **rotore** `s_r = D/10 · esagerazione / 13.0`: il rotore resta vero al metro, una C90 è larga nove blocchi;
+* **navicella e mozzo** `s_n = 2 · s_r` (`NACELLE_EXAGGERATION`), la SW-10 mai sotto 0.25. A un blocco ogni 10 m la
+  navicella vera della C130 è alta 0.6 blocchi, un terzo di un giocatore: si leggeva come un puntino in cima al palo;
+* **torre** `s_t = clamp(0.147 · n, min(0.25, s_n), s_n)` (`TurbineGeometry.towerScale`): cresce con l'altezza della
+  pila, così una torre alta supera il blocco di diametro al piede, e si ferma alla scala della navicella, dove la testa
+  del fusto (raggio 0.19 · s_t) sta sotto il pavimento piatto della navicella (0.19 · s_n) come nel modello authored.
+
+| modello | s_r | s_n | navicella L x l x h (blocchi) | torre: n → s_t, diametro al piede | asse a y = | in avanti dall'asse torre |
+|---|---:|---:|---|---|---|---:|
+| SW-10 | 0.1777 | 0.3554 | 0.55 x 0.20 x 0.21 | 2 → 0.294, 0.20; 3-4 → 0.355, 0.24 | n + 0.107 | 0.370 |
+| C52-0.85 | 0.4000 | 0.8000 | 1.24 x 0.45 x 0.48 | 4 → 0.588, 0.40; 6-7 → 0.800, 0.54 | n + 0.240 | 0.832 |
+| C80-2.0 | 0.6154 | 1.2308 | 1.91 x 0.69 x 0.74 | 6 → 0.882, 0.60; 9-10 → 1.231, 0.84 | n + 0.369 | 1.280 |
+| C90-3.0 | 0.6923 | 1.3846 | 2.14 x 0.77 x 0.83 | 8 → 1.176, 0.80; 10-11 → 1.385, 0.94 | n + 0.415 | 1.440 |
+| C112-3.0 | 0.8615 | 1.7231 | 2.67 x 0.96 x 1.03 | 8 → 1.176, 0.80; 12 → 1.723, 1.17 | n + 0.517 | 1.792 |
+| C130-4.0 | 1.0000 | 2.0000 | 3.10 x 1.12 x 1.20 | 9 → 1.323, 0.90; 13 → 1.911, 1.30 | n + 0.600 | 2.080 |
 
 Margini (da `check_turbine.py --table`, provati su ogni macchina alla torre minima e massima, per un giro intero
-di rotore): la punta più bassa sta a 0.92 (SW-10, n = 2), 1.52, 2.18, 3.71, 2.66, 2.80 (C130, n = 9) blocchi dal
-suolo, nessuna sotto 0.80; la minima distanza pala-fusto va da 0.165 (SW-10) a 0.533 (C130); lo sbalzo orizzontale
-massimo dall'asse della torre è 1.20, 2.66, 4.09, 4.60, 5.73, 6.65. Il rotore delle utility ha le radici dentro lo
-spinner anche con `s_r ≠ s_n` (SW-10: 0.1777 contro 0.25; l'anello di tenuta sta nel cilindro dello spinner).
+di rotore): la punta più bassa sta a 0.95 (SW-10, n = 2), 1.64, 2.37, 3.92, 2.92, 3.10 (C130, n = 9) blocchi dal
+suolo, nessuna sotto 0.80; la minima distanza pala-fusto va da 0.255 (SW-10) a 1.45 (C130); lo sbalzo orizzontale
+massimo dall'asse della torre è 1.23, 2.78, 4.27, 4.80, 5.98, 6.94. Con lo spinner due volte più grande del rotore le
+radici delle pale stanno dentro lo spinner a ogni scala, e l'anello di tenuta resta nascosto.
 
 ## 6. L'isolatore (il raccordo dei cavi)
 
@@ -137,22 +145,28 @@ Nel frame del modello (y dal piede della torre, x e z dall'asse):
 | cima della porcellana (se l'architettura preferisse la cima) | (0.375, 0.390, 0.375) | |
 | piastra di base (acciaio) | raggio 0.10, spessa 0.012, centrata in (0.375, 0.375) | |
 
-* **Non si scala con `s_n`**: ⌀ 0.18 (2.9 px) e posizione fissi per tutte e sei le macchine. Scalato sulla SW-10
-  sarebbe 0.05 (mezzo pixel, impuntabile). Sulla SW-10 il palo sta a 0.53 dall'asse mentre la torre ha raggio 0.085.
+* **Non si scala**: ⌀ 0.18 (2.9 px) per tutte e sei le macchine. Scalato sulla SW-10 sarebbe 0.05 (mezzo pixel,
+  impuntabile). **Si sposta** invece quando il piede è largo: la sua piastra resta 0.02 fuori dallo zoccolo (raggio
+  0.42 · s_t), quindi da s_t ≈ 0.98 in su l'isolatore e il cunicolo scivolano lungo la diagonale di
+  `o = TurbineGeometry.insulatorOffset(s_t)` per asse (0.28 sulla C130 a 13 blocchi). Lo stesso `o` lo applicano il
+  renderer, il picker (`GroupPoses`), l'ancoraggio del cavo (`WindTurbineBlockEntity.localAnchor`) e il collisore del
+  piede (`TurbineTowerBlock`).
 * **Il cunicolo (`insulator_duct`) lo lega alla torre a ogni scala.** Il palo era un oggetto a sé appoggiato al suolo:
   sulla C130 a 0.01 dallo zoccolo, sulle altre cinque staccato dalla torre (sulla SW-10 di 0.33 blocchi), e
   `check_connectivity.py` lo segnala come DETACHED in ogni posa che non è la C130. La soluzione è geometrica e non
-  chiede nulla al renderer: un cunicolo prefabbricato in calcestruzzo a filo del suolo, largo 0.05 e alto 0.016, dal
+  chiede nulla al renderer: un cunicolo prefabbricato in calcestruzzo a filo del suolo, largo 0.05 e alto 0.010, dal
   bordo della piastra del palo fino all'asse della torre (lungo la diagonale, lontano dalla porta). Non è scalato, come
   l'isolatore, quindi qualunque sia la scala del piede entra nello zoccolo: sulla C130 ne resta in vista un centimetro,
-  sulla SW-10 è ciò che porta il cavo dalla torre al palo. L'altezza 0.016 non coincide con la cima dello zoccolo
-  (0.045 · s_n) né con quella della flangia (0.075 · s_n) per nessuna delle sei scale, quindi nessuna faccia è
-  complanare. Il renderer deve solo continuare a disegnare **tutti** i gruppi `insulator*` senza matrice (è già la
-  regola del par. 4); la torre nuda (`TurbineTowerRenderer`, solo `pole*`) non lo disegna, come non disegna l'isolatore.
+  sulla SW-10 è ciò che porta il cavo dalla torre al palo. L'altezza 0.010 sta sotto la cima dello zoccolo
+  (0.045 · s_t, 0.013 al minimo) per tutte le altezze di tutte le macchine, quindi nessuna faccia è complanare. Il
+  renderer disegna **tutti** i gruppi `insulator*` con la sola traslazione di sopra; la torre nuda
+  (`TurbineTowerRenderer`, solo `pole*`) non lo disegna, come non disegna l'isolatore.
 * Il collisore dell'isolatore (par. 7) è il riquadro del solo oggetto `insulator`: il cunicolo è alto un quarto di
   pixel e non collide.
-* **Non ruota con lo yaw** (par. 4.1) **ma ruota col facing del blocco** (`ModelFacing`, come tutto il modello): il
-  punto sta dentro il blocco (|x|, |z| < 0.5), quindi resta nella cella del piede.
+* **Non ruota con lo yaw** (par. 4.1) **ma ruota col facing del blocco** (`ModelFacing`, come tutto il modello). Su
+  una torre stretta sta dentro la cella del piede; su una larga ne esce verso l'angolo, e il collisore del piede esce
+  con lui (la forma del blocco torre è dinamica, quindi conta come forma grande). Il clic a vuoto lo trova comunque:
+  `FittingSelector` cerca le macchine vicine con il raggio del picker.
 * **Raggiungibile**: porcellana da y = 0.25, cioè 4 px sopra il suolo, e fuori dal fusto (0.53 dall'asse contro 0.42
   dello zoccolo). Da un occhio a 1.62 di altezza e 3 blocchi dall'asse la si vede da **74 %** dei 360° (`check_turbine.py`).
   Resta valida la raccomandazione di `wind.md` 16.2: un clic con la bobina su qualunque blocco della struttura
@@ -163,22 +177,22 @@ Nel frame del modello (y dal piede della torre, x e z dall'asse):
 ## 7. Hitbox
 
 `python3 tools/gen_turbine_models.py --java` stampa le tabelle; `check_hitboxes.py` ne prova la coerenza col modello
-(il fusto disegnato ha raggio 0.340 al piede e 0.190 in cima; la collisione non esce mai più di 0.15 px dal cono,
-su tutte le 26 altezze di tutte le macchine).
+(il fusto disegnato ha raggio 0.340 al piede e 0.190 in cima, per s_t; la collisione non esce mai più di 0.18 px dal
+cono, su tutte le 26 altezze di tutte le macchine).
 
-**Torre: segue il cono vero, non un cubo.** Il blocco torre i-esimo (0 = piede) di una torre di n blocchi con scala s
-ha raggio medio `r = s·(0.34 + (0.19 − 0.34)·(i + 0.5)/n)` (0.34 e 0.19 sono i raggi authored; l'altezza authored
+**Torre: segue il cono vero, non un cubo.** Il blocco torre i-esimo (0 = piede) di una torre di n blocchi con scala s = s_t
+(par. 5) ha raggio medio `r = s·(0.34 + (0.19 − 0.34)·(i + 0.5)/n)` (0.34 e 0.19 sono i raggi authored; l'altezza authored
 13.0 si stira a n). La sezione è una scalinata di rettangoli con gli spigoli sul cerchio di raggio r: per ogni angolo
 a in {10°, 20°, 30°, 40°} i due rettangoli di semilati (r cos a, r sin a) e (r sin a, r cos a) attorno all'asse, per
 tutta l'altezza del blocco (8 scatole). L'unione riempie sempre il cerchio di raggio 0.90 r e non esce mai da r.
-Collisione e selezione sono la stessa forma. Esempio, C130 su 13 segmenti: raggi 0.334, 0.323, 0.311 ... 0.196 (un
-blocco perde 0.0115); SW-10 su 2: 0.076 e 0.057, cioè un fusto largo 2.4 px sul primo blocco dove prima il collisore era 11 px.
+Collisione e selezione sono la stessa forma. Esempio, C130 su 13 segmenti (s_t = 1.911): raggi 0.639, 0.617 ... 0.374,
+cioè i primi blocchi escono dalla cella, cosa che una forma dinamica può fare; SW-10 su 2 (s_t = 0.294): 0.089 e 0.067.
 La scalinata dipende dal blocco, dall'altezza della pila e dal modello sopra: il blocco la calcola (e conviene
 memorizzarla per raggio arrotondato al decimo di pixel).
 
 **Piede della torre sotto una turbina**: la forma del blocco in basso aggiunge un'unica scatola per l'isolatore, non
-scalata: `Block.box(12.40, 0.00, 12.40, 15.60, 6.25, 15.60)` nel frame authored SUD (da ruotare col facing); è ciò che
-il giocatore punta, e fa sì che un clic sull'isolatore cada su un blocco della struttura. Lo zoccolo e la flangia
+scalata: `Block.box(12.40, 0.00, 12.40, 15.60, 6.25, 15.60)` nel frame authored SUD (da ruotare col facing), spostata di
+`insulatorOffset(s_t)` in x e z come il disegno (par. 6); è ciò che il giocatore punta. Lo zoccolo e la flangia
 (0.7 px) non collidono.
 
 **Blocco turbina**: la navicella e il raffreddatore, scalati da `s_n` e tagliati alla cella (la parte fuori cella non
@@ -188,12 +202,12 @@ strisce lungo x, ciascuna profonda quanto la scatola girata in quella striscia (
 yaw)`); ai quarti di giro è esattamente la tabella qui sotto ruotata.
 
 ```
-SW-10    scale 0.2500  navicella (6.89, 0.00, 4.45, 9.12, 2.40, 10.64)    raffreddatore (7.22, 2.32, 4.70, 8.78, 3.14, 6.58)
-C52-0.85 scale 0.4000  navicella (6.22, 0.00, 2.32, 9.79, 3.84, 12.22)    raffreddatore (6.75, 3.71, 2.71, 9.25, 5.03, 5.73)
-C80-2.0  scale 0.6154  navicella (5.26, 0.00, 0.00, 10.76, 5.91, 14.50)   raffreddatore (6.07, 5.71, 0.00, 9.93, 7.74, 4.51)
-C90-3.0  scale 0.6923  navicella (4.92, 0.00, 0.00, 11.10, 6.65, 15.31)   raffreddatore (5.83, 6.42, 0.00, 10.17, 8.71, 4.08)
-C112-3.0 scale 0.8615  navicella (4.17, 0.00, 0.00, 11.86, 8.27, 16.00)   raffreddatore (5.30, 8.00, 0.00, 10.70, 10.83, 3.12)
-C130-4.0 scale 1.0000  navicella (3.55, 0.00, 0.00, 12.48, 9.60, 16.00)   raffreddatore (4.86, 9.28, 0.00, 11.14, 12.58, 2.34)
+SW-10    scale 0.3554  navicella (6.42, 0.00, 2.95, 9.59, 3.41, 11.75)    raffreddatore (6.89, 3.30, 3.30, 9.11, 4.47, 5.99)
+C52-0.85 scale 0.8000  navicella (4.44, 0.00, 0.00, 11.58, 7.68, 16.00)   raffreddatore (5.49, 7.42, 0.00, 10.51, 10.06, 3.47)
+C80-2.0  scale 1.2308  navicella (2.53, 0.00, 0.00, 13.51, 11.82, 16.00)  raffreddatore (4.14, 11.42, 0.00, 11.86, 15.48, 1.03)
+C90-3.0  scale 1.3846  navicella (1.84, 0.00, 0.00, 14.20, 13.29, 16.00)  raffreddatore (3.66, 12.85, 0.00, 12.34, 16.00, 0.16)
+C112-3.0 scale 1.7231  navicella (0.34, 0.00, 0.00, 15.72, 16.00, 16.00)  raffreddatore fuori dalla cella
+C130-4.0 scale 2.0000  navicella (0.00, 0.00, 0.00, 16.00, 16.00, 16.00)  raffreddatore fuori dalla cella
 ```
 
 Formula (per qualunque altra scala): `cella = clamp(0.5 + authored · s_n)` in x e z e `y = altezza authored · s_n`, con la

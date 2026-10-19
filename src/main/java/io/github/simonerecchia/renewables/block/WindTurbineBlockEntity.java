@@ -19,6 +19,7 @@ import io.github.simonerecchia.renewables.telemetry.TurbineTelemetrySimulator;
 import io.github.simonerecchia.renewables.weather.LevelWeather;
 import io.github.simonerecchia.renewables.weather.WeatherSnapshot;
 import io.github.simonerecchia.renewables.wind.TurbineDynamics;
+import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 
 import java.util.List;
 import java.util.function.Function;
@@ -751,8 +752,9 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 
 	/**
 	 * Where the wire ends: the middle of the fitting's porcelain, which stands beside the foot of the tower and not up
-	 * at the machine.  The pose this block entity is ({@link #poseOffset}) lowers it by the tower under it, exactly as
-	 * the renderer lowers the model.
+	 * at the machine, moved out as the renderer moves it for a wide foot ({@link TurbineGeometry#insulatorOffset}).  The
+	 * pose this block entity is ({@link #poseOffset}) lowers it by the tower under it, exactly as the renderer lowers
+	 * the model.
 	 */
 	@Nullable
 	@Override
@@ -761,7 +763,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		if (box == null) return null;
 
 		Vector3f centre = box.center();
-		return new Vec3(centre.x(), centre.y(), centre.z());
+		double offset = TurbineGeometry.insulatorOffset(TurbineGeometry.towerScale(Math.max(0, towerHeight()), spec()));
+		return new Vec3(centre.x() + offset, centre.y(), centre.z() + offset);
 	}
 
 	/** Until the model's table says where the fitting is, the middle of the foot block. */

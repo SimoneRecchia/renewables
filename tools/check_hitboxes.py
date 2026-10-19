@@ -693,8 +693,9 @@ def turbine(printing):
     # the staircase against the drawn cone, at every height of every machine
     tallest = 0.0
     for ident, diameter, exaggeration, low, high in gen.CATALOGUE:
-        _, scale = gen.scales(diameter, exaggeration, small=ident == 'sw_10')
+        _, nacelle = gen.scales(diameter, exaggeration, small=ident == 'sw_10')
         for n in range(low, high + 1):
+            scale = gen.tower_scale(n, nacelle)
             for index in range(n):
                 radius = gen.tower_radius(index, n, scale)
                 top = scale * gen.shaft_radius((index + 1) * gen.H_POLE / n)

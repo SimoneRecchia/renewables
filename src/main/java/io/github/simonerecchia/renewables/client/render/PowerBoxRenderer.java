@@ -4,6 +4,7 @@ import io.github.simonerecchia.renewables.Renewables;
 import io.github.simonerecchia.renewables.block.MachineBlock;
 import io.github.simonerecchia.renewables.block.PowerBoxBlock;
 import io.github.simonerecchia.renewables.block.PowerBoxBlockEntity;
+import io.github.simonerecchia.renewables.client.model.GroupPoses;
 import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
 
@@ -32,10 +33,19 @@ public class PowerBoxRenderer extends MachineRenderer {
 
 	private static void render(PowerBoxBlockEntity box, RenderContext context, PoseStack poseStack) {
 		boolean mounted = PowerBoxBlock.mounted(box.getBlockState());
-		renderGrouped(context, poseStack, groupName -> !mounted || !(groupName.startsWith("plinth") || groupName.startsWith("conduit")));
+		renderGrouped(context, poseStack, groupName -> drawn(groupName, mounted));
+	}
+
+	private static boolean drawn(String groupName, boolean mounted) {
+		return !mounted || !(groupName.startsWith("plinth") || groupName.startsWith("conduit"));
 	}
 
 	public static void init() {
 		ModelBindings.register(ModBlocks.POWER_BOX.get());
+		// a kiosk on a wall has no plinth to point at
+		GroupPoses.register(PowerBoxBlockEntity.class, (box, model) -> {
+			boolean mounted = PowerBoxBlock.mounted(box.getBlockState());
+			return groupName -> drawn(groupName, mounted) ? GroupPoses.IDENTITY : null;
+		});
 	}
 }

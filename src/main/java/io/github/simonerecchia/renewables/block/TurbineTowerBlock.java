@@ -57,8 +57,8 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 	private static final double RADIUS_STEPS_PER_BLOCK = 160.0;
 	/** The tube's collision at each radius, built once: a shape is asked for far more often than it changes. */
 	private static final Map<Integer, VoxelShape> TUBES = new ConcurrentHashMap<>();
-	/** The insulator's box at the foot of a tower that carries a turbine, turned with the machine's four facings. */
-	private static final MachineShell.Cell INSULATOR = new MachineShell.Cell(0, 0, 0, box(TurbineGeometry.INSULATOR_BOX));
+	/** The insulator's box at the foot of a tower that carries a turbine, by its offset and the machine's facing. */
+	private static final Map<Integer, VoxelShape> INSULATORS = new ConcurrentHashMap<>();
 
 	/**
 	 * The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state.
@@ -135,11 +135,13 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 
 	/**
 	 * The tube as the model draws it: a cone that is 0.34 in radius at the foot and 0.19 at the head, stretched over the
-	 * pile and scaled to the machine on it (a bare tower is scaled by its height).  This block's slice of it is a staircase
-	 * of rectangles round the axis, so what the player bumps into and points at is the tube and not a box around it.  The
-	 * foot of a tower that carries a turbine also has the insulator beside it, which is what a wire is strung to.
+	 * pile and scaled by {@link TurbineGeometry#towerScale} (a bare tower by its height alone).  This block's slice of it is
+	 * a staircase of rectangles round the axis, so what the player bumps into and points at is the tube and not a box
+	 * around it.  The foot of a tower that carries a turbine also has the insulator beside it, which is what a wire is
+	 * strung to.
 	 *
-	 * Collision and selection are the same shape.
+	 * Collision and selection are the same shape.  A tall tower is wider than its block, and the insulator moves out with
+	 * its plinth: both leave the cell, which a dynamic shape may (it counts as a large collision shape).
 	 */
 	@Override
 	public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
@@ -159,7 +161,7 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 
 		int height = below + above + 1;
 		TurbineSpec machine = head != null && head.getBlock() instanceof WindTurbineBlock turbine ? turbine.spec() : null;
-		double scale = machine != null ? machine.nacelleRenderScale() : TurbineGeometry.bareTowerScale(height);
+		double scale = machine != null ? TurbineGeometry.towerScale(height, machine) : TurbineGeometry.bareTowerScale(height);
 
 		int key = (int) Math.round(TurbineGeometry.towerRadius(below, height, scale) * RADIUS_STEPS_PER_BLOCK);
 		VoxelShape tube = TUBES.computeIfAbsent(key, k -> {
@@ -172,7 +174,10 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 		if (below != 0 || machine == null) return tube;
 
 		int quarters = ModelFacing.quarters(WindTurbineBlock.AUTHORED, head.getValue(BlockStateProperties.HORIZONTAL_FACING));
-		return Shapes.or(tube, INSULATOR.shape(quarters));
+		int offset = (int) Math.round(TurbineGeometry.insulatorOffset(scale) * RADIUS_STEPS_PER_BLOCK);
+		VoxelShape insulator = INSULATORS.computeIfAbsent(offset * 4 + quarters,
+				k -> MachineShell.turned(box(TurbineGeometry.insulatorBox((k / 4) / RADIUS_STEPS_PER_BLOCK)), k % 4));
+		return Shapes.or(tube, insulator);
 	}
 
 	@Override

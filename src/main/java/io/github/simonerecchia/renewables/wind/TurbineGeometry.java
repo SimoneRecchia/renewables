@@ -28,6 +28,17 @@ public final class TurbineGeometry {
 
 	/** The insulator's post and plate, never scaled, as boxes of the foot block (frame facing south). */
 	public static final double[] INSULATOR_BOX = {0.775, 0.0, 0.775, 0.975, 6.25 / 16.0, 0.975};
+	/** The foot's plinth at scale 1, and the gap the insulator's plate keeps from it however wide the foot is drawn. */
+	private static final double PLINTH_RADIUS = 0.42;
+	private static final double INSULATOR_CLEARANCE = 0.02;
+
+	/**
+	 * A tower's scale grows this much a block of pile, so a tall one is more than a block across at the foot; under a
+	 * machine it stops at the nacelle's scale, where the head fits the nacelle's floor.  gen_turbine_models agrees.
+	 */
+	public static final double TOWER_SCALE_PER_BLOCK = 0.147;
+	private static final double BARE_TOWER_MIN_SCALE = 0.25;
+	private static final double BARE_TOWER_MAX_SCALE = 2.0;
 
 	/** The rotor's centre, authored: this far above the nacelle's floor and this far ahead of the tower's axis (pivot H). */
 	public static final double HUB_HEIGHT = 0.300;
@@ -206,12 +217,28 @@ public final class TurbineGeometry {
 		return scale * (TOWER_BASE_RADIUS + (TOWER_TOP_RADIUS - TOWER_BASE_RADIUS) * along);
 	}
 
-	/**
-	 * The scale a bare tower (one with no machine on it) is drawn at: a quarter at two blocks, full at thirteen and
-	 * over.  A tower that carries a machine takes the machine's own scale instead.
-	 */
+	/** The scale a bare tower (one with no machine on it) is drawn at: in proportion to its height, within bounds. */
 	public static double bareTowerScale(int height) {
-		return Math.max(0.25, Math.min(1.0, 0.25 + (height - 2) / 11.0 * 0.75));
+		return Math.max(BARE_TOWER_MIN_SCALE, Math.min(BARE_TOWER_MAX_SCALE, TOWER_SCALE_PER_BLOCK * height));
+	}
+
+	/** The scale the tower under {@code spec} is drawn at on a pile of {@code height}: its height's, up to the nacelle's. */
+	public static double towerScale(int height, TurbineSpec spec) {
+		double cap = spec.nacelleRenderScale();
+		return Math.max(Math.min(BARE_TOWER_MIN_SCALE, cap), Math.min(cap, TOWER_SCALE_PER_BLOCK * height));
+	}
+
+	/** How far the insulator is moved out along x and along z, so a foot drawn at this scale never covers its plate. */
+	public static double insulatorOffset(double towerScale) {
+		double half = (INSULATOR_BOX[3] - INSULATOR_BOX[0]) / 2.0;
+		double from = Math.hypot((INSULATOR_BOX[0] + INSULATOR_BOX[3]) / 2.0 - 0.5, (INSULATOR_BOX[2] + INSULATOR_BOX[5]) / 2.0 - 0.5);
+		return Math.max(0.0, PLINTH_RADIUS * towerScale + half + INSULATOR_CLEARANCE - from) / Math.sqrt(2.0);
+	}
+
+	/** {@link #INSULATOR_BOX} moved out by an {@link #insulatorOffset}: past the foot block's corner on a wide tower. */
+	public static double[] insulatorBox(double offset) {
+		double[] b = INSULATOR_BOX;
+		return new double[] {b[0] + offset, b[1], b[2] + offset, b[3] + offset, b[4], b[5] + offset};
 	}
 
 	/**

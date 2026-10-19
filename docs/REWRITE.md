@@ -27,7 +27,7 @@ Dove stanno ora i sottosistemi riscritti (radice `io.github.simonerecchia.renewa
 
 Asset: tutti generati dagli script di `tools/` — palo e kiosk da `gen_grid_models.py`, cabina da
 `gen_cab_models.py`, turbina da `gen_turbine_models.py` e `gen_turbine_textures.py` (`plastic2.png` non esiste
-più), icone d'inventario da `gen_component_sprites.py` e `gen_pv_textures.py`, logo da `gen_icon.py`, i `.mtl`
+più), icone d'inventario da `gen_item_sprites.py`, pannelli GUI da `gen_pv_textures.py`, logo da `gen_icon.py`, i `.mtl`
 con i loro modelli. Verificato: eseguendo ogni generatore su una copia dell'albero si ottiene
 `src/main/resources` identico byte per byte. Nessun file audio.
 
@@ -69,7 +69,7 @@ Audio: **nessun file audio** nel progetto, niente da togliere.
 | `models/electric_cab/cab.obj` | oggi 1 riga su 7 616: già rifatto |
 | `models/power_box/power_box.obj` | oggi 2 righe su 2 084: già rifatto |
 | `models/wind_turbine/wind_turbine.obj` | **rifatto da zero**: `tools/gen_turbine_models.py`, vedi `docs/turbine-model.md` |
-| `textures/item/` cab, circuit_board, cpu, insulator, metal_casing, motor_core, power_box, screen, utility_pole, wind_turbine | icone d'inventario: da rifare |
+| `textures/item/` (tutti e settanta) | **rifatti da zero** in stile vanilla: `tools/gen_item_sprites.py` |
 | `textures/block/plastic2.png` | **eliminata**: la turbina ha le sue (`tools/gen_turbine_textures.py`) |
 | `icon.png` | da rifare |
 | 46 file `.mtl` | compagni degli OBJ: si rigenerano con i modelli |

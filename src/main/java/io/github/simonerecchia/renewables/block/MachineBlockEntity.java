@@ -286,6 +286,7 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 
 		if (level == null) return;
 
+		int[] saved = insulatorIds.clone();
 		ensureSizes();
 		if (level.isClientSide()) {
 			DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
@@ -296,7 +297,8 @@ public abstract class MachineBlockEntity extends BlockEntity implements Insulato
 		} else {
 			InsulatorIds.claim(insulatorIds, (ServerLevel) level, worldPosition);
 			refreshAnchors();
-			setChanged();
+			// only when an id was given or replaced: unconditionally, every machine's chunk was rewritten on each unload
+			if (!java.util.Arrays.equals(saved, insulatorIds)) setChanged();
 		}
 	}
 

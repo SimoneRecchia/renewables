@@ -50,18 +50,12 @@ public class PvInverterRenderer extends MachineRenderer {
 		float scale = (float) spec.renderScale();
 		float fanAngle = advanceFan(inverter.getBlockPos(), inverter.cabinetTempC(), spec.cooling());
 
-		Direction facing = inverter.getBlockState().getValue(PvInverterBlock.FACING);
-		Set<String> entries = inverter.getLevel() == null ? Set.of()
-				: cableEntries(inverter.getLevel(), inverter.getBlockPos(), PvInverterBlock.AUTHORED, facing, "entry");
+		Set<String> entries = entries(inverter);
 		boolean section = PvInverterBlock.hasCombiner(inverter.getBlockState());
 		Map<String, Matrix4f> poses = new HashMap<>();
 
 		for (String groupName : model.groups.keySet()) {
-			if (groupName.startsWith("pivot_")) continue;
-			if (!entryVisible(groupName, "entry", entries)) continue;
-			// the lower front is the DC compartment or the plate that blanks its aperture off
-			if (groupName.startsWith("section") && !section) continue;
-			if (groupName.startsWith("blank") && section) continue;
+			if (!drawn(groupName, entries, section)) continue;
 
 			poseStack.pushPose();
 			poseStack.mulPoseMatrix(cabinet(groupName, scale));
@@ -80,6 +74,21 @@ public class PvInverterRenderer extends MachineRenderer {
 		}
 
 		renderGrouped(context, poses);
+	}
+
+	private static Set<String> entries(PvInverterBlockEntity inverter) {
+		Direction facing = inverter.getBlockState().getValue(PvInverterBlock.FACING);
+		return inverter.getLevel() == null ? Set.of()
+				: cableEntries(inverter.getLevel(), inverter.getBlockPos(), PvInverterBlock.AUTHORED, facing, "entry");
+	}
+
+	/** Whether a group is drawn: the entries a cable meets, and the DC compartment or the plate that blanks its aperture off. */
+	private static boolean drawn(String groupName, Set<String> entries, boolean section) {
+		if (groupName.startsWith("pivot_") || !entryVisible(groupName, "entry", entries)) return false;
+		if (groupName.startsWith("section")) return section;
+		if (groupName.startsWith("blank")) return !section;
+
+		return true;
 	}
 
 	/**
@@ -106,7 +115,9 @@ public class PvInverterRenderer extends MachineRenderer {
 		// what is pointed at is the cabinet as drawn: a string inverter's fitting is at 0.62 of the model's
 		GroupPoses.register(PvInverterBlockEntity.class, (inverter, model) -> {
 			float scale = (float) inverter.spec().renderScale();
-			return groupName -> cabinet(groupName, scale);
+			Set<String> entries = entries(inverter);
+			boolean section = PvInverterBlock.hasCombiner(inverter.getBlockState());
+			return groupName -> drawn(groupName, entries, section) ? cabinet(groupName, scale) : null;
 		});
 	}
 }

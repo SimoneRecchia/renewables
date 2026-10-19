@@ -68,6 +68,19 @@ public class PlantControllerBlockEntity extends BlockEntity {
 		super(ModBlockEntities.PLANT_CONTROLLER.get(), pos, state);
 	}
 
+	// the cabinet's blockstate model is empty: PlantControllerRenderer draws only what is tracked here
+	@Override
+	public void onLoad() {
+		super.onLoad();
+		ClientTracking.track(this);
+	}
+
+	@Override
+	public void setRemoved() {
+		super.setRemoved();
+		ClientTracking.untrack(this);
+	}
+
 	public void serverTick() {
 		if (!(level instanceof ServerLevel serverLevel)) return;
 
