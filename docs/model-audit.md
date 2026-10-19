@@ -85,8 +85,8 @@ Sizes are chosen by how close a player gets to the face, not by uniformity:
 | the profiles, plates, cable, instruments, domes | 256 | Small faces, or repeated along something long |
 | `pv_switch` | 128 | A handle boss three centimetres across |
 
-`tools/gen_block_textures.py` writes all of them; `tools/gen_pv_textures.py` keeps the item sprites
-and the panel layouts, where sixteen hard pixels is the right answer.
+`tools/gen_block_textures.py` writes all of them; `tools/gen_item_sprites.py` keeps the item sprites and
+`tools/gen_pv_textures.py` the panel layouts, where sixteen hard pixels is the right answer.
 
 **The item icons of the rebuilt placeables are renders of the models themselves**, at 128 pixels, on
 transparent ground. Three of them used to be painted by hand from models that have since been rebuilt
@@ -348,7 +348,8 @@ piece with any uv outside its sprite.
 
 ```bash
 python3 tools/gen_block_textures.py     # every block texture
-python3 tools/gen_pv_textures.py        # item sprites and GUI panels
+python3 tools/gen_pv_textures.py        # GUI panels
+python3 tools/gen_item_sprites.py       # item sprites
 python3 tools/gen_pv_models.py          # the arrays, the inverter, the combiner, the mast
 python3 tools/gen_grid_models.py        # the pole and the kiosk
 python3 tools/gen_tower_models.py       # the three lattice towers
