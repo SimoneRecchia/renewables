@@ -284,8 +284,9 @@ runs last wins, and the output looks like a deliberate choice. `gen_pv_textures.
 low-resolution copies of twenty block textures and ran second, so every regeneration silently put them
 back — a 1024-pixel laminate became a 256-pixel one and nothing could tell you which tool had done it.
 `check_generated_assets.py` now fails the build on it — for every generator whose table it can read, which is
-why a table of drawings is called `*_TEXTURES`: `gen_component_sprites.py` named its table otherwise, and drew
-the C130's inventory icon over `gen_pv_textures.py`'s unseen.
+why a table of drawings is called `*_TEXTURES`: a sprite generator once named its table otherwise, and drew the C130's
+inventory icon over `gen_pv_textures.py`'s unseen. Every inventory sprite is `gen_item_sprites.py`'s now, and
+`gen_pv_textures.py` draws only the GUI panels.
 
 **A figure belongs to one file too.** `check_pv_clearance.py` kept its own copy of the torque tube's
 height; the tube moved and the checker went on measuring the old axis, so it reported a clash that was
@@ -349,8 +350,8 @@ drawn at all.
 
 ```bash
 python3 tools/gen_block_textures.py     # every block texture
-python3 tools/gen_pv_textures.py        # item sprites and panel layouts
-python3 tools/gen_component_sprites.py  # the components' and the grid machines' sprites
+python3 tools/gen_pv_textures.py        # the GUI panel layouts
+python3 tools/gen_item_sprites.py       # every inventory sprite, vanilla style
 python3 tools/gen_icon.py               # the mod's logo
 python3 tools/gen_pv_models.py          # arrays, inverter, combiner, met mast
 python3 tools/gen_grid_models.py        # the pole and the pad-mount kiosk

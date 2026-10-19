@@ -27,7 +27,7 @@ Dove stanno ora i sottosistemi riscritti (radice `io.github.simonerecchia.renewa
 
 Asset: tutti generati dagli script di `tools/` — palo e kiosk da `gen_grid_models.py`, cabina da
 `gen_cab_models.py`, turbina da `gen_turbine_models.py` e `gen_turbine_textures.py` (`plastic2.png` non esiste
-più), icone d'inventario da `gen_component_sprites.py` e `gen_pv_textures.py`, logo da `gen_icon.py`, i `.mtl`
+più), icone d'inventario da `gen_item_sprites.py`, pannelli GUI da `gen_pv_textures.py`, logo da `gen_icon.py`, i `.mtl`
 con i loro modelli. Verificato: eseguendo ogni generatore su una copia dell'albero si ottiene
 `src/main/resources` identico byte per byte. Nessun file audio.
 
