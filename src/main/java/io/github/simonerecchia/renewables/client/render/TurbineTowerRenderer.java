@@ -9,12 +9,12 @@ import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.model.ModelDefinition;
 import io.github.simonerecchia.renewables.model.ModelDefinitions;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
+import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.api.distmarker.Dist;
@@ -32,10 +32,6 @@ import org.joml.Matrix4f;
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class TurbineTowerRenderer extends MachineRenderer {
 	private static final double MAX_RENDER_DISTANCE_SQ = 128 * 128;
-
-	/** The width of a bare column: a quarter of the model's at two blocks, the model's own from thirteen on. */
-	private static final float MIN_WIDTH = 0.25f;
-	private static final float MAX_WIDTH = 1.0f;
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
@@ -104,9 +100,9 @@ public class TurbineTowerRenderer extends MachineRenderer {
 		return count;
 	}
 
-	/** How wide a bare column of this many blocks is drawn, as a multiple of the model's tube. */
+	/** How wide a bare column of this many blocks is drawn, as a multiple of the model's tube: the block's own figure. */
 	static float width(float height) {
-		return Mth.clamp(MIN_WIDTH + (height - 2.0f) / 11.0f * (MAX_WIDTH - MIN_WIDTH), MIN_WIDTH, MAX_WIDTH);
+		return (float) TurbineGeometry.bareTowerScale(Math.round(height));
 	}
 
 	/** Gives the tower the turbine's model: it has no definition of its own, because it has no wire fitting. */

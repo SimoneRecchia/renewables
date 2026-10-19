@@ -1,5 +1,6 @@
 package io.github.simonerecchia.renewables.client.render;
 
+import io.github.simonerecchia.renewables.client.model.GroupPoses;
 import io.github.simonerecchia.renewables.client.model.MeshModel;
 import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
@@ -43,24 +44,32 @@ public class SwitchgearRenderer extends MachineRenderer {
 	private static void render(SwitchgearBlockEntity gear, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
 		boolean open = SwitchgearBlock.open(gear.getBlockState());
-		Vec3 hinge = pivot(model, "blade", new Vec3(0.0, 0.336, 0.155));
+		Vec3 hinge = hinge(model);
+		Matrix4f base = poseStack.last().pose();
 		Map<String, Matrix4f> poses = new HashMap<>();
 
 		for (String groupName : model.groups.keySet()) {
-			if (groupName.startsWith("pivot_") || !drawn(groupName, open)) continue;
-
-			poseStack.pushPose();
-			if (open && groupName.startsWith("rotate_")) {
-				poseStack.translate(0.0, hinge.y, hinge.z);
-				poseStack.mulPose(Axis.XP.rotationDegrees(OPEN_DEGREES));
-				poseStack.translate(0.0, -hinge.y, -hinge.z);
-			}
-
-			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
-			poseStack.popPose();
+			Matrix4f pose = new Matrix4f(base);
+			if (groupPose(groupName, hinge, open, pose)) poses.put(groupName, pose);
 		}
 
 		renderGrouped(context, poses);
+	}
+
+	private static Vec3 hinge(MeshModel model) {
+		return pivot(model, "blade", new Vec3(0.0, 0.336, 0.155));
+	}
+
+	/** Multiplies onto {@code pose} what one group is drawn with; false when it is not drawn.  The picker calls it too. */
+	static boolean groupPose(String groupName, Vec3 hinge, boolean open, Matrix4f pose) {
+		if (groupName.startsWith("pivot_") || !drawn(groupName, open)) return false;
+
+		if (open && groupName.startsWith("rotate_")) {
+			pose.translate(0.0f, (float) hinge.y, (float) hinge.z);
+			pose.rotate(Axis.XP.rotationDegrees(OPEN_DEGREES));
+			pose.translate(0.0f, (float) -hinge.y, (float) -hinge.z);
+		}
+		return true;
 	}
 
 	/** The two flag plates are one plate: whichever the position calls for. */
@@ -73,5 +82,14 @@ public class SwitchgearRenderer extends MachineRenderer {
 
 	public static void init() {
 		ModelBindings.registerAll(ModBlocks.SWITCHGEARS);
+		// an open blade is pointed at where it swung to, and the flag that is not shown is not there to point at
+		GroupPoses.register(SwitchgearBlockEntity.class, (gear, model) -> {
+			boolean open = SwitchgearBlock.open(gear.getBlockState());
+			Vec3 hinge = hinge(model);
+			return groupName -> {
+				Matrix4f pose = new Matrix4f();
+				return groupPose(groupName, hinge, open, pose) ? pose : null;
+			};
+		});
 	}
 }

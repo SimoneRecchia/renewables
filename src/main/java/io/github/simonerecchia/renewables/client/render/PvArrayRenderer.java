@@ -2,6 +2,7 @@ package io.github.simonerecchia.renewables.client.render;
 
 import io.github.simonerecchia.renewables.block.PvArrayBlock;
 import io.github.simonerecchia.renewables.block.PvArrayBlockEntity;
+import io.github.simonerecchia.renewables.client.model.GroupPoses;
 import io.github.simonerecchia.renewables.client.model.MeshModel;
 import io.github.simonerecchia.renewables.client.model.ModelBindings;
 import io.github.simonerecchia.renewables.registry.ModBlocks;
@@ -23,6 +24,7 @@ import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
 /** Draws the arrays, and turns the ones that track. */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -43,28 +45,61 @@ public class PvArrayRenderer extends MachineRenderer {
 
 	private static void render(PvArrayBlockEntity array, RenderContext context, PoseStack poseStack) {
 		MeshModel model = context.model();
-		boolean harnessed = array.harnessed();
-		Ends ends = ends(array);
-
 		if (!array.tracked()) {
 			// nothing moves on a fixed mounting, so the whole model shares one matrix and the cheap
 			// overload does the work
+			boolean harnessed = array.harnessed();
+			Ends ends = ends(array);
 			renderGrouped(context, poseStack, groupName -> drawn(groupName, harnessed, ends));
 			return;
 		}
 
-		double rotation = array.rotationDeg();
-		Map<String, Matrix4f> poses = new HashMap<>();
+		// off the *target* rather than the current angle
+		float azimuth = array.dualAxis() ? smoothAzimuth(array.getBlockPos(), azimuthTarget(array)) : 0.0f;
+		renderGrouped(context, poses(array, model, poseStack.last().pose(), azimuth));
+	}
 
-		if (array.dualAxis()) {
-			poseDualAxis(model, poseStack, poses, array, rotation);
-		} else {
-			poseSingleAxis(model, poseStack, poses, rotation);
+	private static float azimuthTarget(PvArrayBlockEntity array) {
+		return array.targetRotationDeg() >= 0.0 ? 0.0f : 180.0f;
+	}
+
+	/**
+	 * Every drawn group's matrix on top of {@code base}: a single-axis row rolls its {@code rotate_} groups about the
+	 * torque tube; a dual-axis one turns them on its azimuth collar and tips {@code rotate_elevation} on its hinge.  The
+	 * drawing and the picker both build from it.
+	 */
+	static Map<String, Matrix4f> poses(PvArrayBlockEntity array, MeshModel model, Matrix4f base, float azimuth) {
+		boolean harnessed = array.harnessed();
+		Ends ends = ends(array);
+		float rotation = (float) array.rotationDeg();
+		Vec3 tube = pivot(model, "tube", new Vec3(0.0, 0.62, 0.0));
+		Vec3 collar = pivot(model, "azimuth", new Vec3(0.0, 0.60, 0.0));
+		Vec3 hinge = pivot(model, "elevation", new Vec3(0.0, 0.7475, 0.0));
+
+		Map<String, Matrix4f> poses = new HashMap<>();
+		for (String groupName : model.groups.keySet()) {
+			if (groupName.startsWith("pivot_") || !drawn(groupName, harnessed, ends)) continue;
+
+			Matrix4f pose = new Matrix4f(base);
+			if (array.tracked() && groupName.startsWith("rotate_")) {
+				if (array.dualAxis()) {
+					turn(pose, collar.y, Axis.YP.rotationDegrees(azimuth));
+					if (groupName.startsWith("rotate_elevation")) turn(pose, hinge.y, Axis.ZP.rotationDegrees(Math.abs(rotation)));
+				} else {
+					turn(pose, tube.y, Axis.ZP.rotationDegrees(rotation));
+				}
+			}
+			poses.put(groupName, pose);
 		}
 
-		poses.keySet().removeIf(groupName -> !drawn(groupName, harnessed, ends));
+		return poses;
+	}
 
-		renderGrouped(context, poses);
+	/** A turn about an axis through the model's middle at height {@code y}. */
+	private static void turn(Matrix4f pose, double y, Quaternionf rotation) {
+		pose.translate(0.0f, (float) y, 0.0f);
+		pose.rotate(rotation);
+		pose.translate(0.0f, (float) -y, 0.0f);
 	}
 
 	/** The groups that only exist once a set of leads has been worked into the array. */
@@ -128,53 +163,6 @@ public class PvArrayRenderer extends MachineRenderer {
 		return harnessed;
 	}
 
-	/** One roll about the torque tube */
-	private static void poseSingleAxis(MeshModel model, PoseStack poseStack, Map<String, Matrix4f> poses, double rotation) {
-		Vec3 axis = pivot(model, "tube", new Vec3(0.0, 0.62, 0.0));
-
-		for (String groupName : model.groups.keySet()) {
-			if (groupName.startsWith("pivot_")) continue;
-
-			poseStack.pushPose();
-			if (groupName.startsWith("rotate_")) {
-				poseStack.translate(0.0, axis.y, 0.0);
-				poseStack.mulPose(Axis.ZP.rotationDegrees((float) rotation));
-				poseStack.translate(0.0, -axis.y, 0.0);
-			}
-
-			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
-			poseStack.popPose();
-		}
-	}
-
-	/** The azimuth collar first */
-	private static void poseDualAxis(MeshModel model, PoseStack poseStack, Map<String, Matrix4f> poses, PvArrayBlockEntity array, double rotation) {
-		Vec3 collar = pivot(model, "azimuth", new Vec3(0.0, 0.60, 0.0));
-		Vec3 elevation = pivot(model, "elevation", new Vec3(0.0, 0.7475, 0.0));
-		// off the *target* rather than the current angle
-		float azimuth = smoothAzimuth(array.getBlockPos(), array.targetRotationDeg() >= 0.0 ? 0.0f : 180.0f);
-
-		for (String groupName : model.groups.keySet()) {
-			if (groupName.startsWith("pivot_")) continue;
-
-			poseStack.pushPose();
-			if (groupName.startsWith("rotate_")) {
-				poseStack.translate(0.0, collar.y, 0.0);
-				poseStack.mulPose(Axis.YP.rotationDegrees(azimuth));
-				poseStack.translate(0.0, -collar.y, 0.0);
-			}
-
-			if (groupName.startsWith("rotate_elevation")) {
-				poseStack.translate(0.0, elevation.y, 0.0);
-				poseStack.mulPose(Axis.ZP.rotationDegrees((float) Math.abs(rotation)));
-				poseStack.translate(0.0, -elevation.y, 0.0);
-			}
-
-			poses.put(groupName, new Matrix4f(poseStack.last().pose()));
-			poseStack.popPose();
-		}
-	}
-
 	/** Walks the azimuth drive towards its target rather than snapping it. */
 	private static float smoothAzimuth(BlockPos pos, float target) {
 		float current = AZIMUTH_CACHE.getOrDefault(pos, target);
@@ -189,6 +177,11 @@ public class PvArrayRenderer extends MachineRenderer {
 
 	public static void init() {
 		ModelBindings.registerAll(ModBlocks.PV_ARRAYS);
+		// a tracker is pointed at where its modules have turned to, and a harness piece that is not drawn is not there
+		GroupPoses.register(PvArrayBlockEntity.class, (array, model) -> {
+			float azimuth = AZIMUTH_CACHE.getOrDefault(array.getBlockPos(), azimuthTarget(array));
+			return poses(array, model, new Matrix4f(), azimuth)::get;
+		});
 	}
 
 	/** Which way the model is turned before the tracker's own rotation is applied. */
