@@ -6,7 +6,8 @@
 Every model, texture, recipe, blockstate, table and language key under src/ is written by a script in tools/
 (CLAUDE.md section 6), so a file edited by hand, or a generator changed and not run, is a difference here.  The
 generators run in GENERATORS order, which is section 6's; one that exits non-zero fails the check, because several
-of them are checkers too.  Differences are left in place for `git diff` to show.
+of them are checkers too.  Differences are left in place for `git diff` to show; a PNG the comparison takes as the
+same file is put back byte for byte, because check_deployed, which runs after this in CI, compares bytes.
 
 A PNG is compared by its pixels, not its bytes: zlib on Linux and on macOS compress the same pixels differently.
 And a channel may differ by one level: libm differs in the last bit between platforms, so a texture value that
@@ -118,6 +119,7 @@ def snapshot():
 def main():
     os.chdir(ROOT)
     before = snapshot()
+    originals = {path: open(path, 'rb').read() for path in before if path.endswith('.png')}
     failed = []
     for name in GENERATORS:
         start = time.time()
@@ -129,6 +131,11 @@ def main():
 
     after = snapshot()
     changed = sorted(path for path in before.keys() & after.keys() if not same(before[path], after[path]))
+    # within tolerance is not byte for byte: left rewritten, the file is 'stale' to check_deployed for nothing
+    for path in sorted(originals.keys() & after.keys()):
+        if path not in changed and open(path, 'rb').read() != originals[path]:
+            with open(path, 'wb') as out:
+                out.write(originals[path])
     added = sorted(after.keys() - before.keys())
     removed = sorted(before.keys() - after.keys())
     for label, paths in (('changed', changed), ('written, and was not in the tree', added),
