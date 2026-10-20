@@ -314,6 +314,9 @@ them and the next machine added got none at all - which with `requiresCorrectToo
 breaks into nothing. `DROPS` is derived from `MACHINES`, and `check_generated_assets` fails on a machine that
 drops nothing, the same way it already failed on a blockstate no generator writes.
 
+**The one file under `src/` no script writes is the logo**, `assets/renewables/icon.png`: supplied artwork, 512 px,
+kept as a 256-colour palette so it stays under the 256 KiB Modrinth takes for an icon. Replace it, never redraw it by hand.
+
 **The Modrinth page is generated too.** `tools/modrinth.py` makes the project match the repository on every release:
 the README is its text (less what sits between `modrinth_exclude` markers), `gradle.properties` its name, summary,
 licence and project id, `mods.toml` its dependencies, and its own tables the gallery and the AI disclosure. An edit made
@@ -357,7 +360,6 @@ drawn at all.
 python3 tools/gen_block_textures.py     # every block texture
 python3 tools/gen_pv_textures.py        # the GUI panel layouts
 python3 tools/gen_item_sprites.py       # every inventory sprite, vanilla style
-python3 tools/gen_icon.py               # the mod's logo
 python3 tools/gen_pv_models.py          # arrays, inverter, combiner, met mast
 python3 tools/gen_grid_models.py        # the pole and the pad-mount kiosk
 python3 tools/gen_cab_models.py         # the substation cabin

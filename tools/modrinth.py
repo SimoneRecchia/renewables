@@ -9,7 +9,7 @@
 
 Everything but `check` takes the token from MODRINTH_TOKEN. Nothing here is a copy: the project id, name, summary,
 licence and Minecraft version are gradle.properties', the dependencies mods.toml's, the page README.md's (less what
-sits between modrinth_exclude markers, links made absolute), the icon gen_icon.py's. What is Modrinth's alone is the
+sits between modrinth_exclude markers, links made absolute), the icon mods.toml's logo. What is Modrinth's alone is the
 tables below. publish-package.yml runs `project` and `version` on every release, so a page edited on the site is
 overwritten by the next one.
 """
@@ -257,7 +257,7 @@ def problems():
             out.append('mods.toml depends on "%s", which DEPENDENCIES has no Modrinth slug for' % mod)
 
     if not os.path.isfile(path(ICON)):
-        out.append('%s is missing: run tools/gen_icon.py' % ICON)
+        out.append('%s is missing' % ICON)
     elif len(data(ICON)) > ICON_BYTES:
         out.append('the icon is over %d KiB' % (ICON_BYTES // 1024))
     for image, image_title, description in GALLERY:

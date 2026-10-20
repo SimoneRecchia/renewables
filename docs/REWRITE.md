@@ -27,7 +27,7 @@ Dove stanno ora i sottosistemi riscritti (radice `io.github.simonerecchia.renewa
 
 Asset: tutti generati dagli script di `tools/` — palo e kiosk da `gen_grid_models.py`, cabina da
 `gen_cab_models.py`, turbina da `gen_turbine_models.py` e `gen_turbine_textures.py` (`plastic2.png` non esiste
-più), icone d'inventario da `gen_item_sprites.py`, pannelli GUI da `gen_pv_textures.py`, logo da `gen_icon.py`, i `.mtl`
+più), icone d'inventario da `gen_item_sprites.py`, pannelli GUI da `gen_pv_textures.py`, i `.mtl`
 con i loro modelli. Verificato: eseguendo ogni generatore su una copia dell'albero si ottiene
 `src/main/resources` identico byte per byte. Nessun file audio.
 
@@ -71,7 +71,7 @@ Audio: **nessun file audio** nel progetto, niente da togliere.
 | `models/wind_turbine/wind_turbine.obj` | **rifatto da zero**: `tools/gen_turbine_models.py`, vedi `docs/turbine-model.md` |
 | `textures/item/` (tutti e settanta) | **rifatti da zero** in stile vanilla: `tools/gen_item_sprites.py` |
 | `textures/block/plastic2.png` | **eliminata**: la turbina ha le sue (`tools/gen_turbine_textures.py`) |
-| `icon.png` | da rifare |
+| `icon.png` | **sostituita** da un'illustrazione fornita a parte, 512 px in palette da 256 colori (l'unico file non generato) |
 | 46 file `.mtl` | compagni degli OBJ: si rigenerano con i modelli |
 
 ## File Java con logica di dooji (da riscrivere), ordinati per righe
