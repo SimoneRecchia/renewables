@@ -105,4 +105,4 @@ trasformatori, generatore non simulato.
 |---|---|---|
 | 7.1 | Licenza (codice e asset): MIT, LGPL, GPL, All Rights Reserved, o altra? | **Deciso:** GPL-3.0-only (`LICENSE`) |
 | 7.2 | Traduzione italiana (`it_it.json`)? Le guide sono in italiano | solo inglese |
-| 7.3 | Visibilità del repository | privato |
+| 7.3 | Visibilità del repository | **Deciso:** pubblico, perché la pagina Modrinth rimanda a sorgente, issue e documentazione |
