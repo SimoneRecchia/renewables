@@ -314,6 +314,11 @@ them and the next machine added got none at all - which with `requiresCorrectToo
 breaks into nothing. `DROPS` is derived from `MACHINES`, and `check_generated_assets` fails on a machine that
 drops nothing, the same way it already failed on a blockstate no generator writes.
 
+**The Modrinth page is generated too.** `tools/modrinth.py` makes the project match the repository on every release:
+the README is its text (less what sits between `modrinth_exclude` markers), `gradle.properties` its name, summary,
+licence and project id, `mods.toml` its dependencies, and its own tables the gallery and the AI disclosure. An edit made
+on the site is gone at the next release.
+
 **A whole plant is a fixture, and building one is how the topology gets tested.**
 `gen_example_plant.py` lays out four sub-fields, three string boxes, two inverters, a switch bay, a 400 kV
 line and a kiosk, checks the layout off the mod's own files - footprints from each block's cell table, module
@@ -389,6 +394,7 @@ python3 tools/check_generated_assets.py # "one generator a file, every file read
 python3 tools/check_fittings.py         # "fittings.json is what the models say, and complete for every definition"
 python3 tools/check_pv_clearance.py     # "no clash possible at any angle", and the swept floor matches
 python3 tools/check_gui_fits.py         # "0 problems" - needs the vanilla font first, see below
+python3 tools/check_modrinth.py         # "the Modrinth page is what Modrinth accepts"
 python3 tools/gen_cable_models.py       # "nothing a run draws touches anything else it draws"
 python3 tools/gen_trunk_models.py       # the same, on the heavier gauge
 python3 tools/check_deployed.py         # "the client reads exactly what is in the tree" - after a build

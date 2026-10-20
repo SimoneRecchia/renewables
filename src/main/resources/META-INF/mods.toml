@@ -7,7 +7,9 @@ issueTrackerURL="https://github.com/SimoneRecchia/renewables/issues"
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
-displayURL="https://github.com/SimoneRecchia/renewables"
+displayURL="https://modrinth.com/mod/${modrinth_project}"
+# Forge's update check, answered by Modrinth from the versions published there
+updateJSONURL="https://api.modrinth.com/updates/${modrinth_project}/forge_updates.json"
 authors="${mod_authors}"
 logoFile="assets/renewables/icon.png"
 description='''${mod_description}'''

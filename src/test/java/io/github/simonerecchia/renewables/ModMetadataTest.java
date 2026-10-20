@@ -40,12 +40,13 @@ class ModMetadataTest {
 	}
 
 	@Test
-	void theLicenceIsTheReadmesPlaceholder() {
+	void theLicenceIsTheReadmesAndItsTextShips() {
 		Matcher licence = Pattern.compile("(?m)^license=\"([^\"]*)\"").matcher(toml);
 		assertTrue(licence.find(), "mods.toml has a licence");
-		Matcher section = Pattern.compile("## License\\s+(.+?)\\.").matcher(readme);
+		Matcher section = Pattern.compile("(?s)## License\\s+(.+?)(?=\\n## |\\z)").matcher(readme);
 		assertTrue(section.find(), "the README has a License section");
-		assertEquals(section.group(1), licence.group(1));
+		assertTrue(section.group(1).contains("`" + licence.group(1) + "`"), "the README's License names " + licence.group(1));
+		assertTrue(Files.isRegularFile(Path.of("LICENSE")), "LICENSE holds the licence's text");
 	}
 
 	@Test

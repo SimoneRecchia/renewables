@@ -103,6 +103,6 @@ trasformatori, generatore non simulato.
 
 | # | Domanda | Oggi |
 |---|---|---|
-| 7.1 | Licenza (codice e asset): MIT, LGPL, GPL, All Rights Reserved, o altra? | "To be decided" |
+| 7.1 | Licenza (codice e asset): MIT, LGPL, GPL, All Rights Reserved, o altra? | **Deciso:** GPL-3.0-only (`LICENSE`) |
 | 7.2 | Traduzione italiana (`it_it.json`)? Le guide sono in italiano | solo inglese |
 | 7.3 | Visibilità del repository | privato |
