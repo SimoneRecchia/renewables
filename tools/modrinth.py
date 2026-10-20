@@ -52,13 +52,21 @@ DEPENDENCIES = {'mekanism': 'mekanism', 'computercraft': 'cc-tweaked'}
 # The first is featured. Modrinth names an image by its sha1, so a redrawn file replaces the one of the same title;
 # an image on the page that is not listed here is reported and left alone.
 GALLERY = [
-    ('docs/screenshots/showcase-c90.png', 'C90-3.0',
-     'A 3 MW turbine on the tallest tower it is certified for, its rotor turned into the wind.'),
-    ('docs/screenshots/showcase-arrays.png', 'Every array',
-     'The six array products, three of each: two flat tables, two fixed-tilt racks, a single-axis tracker and a '
-     'dual-axis pedestal.'),
+    ('docs/screenshots/showcase-c90.png', 'C90-3.0 wind turbine',
+     'A 3 MW turbine with a 90 m rotor on the tallest tower it is certified for, eleven segments, its nacelle '
+     'yawed into the wind.'),
+    ('docs/screenshots/showcase-arrays.png', 'Every solar array',
+     'The six array products, three of each. In front: the FT-415 and FT-430 flat tables and the TR-580 fixed rack. '
+     'Behind: the TR-530 fixed rack, the HX-700 single-axis tracker and the AE-440 dual-axis pedestal.'),
     ('docs/screenshots/showcase-items-chest.png', 'Everything in the mod',
-     'All 77 items in the creative tab\'s order: the machines, the conductors and cables, and the parts.'),
+     "All 77 items at once, in the creative tab's order: the machines, the conductors and cables, and the parts "
+     'they are crafted from.'),
+    ('docs/screenshots/showcase-items-1.png', 'The creative tab',
+     'The wrench, the three line conductors, transformers, the pole and the lattice towers, the cabin and the Power '
+     'Box, six turbines, six arrays, DC cables, combiners, inverters and switchgear.'),
+    ('docs/screenshots/showcase-items-2.png', 'The creative tab, continued',
+     'The parts every machine is crafted from: steel, glass, silicon and copper, then cells, diodes, connectors and '
+     'boards, up to blades, gearboxes, generators and tower sections.'),
     ('docs/screenshots/20-hv-line-to-substation.png', 'A 400 kV line',
      'A substation transformer sends 400 kV out on three bushings to lattice towers strung with the quad bundle.'),
     ('docs/screenshots/19-lattice-tension-tower.png', 'Tension tower',
