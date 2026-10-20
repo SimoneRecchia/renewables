@@ -98,6 +98,23 @@ jobs:
           mkdir -p build/release-assets
           cp "${jars[0]}" "build/release-assets/${mod_id}.jar"
           gh release upload "$TAG" "${jars[0]}" "build/release-assets/${mod_id}.jar" --clobber
+      # the page first, then the jar, with the release's notes as its changelog. before the package publish, which
+      # refuses a second upload: a re-run after a failure here would otherwise never reach this step again, and a
+      # version already on modrinth is left as it is
+      - name: publish to modrinth
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if [ -z "$MODRINTH_TOKEN" ]; then
+            echo "::error::the repository secret MODRINTH_TOKEN is not set (or release.yml did not pass it down), so $VERSION is not on modrinth"
+            exit 1
+          fi
+          gh release view "$TAG" --json body --jq .body > build/changelog.md
+          python3 tools/modrinth.py project
+          python3 tools/modrinth.py version build/libs/*.jar --version "$VERSION" --changelog build/changelog.md
       # the registry comes from the init script, so build.gradle never names where it is published; the script
       # reads GITHUB_ACTOR and GITHUB_REPOSITORY from the runner
       - name: publish to github packages

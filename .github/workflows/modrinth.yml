@@ -1,0 +1,41 @@
+name: modrinth
+# the modrinth project between releases: make it, bring its page up to date with main, read what review would say,
+# send it to review. a release does `project` itself (publish-package.yml), so this is for the first time and for a
+# page changed without a release
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: what to do (tools/modrinth.py says what each one sends)
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - project
+          - project --create
+          - submit
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modrinth
+
+jobs:
+  modrinth:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v7
+      - name: run tools/modrinth.py
+        env:
+          COMMAND: ${{ inputs.command }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: |
+          if [ -z "$MODRINTH_TOKEN" ]; then
+            echo "::error::the repository secret MODRINTH_TOKEN is not set"
+            exit 1
+          fi
+          # the choice is one of four fixed strings, so word splitting only ever separates `project --create`
+          python3 tools/modrinth.py $COMMAND

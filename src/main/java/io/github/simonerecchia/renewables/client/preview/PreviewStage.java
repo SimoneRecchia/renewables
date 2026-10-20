@@ -9,14 +9,24 @@ import io.github.simonerecchia.renewables.Renewables;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
@@ -49,6 +59,8 @@ public final class PreviewStage {
 	/** What is left to do */
 	private static final Deque<Runnable> STEPS = new ArrayDeque<>();
 	private static boolean armed = System.getProperty("renewables.preview") != null;
+	/** Whether the unattended run has asked for its world yet. */
+	private static boolean worldAsked;
 	/** Whether a run has hidden the GUI and not shown it again yet. */
 	private static boolean hidGui;
 
@@ -80,12 +92,28 @@ public final class PreviewStage {
 		if (event.phase != TickEvent.Phase.END) return;
 
 		Minecraft mc = Minecraft.getInstance();
-		if (mc.player == null || mc.level == null) return;
+		if (mc.player == null || mc.level == null) {
+			if (armed && !worldAsked && mc.screen instanceof TitleScreen) {
+				worldAsked = true;
+				// told rather than run: loading a world ticks the game itself, which is no thing to do inside a tick
+				mc.tell(PreviewStage::createWorld);
+			}
+			return;
+		}
 
 		if (armed) {
 			armed = false;
 			String wanted = System.getProperty("renewables.preview", "");
-			queue(subjects(wanted), true);
+			if ("showcase".equalsIgnoreCase(wanted)) {
+				STEPS.addAll(Showcase.steps());
+			} else {
+				queue(subjects(wanted), true);
+			}
+			if (Boolean.getBoolean("renewables.preview.quit")) {
+				// Screenshot.grab writes its file on another thread
+				waitTicks(STEPS, 40);
+				STEPS.add(() -> Minecraft.getInstance().stop());
+			}
 		}
 
 		if (!STEPS.isEmpty()) STEPS.poll().run();
@@ -102,6 +130,16 @@ public final class PreviewStage {
 			Minecraft.getInstance().options.hideGui = false;
 			hidGui = false;
 		}
+	}
+
+	/** The unattended run's own world: flat, creative and with cheats, which every step here is a command for. */
+	private static void createWorld() {
+		String name = "renewables-preview-" + System.currentTimeMillis();
+		LevelSettings settings = new LevelSettings(name, GameType.CREATIVE, false, Difficulty.PEACEFUL, true, new GameRules(),
+				WorldDataConfiguration.DEFAULT);
+		Minecraft.getInstance().createWorldOpenFlows().createFreshLevel(name, settings, new WorldOptions(0L, false, false),
+				registries -> registries.registryOrThrow(Registries.WORLD_PRESET).getHolderOrThrow(WorldPresets.FLAT).value()
+						.createWorldDimensions());
 	}
 
 	/** Which machines a property value names. */
@@ -133,8 +171,7 @@ public final class PreviewStage {
 			run("time set noon");
 			run("weather clear");
 			run("gamemode creative");
-			Minecraft.getInstance().options.hideGui = true;
-			hidGui = true;
+			hideGui(true);
 		});
 
 		for (String block : blocks) {
@@ -153,8 +190,7 @@ public final class PreviewStage {
 		}
 
 		STEPS.add(() -> {
-			Minecraft.getInstance().options.hideGui = false;
-			hidGui = false;
+			hideGui(false);
 			say("preview: done, in run/screenshots");
 		});
 	}
@@ -213,22 +249,35 @@ public final class PreviewStage {
 	}
 
 	private static void shoot(String block, View view) {
+		shoot(command("preview_%s_%s.png", block.replace(':', '_'), view.name()));
+	}
+
+	static void shoot(String file) {
 		Minecraft mc = Minecraft.getInstance();
-		String name = command("preview_%s_%s.png", block.replace(':', '_'), view.name());
 		// the game directory, not the screenshots directory: grab appends "screenshots" itself
-		Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), message -> {
+		Screenshot.grab(mc.gameDirectory, file, mc.getMainRenderTarget(), message -> {
 		});
+	}
+
+	static void hideGui(boolean hide) {
+		Minecraft.getInstance().options.hideGui = hide;
+		hidGui = hide;
+	}
+
+	/** A step a tick, so this many steps that do nothing. */
+	static void waitTicks(Collection<Runnable> steps, int ticks) {
+		for (int i = 0; i < ticks; i++) steps.add(PreviewStage::nothing);
 	}
 
 	private static void nothing() {
 	}
 
-	private static void run(String command) {
+	static void run(String command) {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player != null) mc.player.connection.sendCommand(command);
 	}
 
-	private static void say(String message) {
+	static void say(String message) {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player != null) mc.player.displayClientMessage(Component.literal(message), false);
 	}

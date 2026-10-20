@@ -317,9 +317,16 @@ For a whole catalogue unattended, which is what makes it usable from a terminal:
 JAVA_TOOL_OPTIONS="-Drenewables.preview=all" ./gradlew runClient
 ```
 
-Two things it needs: a world with cheats on (it works by sending commands), and a display. It is a
-*client* tool, so a machine whose screen is asleep cannot run it — GLFW has no monitor to open a
-window on, and the game will not start at all.
+Unattended, it makes its own world from the title screen — flat, creative, cheats on, because it works by
+sending commands — and `-Drenewables.preview.quit=true` closes the game when the last picture is written.
+What it cannot do without is a display. It is a *client* tool, so a machine whose screen is asleep cannot
+run it — GLFW has no monitor to open a window on, and the game will not start at all.
+
+`-Drenewables.preview=showcase` takes the pictures the Modrinth page shows instead (`Showcase`): every array,
+a C90 on its tallest tower seen from in front of its rotor, the creative tab and every item at once in a
+double chest. The **screenshots** workflow runs it on a virtual screen (Xvfb and Mesa's software OpenGL) and
+commits the pictures to `docs/screenshots` on the branch it ran on; a push whose message says
+`[screenshots]` starts it.
 
 ## The three model formats, and which gets which
 

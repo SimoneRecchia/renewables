@@ -1,0 +1,102 @@
+name: screenshots
+# the game's own pictures of client/preview/Showcase.java's scenes, taken by the real client on a virtual screen and
+# committed to docs/screenshots on the branch it ran on. a push runs it only when its message says [screenshots]
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+
+jobs:
+  shoot:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v7
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: setup jdk
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'microsoft'
+      - name: setup gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+      # glfw needs an x server and the game needs opengl 3.2: xvfb and mesa's software renderer are both
+      - name: install a virtual screen and software opengl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgl1-mesa-dri libglx-mesa0 \
+            libxrandr2 libxi6 libxcursor1 libxxf86vm1 libxinerama1
+      # the window's size is the pictures' size; no first-run onboarding, tutorial or pause when the window has no focus
+      - name: write the game's options
+        run: |
+          mkdir -p run
+          cat > run/options.txt <<'EOF'
+          version:3465
+          onboardAccessibility:false
+          tutorialStep:none
+          skipMultiplayerWarning:true
+          joinedFirstServer:true
+          pauseOnLostFocus:false
+          overrideWidth:1920
+          overrideHeight:1080
+          fullscreen:false
+          guiScale:0
+          renderDistance:12
+          simulationDistance:8
+          graphicsMode:1
+          ao:true
+          bobView:false
+          maxFps:30
+          enableVsync:false
+          narrator:0
+          soundCategory_master:0.0
+          EOF
+      - name: take the screenshots
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          JAVA_TOOL_OPTIONS: -Drenewables.preview=showcase -Drenewables.preview.quit=true
+        run: |
+          chmod +x ./gradlew
+          timeout 30m xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClient
+      - name: keep what the game wrote
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots
+          path: |
+            run/screenshots/
+            run/logs/latest.log
+            run/crash-reports/
+          if-no-files-found: warn
+      - name: commit the pictures
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          shopt -s nullglob
+          shots=(run/screenshots/showcase-*.png)
+          if [ ${#shots[@]} -eq 0 ]; then
+            echo "::error::the game took no pictures; the artifact has its log"
+            exit 1
+          fi
+          cp "${shots[@]}" docs/screenshots/
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "the pictures are the ones already committed"
+            exit 0
+          fi
+          git commit -q -m "docs/screenshots: the showcase scenes as the game draws them" \
+            -m "Taken by the screenshots workflow from $GITHUB_SHA."
+          git push origin "HEAD:$BRANCH"
