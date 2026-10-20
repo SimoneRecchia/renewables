@@ -86,7 +86,7 @@ final class Showcase {
 			}
 			// in front of the middle and looking down on the modules: from eye height they were a band under a sky
 			PreviewStage.run(PreviewStage.command("tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
-					ARRAYS.getX() + 6.5, GROUND + 5.0, ARRAYS.getZ() + 11.5, ARRAYS.getX() + 6.5, GROUND, ARRAYS.getZ() + 2.0));
+					ARRAYS.getX() + 6.5, GROUND + 5.0, ARRAYS.getZ() + 11.5, ARRAYS.getX() + 6.5, GROUND + 0.0, ARRAYS.getZ() + 2.0));
 		});
 		PreviewStage.waitTicks(steps, 80);
 		shot(steps, "showcase-arrays");
