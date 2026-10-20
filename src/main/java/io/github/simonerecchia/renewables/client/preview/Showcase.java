@@ -54,17 +54,13 @@ final class Showcase {
 			PreviewStage.run("gamerule doDaylightCycle false");
 			PreviewStage.run("gamerule doWeatherCycle false");
 			PreviewStage.run("weather clear");
-			PreviewStage.run("gamemode creative");
+			// a spectator stays where a teleport puts it: a creative player who spawned on the ground has its flight
+			// turned off by the ground, and falls, and the camera with it
+			PreviewStage.run("gamemode spectator");
 			PreviewStage.hideGui(true);
 		});
 		// a new world is still lighting its first chunks
 		PreviewStage.waitTicks(steps, 100);
-		// a creative player falls from where a teleport leaves it unless it is flying, and the camera with it
-		steps.add(() -> {
-			Minecraft mc = Minecraft.getInstance();
-			mc.player.getAbilities().flying = true;
-			mc.player.onUpdateAbilities();
-		});
 
 		arrays(steps);
 		turbine(steps);
@@ -131,6 +127,9 @@ final class Showcase {
 
 	/** The creative tab, top and bottom, then all of it at once in a double chest and the inventory under it. */
 	private static void items(List<Runnable> steps) {
+		// the creative screen is a creative player's, and a spectator opens no chest
+		steps.add(() -> PreviewStage.run("gamemode creative"));
+		PreviewStage.waitTicks(steps, 10);
 		steps.add(Showcase::openTab);
 		PreviewStage.waitTicks(steps, 10);
 		steps.add(Showcase::parkCursor);
