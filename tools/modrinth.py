@@ -75,8 +75,8 @@ GALLERY = [
 DISCLOSURE = {
     'type': 'ai_content',
     'uses': ['code', 'assets', 'text'],
-    'note': "Developed with Claude (Anthropic) as a coding assistant, under the author's direction and review: most "
-            'of the Java and Python, the scripts that draw the models and textures, the documentation and this page.',
+    'note': "Developed with an AI coding assistant, under the author's direction and review: most of the Java and "
+            'Python, the scripts that draw the models and textures, the documentation and this page.',
 }
 
 # Modrinth's own limits (labrinth's validators), so `check` fails where review would.
