@@ -39,6 +39,8 @@ final class Showcase {
 	private static final BlockPos ARRAYS = new BlockPos(0, GROUND, 0);
 	private static final BlockPos TURBINE = new BlockPos(48, GROUND, 0);
 	private static final BlockPos CHEST = new BlockPos(-24, GROUND, 0);
+	/** tp ... facing turns the feet towards its point, and the camera is this far above them: aim this much lower. */
+	private static final double EYE = 1.62;
 	/** Half the game's default vertical field of view, 70 degrees. */
 	private static final double HALF_FOV = Math.toRadians(35.0);
 
@@ -86,7 +88,7 @@ final class Showcase {
 			}
 			// in front of the middle and looking down on the modules: from eye height they were a band under a sky
 			PreviewStage.run(PreviewStage.command("tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
-					ARRAYS.getX() + 6.5, GROUND + 5.0, ARRAYS.getZ() + 11.5, ARRAYS.getX() + 6.5, GROUND + 0.0, ARRAYS.getZ() + 2.0));
+					ARRAYS.getX() + 6.5, GROUND + 3.5, ARRAYS.getZ() + 10.0, ARRAYS.getX() + 6.5, GROUND + 0.3 - EYE, ARRAYS.getZ() + 2.5));
 		});
 		PreviewStage.waitTicks(steps, 80);
 		shot(steps, "showcase-arrays");
@@ -124,7 +126,7 @@ final class Showcase {
 		double x = TURBINE.getX() + 0.5 + Math.cos(towards) * distance;
 		double z = TURBINE.getZ() + 0.5 + Math.sin(towards) * distance;
 		PreviewStage.run(PreviewStage.command("tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
-				x, GROUND + top * 0.3, z, TURBINE.getX() + 0.5, GROUND + top * 0.5, TURBINE.getZ() + 0.5));
+				x, GROUND + top * 0.3, z, TURBINE.getX() + 0.5, GROUND + top * 0.5 - EYE, TURBINE.getZ() + 0.5));
 	}
 
 	/** The creative tab, top and bottom, then all of it at once in a double chest and the inventory under it. */
