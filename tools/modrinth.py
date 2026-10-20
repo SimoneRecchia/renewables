@@ -52,20 +52,21 @@ DEPENDENCIES = {'mekanism': 'mekanism', 'computercraft': 'cc-tweaked'}
 # The first is featured. Modrinth names an image by its sha1, so a redrawn file replaces the one of the same title;
 # an image on the page that is not listed here is reported and left alone.
 GALLERY = [
+    ('docs/screenshots/showcase-c90.png', 'C90-3.0',
+     'A 3 MW turbine on the tallest tower it is certified for, its rotor turned into the wind.'),
+    ('docs/screenshots/showcase-arrays.png', 'Every array',
+     'The six array products, three of each: two flat tables, two fixed-tilt racks, a single-axis tracker and a '
+     'dual-axis pedestal.'),
+    ('docs/screenshots/showcase-items-chest.png', 'Everything in the mod',
+     'All 77 items in the creative tab\'s order: the machines, the conductors and cables, and the parts.'),
     ('docs/screenshots/20-hv-line-to-substation.png', 'A 400 kV line',
      'A substation transformer sends 400 kV out on three bushings to lattice towers strung with the quad bundle.'),
     ('docs/screenshots/19-lattice-tension-tower.png', 'Tension tower',
      'Each phase is held by a dead-end string either side of the arm, and the jumpers loop round the tower.'),
-    ('docs/screenshots/15-pv-dual-axis.png', 'Solar arrays',
-     'Dual-axis pedestals in front of a single-axis tracker, fixed racks and ballasted tables.'),
-    ('docs/screenshots/14-pv-fixed-and-tracker.png', 'Fixed racks and a tracker',
-     'Fixed-tilt rows and a single-axis tracker, wired in strings to an inverter over ground-laid cable.'),
     ('docs/screenshots/09-pole-insulators-and-conductors.png', 'Utility pole',
      'Eight pin insulators on two crossarms, carrying bare medium-voltage conductors and an aerial bundled cable.'),
     ('docs/screenshots/12-transformers.png', 'Transformers',
      'A machine transformer, and a substation transformer with its conservator and porcelain bushings.'),
-    ('docs/screenshots/21-wind-farm-six-turbines.png', 'Six turbines',
-     'From the 10 kW SW-10 to the 4 MW C130-4.0, each on a tower certified for it.'),
     ('docs/screenshots/24-night-lantern.png', 'An inverter at night',
      'A central inverter and a Power Box beside a pole line.'),
 ]

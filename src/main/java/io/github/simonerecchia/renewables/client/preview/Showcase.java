@@ -84,9 +84,9 @@ final class Showcase {
 					PreviewStage.run(PreviewStage.command("setblock %d %d %d %s[facing=south]", x + k, GROUND, z, specs.get(i).id()));
 				}
 			}
-			// in front of the middle and low: the lines fill the frame side to side, the tall ones showing over the flat
+			// in front of the middle and looking down on the modules: from eye height they were a band under a sky
 			PreviewStage.run(PreviewStage.command("tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
-					ARRAYS.getX() + 6.5, GROUND + 1.6, ARRAYS.getZ() + 12.0, ARRAYS.getX() + 6.5, GROUND + 0.4, ARRAYS.getZ() + 2.5));
+					ARRAYS.getX() + 6.5, GROUND + 5.0, ARRAYS.getZ() + 11.5, ARRAYS.getX() + 6.5, GROUND, ARRAYS.getZ() + 2.0));
 		});
 		PreviewStage.waitTicks(steps, 80);
 		shot(steps, "showcase-arrays");
