@@ -378,6 +378,9 @@ def status(_):
         return 1
     print('%s (%s, slug %s): %s' % (current['title'], current['id'], current['slug'], current['status']))
     print('versions    %d' % len(current.get('versions') or []))
+    # review's own check, which only a project not yet public has a use for
+    if current['status'] not in ('draft', 'rejected', 'withheld'):
+        return 0
     for nag in call('GET', '/v3/project/%s/validate' % current['id'])['nags']:
         print('%-11s %s %s' % (nag['severity'], nag['kind'], json.dumps(nag.get('details') or {})))
     return 0
