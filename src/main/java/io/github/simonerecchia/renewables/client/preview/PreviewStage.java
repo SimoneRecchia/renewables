@@ -34,6 +34,7 @@ import net.minecraftforge.client.event.RegisterClientCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import org.lwjgl.glfw.GLFW;
 
 /** Renders a machine with the game's own renderer, from the angles worth looking at, straight to PNG. */
 @OnlyIn(Dist.CLIENT) @Mod.EventBusSubscriber(modid = Renewables.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
@@ -96,7 +97,10 @@ public final class PreviewStage {
 			if (armed && !worldAsked && mc.screen instanceof TitleScreen) {
 				worldAsked = true;
 				// told rather than run: loading a world ticks the game itself, which is no thing to do inside a tick
-				mc.tell(PreviewStage::createWorld);
+				mc.tell(() -> {
+					resizeWindow();
+					createWorld();
+				});
 			}
 			return;
 		}
@@ -130,6 +134,18 @@ public final class PreviewStage {
 			Minecraft.getInstance().options.hideGui = false;
 			hidGui = false;
 		}
+	}
+
+	/**
+	 * The pictures are the window's size: {@code -Drenewables.preview.size=1920x1080}. The game's own overrideWidth is
+	 * not read until a window exists, so it is set on the window.
+	 */
+	private static void resizeWindow() {
+		String[] size = System.getProperty("renewables.preview.size", "").split("x");
+		if (size.length != 2) return;
+
+		GLFW.glfwSetWindowSize(Minecraft.getInstance().getWindow().getWindow(), Integer.parseInt(size[0].trim()),
+				Integer.parseInt(size[1].trim()));
 	}
 
 	/** The unattended run's own world: flat, creative and with cheats, which every step here is a command for. */
