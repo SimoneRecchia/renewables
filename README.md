@@ -77,13 +77,14 @@ opens.
 ## Integrations
 
 * **Forge Energy.** The Power Box offers FE on every side and pushes it to its neighbours. Turbines and
-  inverters also offer their output directly, on their bottom face and the face away from their front — for a
-  turbine, at the lowest block of its tower.
+  inverters also offer their output directly, on every face but the top — for a turbine, at the lowest block
+  of its tower, so another mod's cable connects on whichever side of the foot it is laid.
 * **Mekanism.** The same generator faces speak Mekanism's Joules (`IStrictEnergyHandler`) at 125 J per kW, the
   same scale as the Power Box's 50 FE per kW at Mekanism's 2.5 J per FE. What other mods take is taken from a
   per-tick budget, and only the rest goes down the wires, so no Joule is spent twice.
 * **ComputerCraft.** Four peripherals — `renewables_wind_turbine`, `renewables_pv_inverter`,
-  `renewables_pv_array`, `renewables_met_station` — with tick-consistent SCADA telemetry (each tag marked
+  `renewables_pv_array`, `renewables_met_station`, each also answering to electricity's `electricity_*`
+  name — with tick-consistent SCADA telemetry (each tag marked
   measured, derived or simulated), Mekanism-compatible generator methods, stop/start, curtailment, redstone
   mode, power factor and tracker control.
 

@@ -132,6 +132,8 @@ public class WindTurbineBlock extends MachineBlock {
 		}
 
 		level.updateNeighbourForOutputSignal(foot, level.getBlockState(foot).getBlock());
+		// a cable mod that reconnects only in neighborChanged never heard of a turbine set on a tower it already touched
+		level.updateNeighborsAt(foot, level.getBlockState(foot).getBlock());
 		for (BlockPos segment = foot; segment.getY() < machinePos.getY(); segment = segment.above()) {
 			for (Direction side : Direction.values()) {
 				BlockPos neighbour = segment.relative(side);

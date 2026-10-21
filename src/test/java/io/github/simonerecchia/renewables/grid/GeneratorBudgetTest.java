@@ -146,4 +146,12 @@ class GeneratorBudgetTest {
 		assertEquals(0.0, budget.netKw(100.0), EPS);
 		assertEquals(0.0, budget.getAvailableJoules(), EPS);
 	}
+
+	/** A cable that looks before the first tick after a load reads the nameplate's maximum, not nought. */
+	@Test
+	void theMaximumIsThereBeforeTheFirstTick() {
+		GeneratorBudget budget = new GeneratorBudget(NO_LIMITS, () -> 0L);
+		assertEquals(0.0, budget.getMaxJoulesPerTick(), EPS);
+		assertEquals(PRODUCED_KW * JOULES_PER_KW, budget.getMaxJoulesPerTick(PRODUCED_KW), EPS);
+	}
 }

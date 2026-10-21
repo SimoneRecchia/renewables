@@ -321,6 +321,12 @@ public final class CCTweakedPeripherals {
 			return "renewables_wind_turbine";
 		}
 
+		/** electricity's name for the same machine, so a program written for it still finds this one. */
+		@Override
+		public Set<String> getAdditionalTypes() {
+			return Set.of("electricity_wind_turbine");
+		}
+
 		@Override
 		public boolean equals(@Nullable IPeripheral other) {
 			return other instanceof WindTurbinePeripheral peripheral && peripheral.turbine == turbine;
@@ -369,6 +375,11 @@ public final class CCTweakedPeripherals {
 		@Override
 		public String getType() {
 			return "renewables_pv_inverter";
+		}
+
+		@Override
+		public Set<String> getAdditionalTypes() {
+			return Set.of("electricity_pv_inverter");
 		}
 
 		@Override
@@ -449,7 +460,7 @@ public final class CCTweakedPeripherals {
 		/** The name the placeholder answered to, kept so existing programs still find this block. */
 		@Override
 		public Set<String> getAdditionalTypes() {
-			return Set.of("renewables_solar_panel");
+			return Set.of("renewables_solar_panel", "electricity_pv_array", "electricity_solar_panel");
 		}
 
 		@Override
@@ -615,6 +626,11 @@ public final class CCTweakedPeripherals {
 		@Override
 		public String getType() {
 			return "renewables_met_station";
+		}
+
+		@Override
+		public Set<String> getAdditionalTypes() {
+			return Set.of("electricity_met_station");
 		}
 
 		@Override
