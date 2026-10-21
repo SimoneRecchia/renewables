@@ -29,12 +29,14 @@ Mekanism code of ours involved.
 ### The generators
 
 A **turbine** and an **inverter** expose their output directly, as **Joules** through Mekanism's
-`IStrictEnergyHandler` and as **Forge Energy** for everything else, on two faces: the **bottom** and the face
-**away from the one it faces** (its front faces whoever placed it). That mirrors Mekanism's own generators —
-cables belong at the foot of a machine, not halfway up it.
+`IStrictEnergyHandler` and as **Forge Energy** for everything else, on **every face but the top**. Electricity
+offered only the bottom and the back, which worked because a tower could stand on a cable; renewables' tower needs
+a sturdy foundation, so a cable now comes in from whichever side of the foot it is laid on.
 
 * A turbine's machine block sits at the top of its tower, so the tower answers for it: the **lowest tower
-  block** exposes the turbine's capability, on the same two faces, and the turbine pushes from there.
+  block** exposes the turbine's capability, on the same five faces, and the turbine pushes from there. Placing or
+  breaking the turbine updates the blocks round the foot, so a cable laid there first connects without being
+  replaced.
 * An inverter answers on its own block.
 
 Each tick a generator **pushes** to whatever is adjacent to those faces, splitting fairly between several
@@ -93,7 +95,9 @@ with `DISABLED`, `HIGH`, `LOW`.
 ## ComputerCraft
 
 Four peripheral types: `renewables_wind_turbine`, `renewables_pv_inverter`, `renewables_pv_array` (which also
-answers to `renewables_solar_panel`) and `renewables_met_station`.
+answers to `renewables_solar_panel`) and `renewables_met_station`. Each also answers to the name electricity gave
+it (`electricity_wind_turbine`, `electricity_pv_inverter`, `electricity_pv_array`, `electricity_solar_panel`,
+`electricity_met_station`), so a program written for electricity finds the same machine.
 
 ### Attaching
 

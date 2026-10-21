@@ -711,8 +711,11 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 
 	// ---- energy out ----
 
+	/** Every face but the roof, as the turbine's foot: a cable may come in from whichever side it is laid on. */
+	private static final List<Direction> ENERGY_FACES = List.of(Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST);
+
 	private List<Direction> energyFaces() {
-		return List.of(Direction.DOWN, getBlockState().getValue(PvInverterBlock.FACING).getOpposite());
+		return ENERGY_FACES;
 	}
 
 	private boolean isEnergyFace(@Nullable Direction side) {
@@ -749,7 +752,7 @@ public class PvInverterBlockEntity extends MachineBlockEntity implements Dispatc
 
 	@Override
 	public double getMaxJoulesPerTick() {
-		return level == null || level.isClientSide() ? 0.0 : budget.getMaxJoulesPerTick();
+		return level == null || level.isClientSide() ? 0.0 : budget.getMaxJoulesPerTick(spec().acPowerKw());
 	}
 
 	@Override

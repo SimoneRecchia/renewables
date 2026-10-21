@@ -659,8 +659,14 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 
 	// ---- the energy budget other mods draw from ----
 
+	/**
+	 * Every face of the tower's foot but the top, which is the next segment: electricity stood a tower on a cable, which
+	 * renewables' sturdier foundation rule no longer allows, so a cable has to be able to come in from any side.
+	 */
+	private static final List<Direction> ENERGY_FACES = List.of(Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST);
+
 	private List<Direction> energyFaces() {
-		return List.of(Direction.DOWN, facing(WindTurbineBlock.AUTHORED).getOpposite());
+		return ENERGY_FACES;
 	}
 
 	private boolean isEnergyFace(@Nullable Direction side) {
@@ -682,7 +688,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	/** The most the turbine offers other mods in one tick: its nameplate times the configured share, under the absolute ceiling if there is one. */
 	@Override
 	public double getMaxJoulesPerTick() {
-		return level == null || level.isClientSide() ? 0.0 : budget.getMaxJoulesPerTick();
+		// off the nameplate, not the last tick's: a cable that looks before the first tick reads no maximum as no source
+		return level == null || level.isClientSide() ? 0.0 : budget.getMaxJoulesPerTick(spec().ratedPowerKw());
 	}
 
 	@Override

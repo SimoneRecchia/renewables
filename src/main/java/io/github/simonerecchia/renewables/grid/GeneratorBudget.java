@@ -103,6 +103,11 @@ public final class GeneratorBudget implements IEnergyBudget {
 
 	@Override
 	public double getMaxJoulesPerTick() {
+		return getMaxJoulesPerTick(ratedKw);
+	}
+
+	/** The same for a nameplate the caller knows, so the answer is there before the first {@link #open}. */
+	public double getMaxJoulesPerTick(double ratedKw) {
 		return EnergyBudgets.maxJoulesPerTick(limits.enabled(), ratedKw, limits.fraction(), limits.ceiling());
 	}
 
