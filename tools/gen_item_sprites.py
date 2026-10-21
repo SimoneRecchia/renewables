@@ -8,8 +8,8 @@ material (outline, shadow, base, light, highlight) lit from the top left; the ou
 tone, never black; no noise.  A drawing is a function over a Sprite, which keeps a material and a tone a pixel, so the
 outline is worked out from the silhouette (Sprite.outline) rather than drawn round it by hand.
 
-One machine family reads as a family: the six turbines are one drawing at six sizes, the three lattice towers one
-body with three heads, the four PV mounts one panel on four kinds of support.
+One machine family reads as a family: the five C turbines share the C130's sprite and the SW-10 has its own, the
+three lattice towers are one body with three heads, the four PV mounts one module on four kinds of support.
 """
 
 import math
@@ -843,25 +843,35 @@ def tower_section():
     return s
 
 
-# ------------------------------------------------------------------ the PV family: one panel on four supports
+# ------------------------------------------------------------------ the PV family: one module on four supports
 
-def panel(s, rows, ramp=SOLAR):
-    """A module as a list of (x0, x1) spans a row, top to bottom: blue glass, its cell grid in a lighter tone."""
-    for y, (x0, x1) in rows:
-        for x in range(x0, x1 + 1):
-            s.put(x, y, ramp, 2)
-    for y, (x0, x1) in rows:
-        for x in range(x0, x1 + 1):
-            if (x - x0) % 3 == 0 or y % 3 == 0:
-                s.retone(x, y, 3)
+def module(s, y0, rows, x0, width, lean, frame=True):
+    """A module's face, ``rows`` pixel rows from ``y0``, each ``width`` wide, row k shifted right by ``lean(k)`` whole
+    pixels so the grid stays crisp: the aluminium frame lit along the top, two-pixel cells with a lighter line
+    between them, and three pixels of sky across the glass.  Returns the rows as (y, first x, last x)."""
+    spans = [(y0 + k, x0 + lean(k), x0 + lean(k) + width - 1) for k in range(rows)]
+    for y, a, b in spans:
+        s.fill(a, y, b, y, SOLAR, 2)
+    s.outline()
+    edge = 2 if frame else 1
+    for k, (y, a, b) in enumerate(spans[1:-1], start=1):
+        for x in range(a + 1, b):
+            if frame and (k in (1, rows - 2) or x in (a + 1, b - 1)):
+                s.put(x, y, ALU, 4 if k == 1 else 1 if k == rows - 2 else 3 if x == a + 1 else 2)
+                continue
+            cx, cy = x - a - edge, k - edge
+            grid = cx % 3 == 2 or cy % 3 == 2
+            s.put(x, y, SOLAR, 3 if grid else 2 if cx + cy < width else 1)
+    for i in range(3):
+        y, a, _ = spans[edge + i]
+        s.put(a + edge + 3 - i, y, SOLAR, 4)
+    return spans
 
 
 def pv_laminate():
     s = Sprite()
-    panel(s, [(y, (2, 13)) for y in range(1, 15)])
-    s.outline()
-    for y in range(2, 14):
-        s.put(2, y, SOLAR, 4 if y < 5 else 3)
+    # the laminate before it is framed: glass, cells and backsheet, square on
+    module(s, 1, 14, 2, 12, lambda k: 0, frame=False)
     return s
 
 
@@ -882,55 +892,46 @@ def solar_cell():
     return s
 
 
-def tilted_panel(s, x0, y0, width, height, lean):
-    """A module seen from in front and above, its top edge ``lean`` pixels further right than its bottom."""
-    rows = []
-    for k in range(height):
-        shift = lean * (height - 1 - k) // max(1, height - 1)
-        rows.append((y0 + k, (x0 + shift, x0 + shift + width - 1)))
-    panel(s, rows)
-
-
 def pv_flat():
     s = Sprite()
-    # a ballasted flat roof table: the module almost flat, on concrete blocks
-    tilted_panel(s, 1, 6, 12, 5, 3)
-    s.fill(2, 11, 4, 13, CONCRETE, 2)
-    s.fill(11, 11, 13, 13, CONCRETE, 2)
+    # a ballasted flat-roof table: the module tipped a little, on two concrete trays
+    s.fill(1, 12, 4, 13, CONCRETE, 2)
+    s.fill(10, 12, 13, 13, CONCRETE, 2)
     s.outline()
+    module(s, 5, 7, 0, 13, lambda k: (6 - k) // 2)
     return s
 
 
 def pv_tilt():
     s = Sprite()
-    # a fixed rack: the module leaning back, a long leg behind and a short one in front
-    tilted_panel(s, 1, 2, 11, 9, 3)
-    s.fill(3, 11, 4, 14, ALU, 2)
-    s.fill(11, 9, 12, 14, ALU, 2)
-    s.outline()
+    # a fixed rack: the module leaning back on a short front leg and a long back one, a brace between, on its rail
+    s.fill(3, 11, 3, 15, ALU, 2)
+    s.fill(11, 9, 12, 15, ALU, 2)
+    line(s, 3, 13, 11, 10, ALU, 2)
+    s.fill(1, 15, 14, 15, ALU, 2)
+    module(s, 1, 11, 1, 12, lambda k: (10 - k) // 4)
     return s
 
 
 def pv_track():
     s = Sprite()
-    # a single-axis tracker: a row of modules on its torque tube, one post under the middle
-    tilted_panel(s, 0, 4, 16, 4, 0)
-    s.fill(0, 8, 15, 8, STEEL, 2)
-    s.fill(7, 9, 8, 15, STEEL, 2)
+    # a single-axis tracker: a long row of modules on its torque tube, one post under the middle
+    s.fill(7, 9, 8, 14, STEEL, 2)
+    s.fill(4, 15, 11, 15, CONCRETE, 2)
+    s.fill(1, 9, 14, 9, STEEL, 1)
     s.outline()
-    for x in range(1, 15):
-        s.put(x, 8, STEEL, 1)
+    module(s, 2, 7, 0, 15, lambda k: (6 - k) // 3)
     return s
 
 
 def pv_dual():
     s = Sprite()
-    # a dual-axis tracker: a square of modules on a pedestal, turned to the sun
-    tilted_panel(s, 2, 1, 12, 9, 2)
-    s.fill(7, 10, 8, 13, STEEL, 2)
-    s.fill(4, 14, 11, 15, CONCRETE, 2)
+    # a dual-axis tracker: a square of modules turned to the sun on its slewing head and pedestal
+    s.fill(7, 11, 8, 14, STEEL, 2)
+    s.fill(6, 10, 9, 11, STEEL, 3)
+    s.fill(4, 15, 11, 15, CONCRETE, 2)
     s.outline()
-    s.put(7, 11, STEEL, 3)
+    module(s, 0, 10, 2, 12, lambda k: (9 - k) // 5)
     return s
 
 
@@ -1001,7 +1002,7 @@ def met_station():
     return s
 
 
-# ------------------------------------------------------------------ the turbines: one drawing at six sizes
+# ------------------------------------------------------------------ the turbines: the C line and the small machine
 
 def blades(s, hub, reach, root, tips, angles=(90.0, 210.0, 330.0)):
     """Three tapered blades out of ``hub``: lit along their leading edge, in shadow along the other, no outline -
@@ -1022,39 +1023,27 @@ def blades(s, hub, reach, root, tips, angles=(90.0, 210.0, 330.0)):
                     s.put(x, y, ramp, 4 if u < 0 else 1, keep=True)
 
 
-def turbine(reach, hub_y, foot, tips=False, root=2.6, small=False):
+def turbine(reach, hub_y, foot, tips=False, root=2.6):
     """A turbine from the front: the tube tapering up from ``foot`` pixels to two, the hub, three blades ``reach``
-    pixels long.  The small machine stands on a steel mast with its tail vane behind it."""
+    pixels long."""
     s = Sprite()
     hx, hy = 8.0, hub_y
     for y in range(int(hy) + 1, W):
-        if small:
-            s.put(7, y, STEEL, 3)
-            s.put(8, y, STEEL, 1)
-            continue
         width = int(round(2 + (foot - 2) * (y - hy) / (15 - hy)))
         left = int(round(hx - width / 2.0))
         # a white tube two pixels wide would be all outline: it is lit and shaded like the blades instead
         for x in range(left, left + width):
             s.put(x, y, WHITE, 4 if x == left else 1 if x == left + width - 1 else 2, keep=True)
-    if small:
-        line(s, 6, int(hy) - 1, 4, int(hy) - 2, STEEL, 2)
-        for k, y in enumerate(range(int(hy) - 5, int(hy))):
-            s.fill(1 + max(0, 2 - k), y, 3, y, WHITE, 3 if k < 3 else 2)
     s.outline()
     blades(s, (hx, hy), reach, root, tips)
     disc(s, hx - 0.5, hy - 0.5, 1.3, WHITE)
     return s
 
 
-# Six sizes of one machine: the rotor grows from the SW-10's four pixels to the C130's seven and a half, the tube
-# thickens with it, and the two that stand over 150 m carry the red tips aviation rules ask for.
+# Two drawings: every C machine shows the C130's (gen_crafting.MACHINES points their items at 'wind_turbine'), and the
+# SW-10, the one small machine, a shorter rotor on a slimmer tube.
 TURBINES = {
-    'sw_10': dict(reach=4.2, hub_y=7.0, foot=2, small=True, root=2.2),
-    'c52_085': dict(reach=5.0, hub_y=8.0, foot=2),
-    'c80_20': dict(reach=6.0, hub_y=7.5, foot=3),
-    'c90_30': dict(reach=6.5, hub_y=7.0, foot=3),
-    'c112_30': dict(reach=7.0, hub_y=7.0, foot=4, tips=True),
+    'sw_10': dict(reach=5.0, hub_y=8.0, foot=2),
     'wind_turbine': dict(reach=7.6, hub_y=7.0, foot=4, tips=True, root=3.0),
 }
 
