@@ -46,7 +46,7 @@ jobs:
       # CLAUDE.md sections 6 and 7: every asset is generated, and the checkers must pass before anything is done.
       # The tools are standard-library Python only.
       - name: setup python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       # every generator, in section 6's order, and src/ must come out as committed (PNGs compared by pixels)
