@@ -37,7 +37,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb libgl1-mesa-dri libglx-mesa0 \
             libxrandr2 libxi6 libxcursor1 libxxf86vm1 libxinerama1
-      # the window's size is the pictures' size; no first-run onboarding, tutorial or pause when the window has no focus
+      # no first-run onboarding, tutorial or pause when the window has no focus; the size is renewables.preview.size
       - name: write the game's options
         run: |
           mkdir -p run
@@ -48,8 +48,6 @@ jobs:
           skipMultiplayerWarning:true
           joinedFirstServer:true
           pauseOnLostFocus:false
-          overrideWidth:1920
-          overrideHeight:1080
           fullscreen:false
           guiScale:0
           renderDistance:12
@@ -65,7 +63,7 @@ jobs:
       - name: take the screenshots
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-          JAVA_TOOL_OPTIONS: -Drenewables.preview=showcase -Drenewables.preview.quit=true
+          JAVA_TOOL_OPTIONS: -Drenewables.preview=showcase -Drenewables.preview.quit=true -Drenewables.preview.size=1920x1080
         run: |
           chmod +x ./gradlew
           timeout 30m xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClient

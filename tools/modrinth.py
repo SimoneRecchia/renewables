@@ -9,7 +9,7 @@
 
 Everything but `check` takes the token from MODRINTH_TOKEN. Nothing here is a copy: the project id, name, summary,
 licence and Minecraft version are gradle.properties', the dependencies mods.toml's, the page README.md's (less what
-sits between modrinth_exclude markers, links made absolute), the icon gen_icon.py's. What is Modrinth's alone is the
+sits between modrinth_exclude markers, links made absolute), the icon mods.toml's logo. What is Modrinth's alone is the
 tables below. publish-package.yml runs `project` and `version` on every release, so a page edited on the site is
 overwritten by the next one.
 """
@@ -52,20 +52,29 @@ DEPENDENCIES = {'mekanism': 'mekanism', 'computercraft': 'cc-tweaked'}
 # The first is featured. Modrinth names an image by its sha1, so a redrawn file replaces the one of the same title;
 # an image on the page that is not listed here is reported and left alone.
 GALLERY = [
+    ('docs/screenshots/showcase-c90.png', 'C90-3.0 wind turbine',
+     'A 3 MW turbine with a 90 m rotor on the tallest tower it is certified for, eleven segments, its nacelle '
+     'yawed into the wind.'),
+    ('docs/screenshots/showcase-arrays.png', 'Every solar array',
+     'The six array products, three of each. In front: the FT-415 and FT-430 flat tables and the TR-580 fixed rack. '
+     'Behind: the TR-530 fixed rack, the HX-700 single-axis tracker and the AE-440 dual-axis pedestal.'),
+    ('docs/screenshots/showcase-items-chest.png', 'Everything in the mod',
+     "All 77 items at once, in the creative tab's order: the machines, the conductors and cables, and the parts "
+     'they are crafted from.'),
+    ('docs/screenshots/showcase-items-1.png', 'The creative tab',
+     'The wrench, the three line conductors, transformers, the pole and the lattice towers, the cabin and the Power '
+     'Box, six turbines, six arrays, DC cables, combiners, inverters and switchgear.'),
+    ('docs/screenshots/showcase-items-2.png', 'The creative tab, continued',
+     'The parts every machine is crafted from: steel, glass, silicon and copper, then cells, diodes, connectors and '
+     'boards, up to blades, gearboxes, generators and tower sections.'),
     ('docs/screenshots/20-hv-line-to-substation.png', 'A 400 kV line',
      'A substation transformer sends 400 kV out on three bushings to lattice towers strung with the quad bundle.'),
     ('docs/screenshots/19-lattice-tension-tower.png', 'Tension tower',
      'Each phase is held by a dead-end string either side of the arm, and the jumpers loop round the tower.'),
-    ('docs/screenshots/15-pv-dual-axis.png', 'Solar arrays',
-     'Dual-axis pedestals in front of a single-axis tracker, fixed racks and ballasted tables.'),
-    ('docs/screenshots/14-pv-fixed-and-tracker.png', 'Fixed racks and a tracker',
-     'Fixed-tilt rows and a single-axis tracker, wired in strings to an inverter over ground-laid cable.'),
     ('docs/screenshots/09-pole-insulators-and-conductors.png', 'Utility pole',
      'Eight pin insulators on two crossarms, carrying bare medium-voltage conductors and an aerial bundled cable.'),
     ('docs/screenshots/12-transformers.png', 'Transformers',
      'A machine transformer, and a substation transformer with its conservator and porcelain bushings.'),
-    ('docs/screenshots/21-wind-farm-six-turbines.png', 'Six turbines',
-     'From the 10 kW SW-10 to the 4 MW C130-4.0, each on a tower certified for it.'),
     ('docs/screenshots/24-night-lantern.png', 'An inverter at night',
      'A central inverter and a Power Box beside a pole line.'),
 ]
@@ -248,7 +257,7 @@ def problems():
             out.append('mods.toml depends on "%s", which DEPENDENCIES has no Modrinth slug for' % mod)
 
     if not os.path.isfile(path(ICON)):
-        out.append('%s is missing: run tools/gen_icon.py' % ICON)
+        out.append('%s is missing' % ICON)
     elif len(data(ICON)) > ICON_BYTES:
         out.append('the icon is over %d KiB' % (ICON_BYTES // 1024))
     for image, image_title, description in GALLERY:
@@ -369,6 +378,9 @@ def status(_):
         return 1
     print('%s (%s, slug %s): %s' % (current['title'], current['id'], current['slug'], current['status']))
     print('versions    %d' % len(current.get('versions') or []))
+    # review's own check, which only a project not yet public has a use for
+    if current['status'] not in ('draft', 'rejected', 'withheld'):
+        return 0
     for nag in call('GET', '/v3/project/%s/validate' % current['id'])['nags']:
         print('%-11s %s %s' % (nag['severity'], nag['kind'], json.dumps(nag.get('details') or {})))
     return 0

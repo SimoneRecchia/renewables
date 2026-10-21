@@ -9,10 +9,12 @@ import io.github.simonerecchia.renewables.registry.ModTabs;
 import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -37,6 +39,8 @@ final class Showcase {
 	private static final BlockPos ARRAYS = new BlockPos(0, GROUND, 0);
 	private static final BlockPos TURBINE = new BlockPos(48, GROUND, 0);
 	private static final BlockPos CHEST = new BlockPos(-24, GROUND, 0);
+	/** tp ... facing turns the feet towards its point, and the camera is this far above them: aim this much lower. */
+	private static final double EYE = 1.62;
 	/** Half the game's default vertical field of view, 70 degrees. */
 	private static final double HALF_FOV = Math.toRadians(35.0);
 
@@ -50,17 +54,13 @@ final class Showcase {
 			PreviewStage.run("gamerule doDaylightCycle false");
 			PreviewStage.run("gamerule doWeatherCycle false");
 			PreviewStage.run("weather clear");
-			PreviewStage.run("gamemode creative");
+			// a spectator stays where a teleport puts it: a creative player who spawned on the ground has its flight
+			// turned off by the ground, and falls, and the camera with it
+			PreviewStage.run("gamemode spectator");
 			PreviewStage.hideGui(true);
 		});
 		// a new world is still lighting its first chunks
 		PreviewStage.waitTicks(steps, 100);
-		// a creative player falls from where a teleport leaves it unless it is flying, and the camera with it
-		steps.add(() -> {
-			Minecraft mc = Minecraft.getInstance();
-			mc.player.getAbilities().flying = true;
-			mc.player.onUpdateAbilities();
-		});
 
 		arrays(steps);
 		turbine(steps);
@@ -77,13 +77,14 @@ final class Showcase {
 			PreviewStage.run("time set 3000");
 			for (int i = 0; i < specs.size(); i++) {
 				int x = ARRAYS.getX() + (i % 3) * 5;
-				int z = ARRAYS.getZ() + (i < 3 ? 4 : 0);
+				int z = ARRAYS.getZ() + (i < 3 ? 5 : 0);
 				for (int k = 0; k < 3; k++) {
 					PreviewStage.run(PreviewStage.command("setblock %d %d %d %s[facing=south]", x + k, GROUND, z, specs.get(i).id()));
 				}
 			}
+			// in front of the middle and looking down on the modules: from eye height they were a band under a sky
 			PreviewStage.run(PreviewStage.command("tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
-					ARRAYS.getX() + 12.5, GROUND + 3.5, ARRAYS.getZ() + 9.5, ARRAYS.getX() + 6.5, GROUND + 0.2, ARRAYS.getZ() + 2.5));
+					ARRAYS.getX() + 6.5, GROUND + 3.5, ARRAYS.getZ() + 10.0, ARRAYS.getX() + 6.5, GROUND + 0.3 - EYE, ARRAYS.getZ() + 2.5));
 		});
 		PreviewStage.waitTicks(steps, 80);
 		shot(steps, "showcase-arrays");
@@ -115,17 +116,20 @@ final class Showcase {
 
 		double radius = TurbineGeometry.rotorRadius(spec);
 		double top = segments + TurbineGeometry.hubOffset(spec, 0.0)[1] + radius;
-		double distance = 1.2 * (top / 2.0 + 2.0) / Math.tan(HALF_FOV);
+		double distance = (top / 2.0 + 1.5) / Math.tan(HALF_FOV);
 		// the yaw is the heading the air travels towards (0 east, 90 south) and the rotor faces the other way
 		double towards = Math.toRadians(turbine.yawDegrees(0.0f) + 180.0 + 35.0);
 		double x = TURBINE.getX() + 0.5 + Math.cos(towards) * distance;
 		double z = TURBINE.getZ() + 0.5 + Math.sin(towards) * distance;
 		PreviewStage.run(PreviewStage.command("tp @s %.2f %.2f %.2f facing %.2f %.2f %.2f",
-				x, GROUND + top * 0.3, z, TURBINE.getX() + 0.5, GROUND + top * 0.5, TURBINE.getZ() + 0.5));
+				x, GROUND + top * 0.3, z, TURBINE.getX() + 0.5, GROUND + top * 0.5 - EYE, TURBINE.getZ() + 0.5));
 	}
 
 	/** The creative tab, top and bottom, then all of it at once in a double chest and the inventory under it. */
 	private static void items(List<Runnable> steps) {
+		// the creative screen is a creative player's, and a spectator opens no chest
+		steps.add(() -> PreviewStage.run("gamemode creative"));
+		PreviewStage.waitTicks(steps, 10);
 		steps.add(Showcase::openTab);
 		PreviewStage.waitTicks(steps, 10);
 		steps.add(Showcase::parkCursor);
@@ -182,7 +186,6 @@ final class Showcase {
 		BlockPos left = CHEST.east();
 		PreviewStage.run(PreviewStage.command("setblock %d %d %d minecraft:chest[facing=south,type=right]", right.getX(), right.getY(), right.getZ()));
 		PreviewStage.run(PreviewStage.command("setblock %d %d %d minecraft:chest[facing=south,type=left]", left.getX(), left.getY(), left.getZ()));
-		PreviewStage.run("clear @s");
 		for (int i = 0; i < ids.size(); i++) {
 			if (i < 27) {
 				PreviewStage.run(PreviewStage.command("item replace block %d %d %d container.%d with %s", right.getX(), right.getY(), right.getZ(), i, ids.get(i)));
@@ -196,14 +199,31 @@ final class Showcase {
 				CHEST.getX() + 1.0, GROUND + 0.0, CHEST.getZ() + 2.5, CHEST.getX() + 1.0, GROUND + 0.5, CHEST.getZ() + 0.5));
 	}
 
-	/** A screen opens with the cursor in its middle, over a slot, and its tooltip would be in the picture. */
+	/**
+	 * A screen opens with the cursor in its middle, over a slot, and its tooltip would be in the picture. A window
+	 * without focus - Xvfb's, with no window manager - is not moved by GLFW, so the move is handed to the game as
+	 * GLFW would hand it, by the dev name of the handler's callback.
+	 */
 	private static void parkCursor() {
-		GLFW.glfwSetCursorPos(Minecraft.getInstance().getWindow().getWindow(), 1.0, 1.0);
+		Minecraft mc = Minecraft.getInstance();
+		long window = mc.getWindow().getWindow();
+		GLFW.glfwSetCursorPos(window, 1.0, 1.0);
+		try {
+			Method onMove = MouseHandler.class.getDeclaredMethod("onMove", long.class, double.class, double.class);
+			onMove.setAccessible(true);
+			onMove.invoke(mc.mouseHandler, window, 1.0, 1.0);
+		} catch (ReflectiveOperationException e) {
+			PreviewStage.say("showcase: could not move the cursor: " + e);
+		}
 	}
 
-	/** A toast cleared in the tick it is shot in is still in the frame being read, so it goes a few ticks before. */
+	/** What is cleared in the tick it is shot in is still in the frame being read, so it goes a few ticks before. */
 	private static void shot(List<Runnable> steps, String name) {
-		steps.add(() -> Minecraft.getInstance().getToasts().clear());
+		steps.add(() -> {
+			// with a screen open the game draws the chat even with the GUI hidden
+			Minecraft.getInstance().gui.getChat().clearMessages(false);
+			Minecraft.getInstance().getToasts().clear();
+		});
 		PreviewStage.waitTicks(steps, 3);
 		steps.add(() -> PreviewStage.shoot(name + ".png"));
 	}

@@ -30,7 +30,7 @@ SOURCE = 'src'
 # CLAUDE.md section 6, in its order: textures before the models that name them, gen_core_data before gen_crafting,
 # every OBJ before gen_fittings reads them, the shape tables before splice_tables pastes them.
 GENERATORS = [
-    'gen_block_textures.py', 'gen_pv_textures.py', 'gen_item_sprites.py', 'gen_icon.py',
+    'gen_block_textures.py', 'gen_pv_textures.py', 'gen_item_sprites.py',
     'gen_pv_models.py', 'gen_grid_models.py', 'gen_cab_models.py', 'gen_cable_models.py', 'gen_trunk_models.py',
     'gen_core_data.py', 'gen_crafting.py',
     'gen_turbine_models.py', 'gen_turbine_textures.py', 'gen_tower_models.py', 'gen_transformer_models.py',
