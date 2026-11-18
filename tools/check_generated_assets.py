@@ -262,6 +262,7 @@ def data_files():
     folders = [os.path.join(resources, 'data', 'renewables', 'recipes'),
                os.path.join(resources, 'data', 'renewables', 'advancements'),
                os.path.join(resources, 'data', 'minecraft', 'tags'),
+               os.path.join(resources, 'data', 'renewables', 'tags'),
                os.path.join(ASSETS, 'models', 'item')]
     on_disk = sorted(os.path.join(root, name) for folder in folders for root, _, names in os.walk(folder)
                      for name in names if name.endswith('.json'))

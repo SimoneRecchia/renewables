@@ -42,6 +42,8 @@ MATERIALS = {
     'seal': 'turbine_seal.png',
     'insulator_porcelain': 'porcelain_brown.png',
     'insulator_steel': 'pv_steel.png',
+    'jacket': 'dc_core.png',
+    'gland': 'dc_gland.png',
 }
 
 # ------------------------------------------------------------------ the figures
@@ -118,6 +120,15 @@ POST_R = 0.026
 PLATE_R, PLATE_H = 0.10, 0.012
 DUCT_W, DUCT_H = 0.05, 0.010           # the cable trough from the tower's foot to the post
 
+# The cable entry: another mod's cable, laid against the foot, carried on to a shaft too narrow to reach the block's
+# side.  Never scaled; one entry_<side> a side, and its gland apart because the renderer moves it out to the wall.
+ENTRY_Y = 0.5                          # where a laid cable runs: the middle of the block
+ENTRY_R = 1.25 / 16.0                  # thinner than the 6 px Mekanism cable it continues
+ENTRY_LAP = 0.01                       # into the next block, so its cap is inside that cable's own end
+GLAND = ((0.040, 0.105, 1.0, HEX), (0.026, 0.098, 0.80, FITTING))   # length, radius, taper: body, then nut
+DOOR_SIDE = 'south'                    # foot() puts the door on +z
+ENTRY_SIDES = (('north', (0, -1)), ('east', (1, 0)), ('south', (0, 1)), ('west', (-1, 0)))
+
 # The catalogue, for the scale table and the clearance proof: id, rotor diameter m, rotor exaggeration,
 # tower segments min and max.  wind.md section 2.
 CATALOGUE = (
@@ -164,6 +175,39 @@ def insulator_shift(scale):
 def shaft_radius(y):
     """The tower's radius at an authored height."""
     return R_BASE + (R_TOP - R_BASE) * y / H_POLE
+
+
+def entry_side(group):
+    """'entry_east' and 'entry_east_gland' -> 'east'."""
+    return group[len('entry_'):].split('_')[0]
+
+
+def entry_back(n, scale):
+    """How far out a gland's back goes: where the wall stands as far out as the gland's rim, so no gap shows.
+
+    entry_back(H_POLE, 1.0) is the authored model's own wall, where the gland is authored.
+    """
+    wall = scale * shaft_radius(ENTRY_Y * H_POLE / n)
+    return math.sqrt(max(0.0, wall * wall - GLAND[0][1] ** 2))
+
+
+def entry_drawn(group, n, scale):
+    """Whether WindTurbineRenderer draws this entry group on a pile of n at this tower scale, its side cabled.
+
+    Not where the shaft already reaches the block's side, nor across the door; the gland not on a wall that curves
+    away under it by more than half its length, nor out past the block.
+    """
+    side = entry_side(group)
+    wall = scale * shaft_radius(ENTRY_Y * H_POLE / n)
+    door = scale * (DOOR_SILL + DOOR_H + DOOR_FRAME)
+    if wall >= 0.5 or (side == DOOR_SIDE and door > ENTRY_Y - ENTRY_R):
+        return False
+    if not group.startswith('entry_%s_gland' % side):
+        return True
+    length = sum(part[0] for part in GLAND)
+    back = entry_back(n, scale)
+    return (wall - back <= length / 2.0 and back + length <= 0.5
+            and not (side == DOOR_SIDE and door > ENTRY_Y - GLAND[0][1]))
 
 
 # ------------------------------------------------------------------ small helpers
@@ -778,6 +822,35 @@ def insulator(mesh):
               (0.0, 0.0, -DUCT_W / 2.0), (reach - PLATE_R + 0.02, DUCT_H, DUCT_W / 2.0), uv_scale=2.0)
 
 
+# ------------------------------------------------------------------ the cable entries
+
+def entries(mesh):
+    """A cable from inside the shaft out through each side of the foot block, and the gland it goes in by.
+
+    The cable starts on the axis, so it leaves the wall wherever the wall is; the gland is authored on the authored
+    shaft's wall and moved along to the drawn one.  Drawn only on a side another mod's cable meets (entry_drawn).
+    """
+    for side, (dx, dz) in ENTRY_SIDES:
+        axis = 'x' if dx else 'z'
+        step = float(dx + dz)
+        jacket = mesh.faces('entry_' + side, 'jacket')
+        end = step * (0.5 + ENTRY_LAP)
+        # dc_core is the cable's own cross-section gradient, constant along the run: stretching it along is free
+        tube(mesh, jacket, [(0.0, ENTRY_Y, 0.0), (end if dx else 0.0, ENTRY_Y, end if dz else 0.0)], ENTRY_R,
+             sides=FITTING, uv_scale=1.0, uv_along=1.0, caps=jacket)
+
+        # a hex body against the wall and a compression nut, the way the combiner's glands are drawn
+        gland = mesh.faces('entry_%s_gland' % side, 'gland')
+        cursor = entry_back(H_POLE, 1.0)
+        for length, radius, taper, sides in GLAND:
+            middle = [0.0, ENTRY_Y, 0.0]
+            middle[0 if dx else 2] = step * (cursor + length / 2.0)
+            # cylinder tapers its +axis end, so a gland facing the other way wants the reciprocal
+            cylinder(mesh, gland, tuple(middle), axis, radius if step > 0 else radius * taper, length / 2.0,
+                     sides=sides, uv_scale=0.3, taper=taper if step > 0 else 1.0 / taper, caps=gland)
+            cursor += length
+
+
 # ------------------------------------------------------------------ the whole
 
 def pivot(mesh):
@@ -793,6 +866,7 @@ def turbine():
     spinner(mesh)
     blades(mesh)
     insulator(mesh)
+    entries(mesh)
     pivot(mesh)
     return mesh
 
@@ -860,7 +934,8 @@ def group_matrix(group, n, rotor_scale, nacelle_scale, hub, floor, rotor=0.0, ya
     """The point mapper the renderer applies to one group (models.md 8.3, with the clean-room fixes).
 
     ``n`` tower segments.  pole is stretched to n blocks and scaled radially by tower_scale; pole_base scaled
-    uniformly by it; insulator moved out along its diagonal by insulator_shift, never scaled; nacelle, blades
+    uniformly by it; insulator moved out along its diagonal by insulator_shift, never scaled; an entry never scaled,
+    its gland moved out to the wall by entry_back; nacelle, blades
     and hub carried to the top of the tower and yawed about the tower axis - the foot never is.  ``rotor`` is
     degrees clockwise seen from the front.
     """
@@ -885,6 +960,12 @@ def group_matrix(group, n, rotor_scale, nacelle_scale, hub, floor, rotor=0.0, ya
         return lambda p: (p[0] * tower, p[1] * n / H_POLE, p[2] * tower)
     if group.startswith('insulator'):
         return lambda p: (p[0] + shift, p[1], p[2] + shift)
+    if group.startswith('entry'):
+        if not group.startswith('entry_%s_gland' % entry_side(group)):
+            return lambda p: p
+        dx, dz = dict(ENTRY_SIDES)[entry_side(group)]
+        along = entry_back(n, tower) - entry_back(H_POLE, 1.0)
+        return lambda p: (p[0] + dx * along, p[1], p[2] + dz * along)
     if group.startswith('rotate_1') or group.startswith('rotate_2'):
         scale = rotor_scale if group.startswith('rotate_1') else nacelle_scale
         return lambda p: turn(add(turn(add(mul(sub(p, hub), scale), hub_at), -rotor, hub_at, 'z'), (0, 0, 0)),

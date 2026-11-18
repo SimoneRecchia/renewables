@@ -124,6 +124,11 @@ public final class EnergyBridge {
 		}
 	}
 
+	/** Whether {@code neighbour} takes energy on {@code side}: what a cable laid against a generator connects by. */
+	public static boolean accepts(BlockEntity neighbour, Direction side) {
+		return findAcceptor(neighbour, side) != null;
+	}
+
 	/**
 	 * Mekanism's own handler is preferred over Forge Energy, matching the priority order in Mekanism's EnergyCompatUtils.
 	 */

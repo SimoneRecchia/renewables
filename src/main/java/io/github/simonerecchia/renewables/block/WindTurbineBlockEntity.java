@@ -30,6 +30,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.capabilities.Capability;
@@ -109,6 +110,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private double rotorSpeed;
 	/** The share of what the wind offers the rotor can take, 0 to 1 ({@link RotorClearance#exposure}): saved for the panel. */
 	private double rotorExposure = 1.0;
+	/** The foot's sides a cable or machine takes energy from, a bit per 2D direction: the renderer draws an entry to each. */
+	private byte cableSides;
 
 	// ---- not saved ----
 
@@ -116,6 +119,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	private double lastSentYaw;
 	private int towerSegments = -1;
 	private int towerRecheck = TOWER_RECHECK_TICKS;
+	private int cableRecheck;
 	/** What is round the rotor, looked at again every second and when the nacelle has swung {@link #CLEARANCE_YAW_STEP} off it. */
 	private RotorClearance clearance = RotorClearance.OPEN;
 	private double clearanceYaw = Double.NaN;
@@ -195,6 +199,31 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 			setChanged();
 			ClientSync.now(this);
 		}
+	}
+
+	/** Looks every second at which sides of the foot something takes energy from, and tells the clients when that changes. */
+	private void recheckCableSides() {
+		if (level == null || --cableRecheck > 0) return;
+
+		cableRecheck = TOWER_RECHECK_TICKS;
+		BlockPos foot = footPos();
+		byte now = 0;
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			BlockEntity neighbour = level.getBlockEntity(foot.relative(side));
+			if (neighbour != null && !neighbour.isRemoved() && EnergyBridge.accepts(neighbour, side.getOpposite())) {
+				now |= (byte) (1 << side.get2DDataValue());
+			}
+		}
+		if (now == cableSides) return;
+
+		cableSides = now;
+		setChanged();
+		ClientSync.now(this);
+	}
+
+	/** Whether a cable or a machine takes energy from the foot on that side, as the server last saw it. */
+	public boolean cableArrives(Direction side) {
+		return side.getAxis().isHorizontal() && (cableSides & (1 << side.get2DDataValue())) != 0;
 	}
 
 	// ---- what the renderer reads (docs/ARCHITECTURE.md section 3.7) ----
@@ -409,6 +438,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		if (!(level instanceof ServerLevel serverLevel)) return;
 
 		recheckTower();
+		recheckCableSides();
 		TurbineSpec spec = spec();
 		surveyRotor(spec);
 
@@ -660,8 +690,8 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 	// ---- the energy budget other mods draw from ----
 
 	/**
-	 * Every face of the tower's foot but the top, which is the next segment: electricity stood a tower on a cable, which
-	 * renewables' sturdier foundation rule no longer allows, so a cable has to be able to come in from any side.
+	 * Every face of the tower's foot but the top, which is the next segment: the bottom for a tower stood on a cable
+	 * (TurbineTowerBlock.FOUNDATIONS), the four sides for one laid beside it.
 	 */
 	private static final List<Direction> ENERGY_FACES = List.of(Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST);
 
@@ -811,6 +841,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		tag.putDouble("uncapped", uncappedKw);
 		tag.putDouble("rotorSpeed", rotorSpeed);
 		tag.putDouble("rotorExposure", rotorExposure);
+		tag.putByte("cableSides", cableSides);
 	}
 
 	@Override
@@ -846,6 +877,7 @@ public class WindTurbineBlockEntity extends MachineBlockEntity implements Dispat
 		uncappedKw = tag.getDouble("uncapped");
 		rotorSpeed = tag.getDouble("rotorSpeed");
 		rotorExposure = tag.contains("rotorExposure") ? Mth.clamp(tag.getDouble("rotorExposure"), 0.0, 1.0) : 1.0;
+		cableSides = tag.getByte("cableSides");
 	}
 
 	/** The client takes everything the server knows, then carries its animation on from it. */
