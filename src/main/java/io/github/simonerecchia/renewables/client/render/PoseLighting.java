@@ -22,7 +22,8 @@ import org.joml.Vector3fc;
  * <li><b>A scale that is not uniform</b> cannot be carried by the light: {@link #axisScale} finds one along the model's own
  *     axes (the turbine's tower, stretched to its height) so the renderer can bake it into the buffer instead.</li>
  * </ul>
- * Pure maths apart from {@link #applyTo} and {@link #restore}, so it is tested without a game.
+ * Pure maths apart from {@link #restore}, so it is tested without a game.  {@code MachineRenderer} hands
+ * {@link #inModelFrame}'s two vectors to the shader with each draw.
  */
 @OnlyIn(Dist.CLIENT)
 public final class PoseLighting {
@@ -37,8 +38,6 @@ public final class PoseLighting {
 
 	private final Vector3f view0 = new Vector3f();
 	private final Vector3f view1 = new Vector3f();
-	private final Vector3f model0 = new Vector3f();
-	private final Vector3f model1 = new Vector3f();
 	private final Matrix3f inverse = new Matrix3f();
 
 	/**
@@ -71,12 +70,6 @@ public final class PoseLighting {
 		inverse.invert();
 		inverse.transform(view0, out0).normalize();
 		inverse.transform(view1, out1).normalize();
-	}
-
-	/** Points the shader's lights at a group drawn with {@code pose}; read by the very next draw. */
-	void applyTo(Matrix4fc pose) {
-		inModelFrame(pose, model0, model1);
-		RenderSystem.setShaderLights(model0, model1);
 	}
 
 	/** Sets the level's own lights for a camera whose rotation is {@code view}: for a pass whose normals are in camera space. */
