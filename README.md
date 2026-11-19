@@ -78,7 +78,8 @@ opens.
 
 * **Forge Energy.** The Power Box offers FE on every side and pushes it to its neighbours. Turbines and
   inverters also offer their output directly, on every face but the top — for a turbine, at the lowest block
-  of its tower, so another mod's cable connects on whichever side of the foot it is laid.
+  of its tower, so another mod's cable connects on whichever side of the foot it is laid. A tower can also stand
+  on a Mekanism Universal Cable, like Mekanism's own wind generator (the `renewables:tower_foundations` tag).
 * **Mekanism.** The same generator faces speak Mekanism's Joules (`IStrictEnergyHandler`) at 125 J per kW, the
   same scale as the Power Box's 50 FE per kW at Mekanism's 2.5 J per FE. What other mods take is taken from a
   per-tick budget, and only the rest goes down the wires, so no Joule is spent twice.

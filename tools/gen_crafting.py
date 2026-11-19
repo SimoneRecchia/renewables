@@ -31,6 +31,7 @@ ITEM_MODELS = os.path.join('src', 'main', 'resources', 'assets', 'renewables', '
 BLOCKSTATES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'blockstates')
 LOOT = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'loot_tables', 'blocks')
 TAGS = os.path.join('src', 'main', 'resources', 'data', 'minecraft', 'tags', 'blocks')
+OWN_TAGS = os.path.join('src', 'main', 'resources', 'data', 'renewables', 'tags', 'blocks')
 SPRITES = os.path.join('src', 'main', 'resources', 'assets', 'renewables', 'textures')
 # The C130 kept the registry name of the machine the mod started with (ModBlocks).
 TURBINE_ALIASES = {'c130_40': 'wind_turbine'}
@@ -879,6 +880,17 @@ def tool_tags():
     }
 
 
+def foundation_tags():
+    """What a turbine tower may stand on besides a sturdy top face: TurbineTowerBlock.FOUNDATIONS reads it.
+
+    Mekanism's Universal Cables, so a tower is set on a cable the way a Mekanism wind generator is. Optional
+    entries, so the tag loads without Mekanism; a modpack adds its own cables to the same tag.
+    """
+    cables = [{'id': 'mekanism:%s_universal_cable' % tier, 'required': False}
+              for tier in ('basic', 'advanced', 'elite', 'ultimate')]
+    return {os.path.join(OWN_TAGS, 'tower_foundations.json'): {'replace': False, 'values': cables}}
+
+
 def needs_stone():
     """Every machine not in NEEDS_IRON: the shell is iron-tier with the machines that fill cells."""
     return [name for name in MACHINES if name not in NEEDS_IRON and name != 'machine_shell']
@@ -901,6 +913,7 @@ def planned():
     out = machine_assets()
     out.update(loot_tables())
     out.update(tool_tags())
+    out.update(foundation_tags())
     # one item model per part: a flat sprite, like every other ingredient in the game
     for part_id, _, _, _ in parts():
         out[os.path.join(ITEM_MODELS, part_id + '.json')] = {

@@ -17,7 +17,9 @@ import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -43,6 +45,8 @@ import org.joml.Matrix4f;
  * <li>{@code pole*}: the tower, stretched to the height of the tower and as wide as {@link TurbineGeometry#towerScale};</li>
  * <li>{@code insulator*}: the wire fitting at the foot, never scaled, moved clear of a wide plinth.  Neither of these
  *     two follows the wind, so the fitting stays where the picker and the wire anchor are;</li>
+ * <li>{@code entry_<side>*}: another mod's cable carried in to a shaft too narrow to reach it, on a side the server says
+ *     one arrives; never scaled, its gland moved out to the wall;</li>
  * <li>{@code rotate_1*}: the blades, about the hub, at the rotor's scale;</li>
  * <li>{@code rotate_2*}: the hub's cone, about the hub, at the nacelle's scale;</li>
  * <li>anything else is the nacelle, brought down to sit on the top of the tower.  These three turn about the axis of
@@ -79,7 +83,7 @@ public class WindTurbineRenderer extends MachineRenderer {
 	 * tower, and where the model's hub is and where the drawn one is.
 	 */
 	record Layout(float nacelleScale, float rotorScale, float towerScale, float insulatorOffset, int segments, float authoredHeight,
-			float nacelleBottom, Vec3 hubCentre, Vec3 hub) {
+			float nacelleBottom, Vec3 hubCentre, Vec3 hub, Set<String> cables, Set<String> glands, float glandAlong) {
 		static Layout of(MeshModel model, WindTurbineBlockEntity turbine) {
 			TurbineSpec spec = turbine.spec();
 			int segments = Math.max(0, turbine.towerHeight());
@@ -89,9 +93,55 @@ public class WindTurbineRenderer extends MachineRenderer {
 			float nacelleBottom = WindTurbineRenderer.nacelleBottom(model, (float) hubCentre.y);
 			// the hub rides on the nacelle: the same height above its underside, scaled with it
 			Vec3 hub = new Vec3(hubCentre.x * nacelleScale, segments + nacelleScale * (hubCentre.y - nacelleBottom), hubCentre.z * nacelleScale);
+
+			Set<String> cables = new HashSet<>();
+			Set<String> glands = new HashSet<>();
+			float glandAlong = entries(model, turbine, segments, towerScale, cables, glands);
 			return new Layout(nacelleScale, (float) spec.renderScale(), (float) towerScale, (float) TurbineGeometry.insulatorOffset(towerScale),
-					segments, authoredTowerHeight(model), nacelleBottom, hubCentre, hub);
+					segments, authoredTowerHeight(model), nacelleBottom, hubCentre, hub, cables, glands, glandAlong);
 		}
+	}
+
+	/** The side of the model the door is on: gen_turbine_models.foot puts it on +z. */
+	private static final Direction DOOR_SIDE = Direction.SOUTH;
+
+	/**
+	 * Which model sides get a cable entry and which a gland too, and how far a gland moves from where it is authored to the
+	 * drawn wall.  The rules are gen_turbine_models.entry_drawn, the figures read off the model: none where the shaft
+	 * already reaches the block's side or across the door; no gland on a wall that curves away under it, or out of the block.
+	 */
+	private static float entries(MeshModel model, WindTurbineBlockEntity turbine, int segments, double scale, Set<String> cables,
+			Set<String> glands) {
+		PartBox jacket = model.union("entry_east_jacket");
+		PartBox gland = model.union("entry_east_gland");
+		PartBox base = model.union("pole_base");
+		if (segments <= 0 || jacket == null || gland == null || base == null) return 0.0f;
+
+		double y = (jacket.min().y() + jacket.max().y()) / 2.0;
+		double cableRadius = (jacket.max().y() - jacket.min().y()) / 2.0;
+		double glandRadius = (gland.max().y() - gland.min().y()) / 2.0;
+		double glandLength = gland.max().x() - gland.min().x();
+		double wall = scale * (TurbineGeometry.TOWER_BASE_RADIUS + (TurbineGeometry.TOWER_TOP_RADIUS - TurbineGeometry.TOWER_BASE_RADIUS) * y / segments);
+		double back = Math.sqrt(Math.max(0.0, wall * wall - glandRadius * glandRadius));
+		// the door head is the highest thing in pole_base
+		double door = base.max().y() * scale;
+		if (wall >= 0.5) return 0.0f;
+
+		Direction facing = turbine.getBlockState().getValue(MachineBlock.FACING);
+		for (Direction world : Direction.Plane.HORIZONTAL) {
+			if (!turbine.cableArrives(world)) continue;
+
+			Direction side = ModelFacing.side(world, WindTurbineBlock.AUTHORED, facing);
+			boolean doorSide = side == DOOR_SIDE;
+			if (doorSide && door > y - cableRadius) continue;
+
+			cables.add(side.getName());
+			if (wall - back <= glandLength / 2.0 && back + glandLength <= 0.5 && !(doorSide && door > y - glandRadius)) {
+				glands.add(side.getName());
+			}
+		}
+
+		return (float) (back - gland.min().x());
 	}
 
 	private static void render(WindTurbineBlockEntity turbine, RenderContext context, PoseStack poseStack) {
@@ -149,6 +199,20 @@ public class WindTurbineRenderer extends MachineRenderer {
 		// stays at the foot, never scaled; moved out along its diagonal as far as a wide foot's plinth needs
 		if (groupName.startsWith("insulator")) {
 			pose.translate(layout.insulatorOffset(), 0.0f, layout.insulatorOffset());
+			return true;
+		}
+
+		// another mod's cable carried on to a narrow shaft: at the foot, never scaled; the gland moved out to the wall
+		if (groupName.startsWith("entry_")) {
+			String rest = groupName.substring("entry_".length());
+			int cut = rest.indexOf('_');
+			String side = cut < 0 ? rest : rest.substring(0, cut);
+			if (!groupName.startsWith("entry_" + side + "_gland")) return layout.cables().contains(side);
+			if (!layout.glands().contains(side)) return false;
+
+			Direction out = Direction.byName(side);
+			if (out == null) return false;
+			pose.translate(out.getStepX() * layout.glandAlong(), 0.0f, out.getStepZ() * layout.glandAlong());
 			return true;
 		}
 

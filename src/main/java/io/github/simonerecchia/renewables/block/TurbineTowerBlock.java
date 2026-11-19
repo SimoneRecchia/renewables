@@ -1,6 +1,7 @@
 package io.github.simonerecchia.renewables.block;
 
 import io.github.simonerecchia.renewables.api.power.TurbineSpec;
+import io.github.simonerecchia.renewables.catalog.Catalogue;
 import io.github.simonerecchia.renewables.registry.ModBlockEntities;
 import io.github.simonerecchia.renewables.wind.TurbineGeometry;
 
@@ -13,6 +14,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -59,6 +62,8 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 	private static final Map<Integer, VoxelShape> TUBES = new ConcurrentHashMap<>();
 	/** The insulator's box at the foot of a tower that carries a turbine, by its offset and the machine's facing. */
 	private static final Map<Integer, VoxelShape> INSULATORS = new ConcurrentHashMap<>();
+	/** Blocks a foot may stand on without a sturdy top: cables, so the foot's bottom face meets one. Written by gen_crafting.foundation_tags. */
+	public static final TagKey<Block> FOUNDATIONS = BlockTags.create(Catalogue.id("tower_foundations"));
 
 	/**
 	 * The shape follows the tower's height and the machine on it, so it is asked for every time rather than kept per state.
@@ -199,7 +204,8 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 	// ---- standing up ----
 
 	/**
-	 * A segment stands on another segment, or is founded on a block whose top can carry it in the middle - and never on a
+	 * A segment stands on another segment, or is founded on a block whose top can carry it in the middle or on a cable
+	 * ({@link #isFoundation}) - and never on a
 	 * machine of this mod.  Any collision at all used to do, so a tower stood on another turbine's nacelle, counted its
 	 * own pile only, and ran a second rotor through the first one's, its foot fourteen blocks up in the wind.
 	 */
@@ -212,10 +218,14 @@ public class TurbineTowerBlock extends Block implements EntityBlock, MachineShel
 		return isFoundation(level, below, support);
 	}
 
-	/** Whether a block can take the foot of a tower: a top face that carries a load in its middle, and not a machine. */
+	/**
+	 * Whether a block can take the foot of a tower: a top face that carries a load in its middle, or a block in
+	 * {@link #FOUNDATIONS} (Mekanism's Universal Cables), and never a machine of this mod.
+	 */
 	public static boolean isFoundation(LevelReader level, BlockPos pos, BlockState support) {
 		Block block = support.getBlock();
 		if (block instanceof MachineBlock || block instanceof MachineShellBlock || block instanceof TurbineTowerBlock) return false;
+		if (support.is(FOUNDATIONS)) return true;
 
 		return support.isFaceSturdy(level, pos, Direction.UP, SupportType.CENTER);
 	}

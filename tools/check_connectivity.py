@@ -694,7 +694,13 @@ def turbine_poses():
         rotor, nacelle = turbine.scales(diameter, exaggeration, small=ident == 'sw_10')
         for n in (low, high):
             whole = ident == 'sw_10' and n == low
-            keep = (lambda g: True) if whole else (lambda g: g.startswith('pole') or g.startswith('insulator'))
+            tower = turbine.tower_scale(n, nacelle)
+
+            # every side cabled: an entry is drawn wherever the renderer would draw it
+            def keep(g, whole=whole, n=n, tower=tower):
+                if g.startswith('entry'):
+                    return turbine.entry_drawn(g, n, tower)
+                return whole or g.startswith('pole') or g.startswith('insulator')
 
             def pose(group, p, n=n, rotor=rotor, nacelle=nacelle):
                 return turbine.group_matrix(group, n, rotor, nacelle, hub, floor)(p)

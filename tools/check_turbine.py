@@ -27,7 +27,8 @@ PATH = os.path.join(objlib.MODELS, 'wind_turbine', 'wind_turbine.obj')
 
 # The objects the model is made of and the renderer treats by prefix.  Anything else is a nacelle part.
 OBJECTS = ('pole', 'pole_base', 'motor', 'motor_shaft', 'motor_hatch', 'motor_cooler', 'motor_sensors',
-           'motor_beacon', 'rotate_2', 'rotate_1', 'insulator', 'insulator_duct', 'pivot_rotor')
+           'motor_beacon', 'rotate_2', 'rotate_1', 'insulator', 'insulator_duct', 'pivot_rotor') + tuple(
+    'entry_%s%s' % (side, part) for side in ('north', 'east', 'south', 'west') for part in ('', '_gland'))
 
 # A metre of margin between a blade and anything it should not touch, in blocks.
 GROUND_CLEARANCE = 0.80
@@ -145,7 +146,7 @@ def main():
     for wanted in (('insulator', 'insulator_porcelain'), ('insulator', 'insulator_steel')):
         if wanted not in keys:
             fail('no group %s_%s: the wire has nothing to hang on' % wanted)
-    nacelle_parts = [n for n in objects if not n.startswith(('pole', 'insulator', 'rotate_', 'pivot_'))]
+    nacelle_parts = [n for n in objects if not n.startswith(('pole', 'insulator', 'rotate_', 'pivot_', 'entry'))]
     print('objects: %s' % ', '.join(objects))
 
     # -------------------------------------------------------------- closed, outward

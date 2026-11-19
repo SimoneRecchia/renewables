@@ -989,22 +989,26 @@ def subdivided(corners, longest):
     return [piece for half in halves for piece in subdivided(half, longest)]
 
 
-def turbine_triangles(model='c130_40', n=13, rotor=0.0, yaw=0.0, at=(0, 0, 0)):
+def turbine_triangles(model='c130_40', n=13, rotor=0.0, yaw=0.0, at=(0, 0, 0), cabled=()):
     """The turbine as the renderer poses it: the figures from the catalogue, the transform from the generator.
 
     gen_turbine_models.group_matrix is the one statement of how each group moves, so this draws the contract
-    and not a second reading of it.
+    and not a second reading of it.  ``cabled`` names the model's sides another mod's cable meets.
     """
     import gen_turbine_models as turbine
 
     row = next(r for r in turbine.CATALOGUE if r[0] == model)
     rotor_scale, nacelle_scale = turbine.scales(row[1], row[2], small=model == 'sw_10')
+    tower = turbine.tower_scale(n, nacelle_scale)
     path = os.path.join(MODELS, 'wind_turbine', 'wind_turbine.obj')
     hub, floor = turbine.hub_and_floor(path)
     out = []
     for group, texture, corners, normal, shade, cull in read_obj(path, {}, flip_v=True, cull=False,
                                                                  forge_groups=False):
         if group.startswith('pivot_'):
+            continue
+        if group.startswith('entry') and not (turbine.entry_side(group) in cabled
+                                              and turbine.entry_drawn(group, n, tower)):
             continue
         move = turbine.group_matrix(group, n, rotor_scale, nacelle_scale, hub, floor, rotor, yaw)
         moved = tuple(((move(p)[0] + 0.5 + at[0], move(p)[1] + at[1], move(p)[2] + 0.5 + at[2]), uv)
@@ -1047,6 +1051,43 @@ def scene_turbine_foot():
     triangles = ground(-4, -4, 6, 6, SAND)
     triangles += turbine_triangles()
     return triangles, (1.9, 0.75, 2.3), (0.55, 0.25, 0.8)
+
+
+def foreign_arm(block, side, texture='renewables:block/pv_steel'):
+    """A stand-in for another mod's cable: a 6 px square arm from the middle of ``block`` to its side ``side``."""
+    tile = Texture.get(texture_path(texture))
+    cx, cz = block[0] + 0.5, block[1] + 0.5
+    dx, dz = side
+    lo = [cx - 3 / 16.0, 0.5 - 3 / 16.0, cz - 3 / 16.0]
+    hi = [cx + 3 / 16.0, 0.5 + 3 / 16.0, cz + 3 / 16.0]
+    for axis, step in ((0, dx), (2, dz)):
+        if step > 0:
+            hi[axis] = block[axis // 2] + 1.0
+        elif step < 0:
+            lo[axis] = block[axis // 2]
+    out = []
+    for axis in range(3):
+        for end in (0, 1):
+            normal = tuple((1.0 if end else -1.0) if k == axis else 0.0 for k in range(3))
+            u, v = [k for k in range(3) if k != axis]
+            corners = []
+            for a, b in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                p = [0.0, 0.0, 0.0]
+                p[axis] = hi[axis] if end else lo[axis]
+                p[u] = hi[u] if a else lo[u]
+                p[v] = hi[v] if b else lo[v]
+                corners.append((tuple(p), (float(a), float(b))))
+            for i in (1, 2):
+                out.append(('foreign', tile, (corners[0], corners[i], corners[i + 1]), normal, True, False))
+    return out
+
+
+def scene_turbine_entry():
+    """A C52 on four blocks with another mod's cable laid against its foot on two sides: the entry carries it in."""
+    triangles = ground(-3, -3, 4, 4, SAND)
+    triangles += turbine_triangles('c52_085', 4, cabled=('west', 'east'))
+    triangles += foreign_arm((-1, 0), (1, 0)) + foreign_arm((1, 0), (-1, 0))
+    return triangles, (2.3, 1.3, 2.4), (0.5, 0.45, 0.5)
 
 
 def scene_turbine_small():
@@ -1149,6 +1190,7 @@ SCENES = {
     'turbine_head': scene_turbine_head,
     'turbine_rear': scene_turbine_rear,
     'turbine_foot': scene_turbine_foot,
+    'turbine_entry': scene_turbine_entry,
     'turbine_small': scene_turbine_small,
     'turbine_hitbox': scene_turbine_hitbox,
     'turbine_lineup': scene_turbine_lineup,

@@ -12,6 +12,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -36,11 +37,19 @@ public class PvArrayRenderer extends MachineRenderer {
 	private static final Map<BlockPos, Float> AZIMUTH_CACHE = new HashMap<>();
 	/** Degrees the azimuth drive turns per frame at 60 frames a second (see {@link #frameScale()}). */
 	private static final float AZIMUTH_STEP = 2.0f;
+	/** What is at each end of a row, read off the world again every {@link #ENDS_TICKS}: a field asked it every frame. */
+	private static final Map<BlockPos, Seen> ENDS = new HashMap<>();
+	private static final int ENDS_TICKS = 10;
+
+	private record Seen(Ends ends, int at) {
+	}
 
 	@SubscribeEvent
 	public static void onRenderLevel(RenderLevelStageEvent event) {
-		cleanupAngles(AZIMUTH_CACHE, drawAll(event, PvArrayBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
-				PvArrayRenderer::drawnFacing, PvArrayBlock.AUTHORED, PvArrayRenderer::render));
+		Set<BlockPos> seen = drawAll(event, PvArrayBlockEntity.class, MAX_RENDER_DISTANCE_SQ,
+				PvArrayRenderer::drawnFacing, PvArrayBlock.AUTHORED, PvArrayRenderer::render);
+		cleanupAngles(AZIMUTH_CACHE, seen);
+		forget(ENDS, seen);
 	}
 
 	private static void render(PvArrayBlockEntity array, RenderContext context, PoseStack poseStack) {
@@ -114,6 +123,16 @@ public class PvArrayRenderer extends MachineRenderer {
 	private static Ends ends(PvArrayBlockEntity array) {
 		if (array.getLevel() == null) return new Ends(false, false, false, false);
 
+		int now = renderTick();
+		Seen cached = ENDS.get(array.getBlockPos());
+		if (cached != null && Math.abs(now - cached.at()) < ENDS_TICKS) return cached.ends();
+
+		Ends ends = endsNow(array);
+		ENDS.put(array.getBlockPos().immutable(), new Seen(ends, now));
+		return ends;
+	}
+
+	private static Ends endsNow(PvArrayBlockEntity array) {
 		Direction north = drawnFacing(array.getBlockState());
 		Direction south = north.getOpposite();
 		return new Ends(fedFrom(array, north), fedFrom(array, south),

@@ -41,6 +41,12 @@ import net.minecraft.world.level.block.state.BlockState;
 public class PvArrayBlockEntity extends BlockEntity {
 	/** How often the sky view is surveyed again, in ticks. */
 	private static final int SKY_VIEW_TTL = 200;
+	/**
+	 * How often the trace towards the sun, the look for anything standing in its way and the snow on top are made again:
+	 * the sun moves a third of a degree a second, and a field of rows tracing every tick was most of the server's tick.
+	 */
+	private static final int BEAM_TTL = 20;
+	private static final int ENTITY_TTL = 10;
 	/** Flash-test binning, peak to peak: real datasheets print plus or minus three percent. */
 	private static final double MODULE_TOLERANCE = 0.03;
 	/** How much better lying flat has to be before a tracker gives up on the sun, as a ratio. */
@@ -66,6 +72,12 @@ public class PvArrayBlockEntity extends BlockEntity {
 
 	private double skyViewFactor = 1.0;
 	private int skyViewCountdown = 0;
+	/** What the blocks and the entities between the row and the sun leave of the beam, as last traced; not saved. */
+	private double blockBeamFraction = 1.0;
+	private double entityBeamFraction = 1.0;
+	private int beamCountdown = 0;
+	private int entityCountdown = 0;
+	private int snowCountdown = 0;
 
 	// ---- the tracker ----
 
@@ -171,7 +183,10 @@ public class PvArrayBlockEntity extends BlockEntity {
 		// the drive and its dwells run on the sky's clock; a stopped clock still lets a row settle and a stow end
 		long driveTicks = clockRuns(serverLevel) ? dayTicks : 1L;
 
-		snowDepthM = Shading.snowDepthOver(serverLevel, worldPosition);
+		if (--snowCountdown <= 0) {
+			snowDepthM = Shading.snowDepthOver(serverLevel, worldPosition);
+			snowCountdown = next(BEAM_TTL);
+		}
 		updateSoiling(serverLevel, spec, dayTicks);
 		updateTracker(spec, sky, weather, driveTicks);
 		updatePlane(serverLevel, spec, sky);
@@ -179,6 +194,14 @@ public class PvArrayBlockEntity extends BlockEntity {
 		updateTelemetry(spec);
 
 		clientSync.throttled(this);
+	}
+
+	/**
+	 * The ticks to the next look: {@code ttl}, give or take a sixth by position, so a field loaded in one tick does not
+	 * make all its traces in the same one again every second.
+	 */
+	private int next(int ttl) {
+		return ttl - ttl / 6 + Math.floorMod(worldPosition.hashCode(), ttl / 3 + 1);
 	}
 
 	/** Day-clock ticks since the last tick, none on the first, and never backwards when the time is set. */
@@ -234,8 +257,15 @@ public class PvArrayBlockEntity extends BlockEntity {
 		// over the array, what is standing on it
 		rowShadedFraction = Shading.rowShadedFraction(spec.groundCoverRatio(), tilt, azimuth, sky.sun());
 		double planeHeight = planeHeight();
-		obstructionFraction = Shading.beamFraction(serverLevel, worldPosition, planeHeight, sky.sun(), PvArrayBlock::row)
-				 * Shading.entityBeamFraction(serverLevel, worldPosition, planeHeight, sky.sun());
+		if (--beamCountdown <= 0) {
+			blockBeamFraction = Shading.beamFraction(serverLevel, worldPosition, planeHeight, sky.sun(), PvArrayBlock::row);
+			beamCountdown = next(BEAM_TTL);
+		}
+		if (--entityCountdown <= 0) {
+			entityBeamFraction = Shading.entityBeamFraction(serverLevel, worldPosition, planeHeight, sky.sun());
+			entityCountdown = next(ENTITY_TTL);
+		}
+		obstructionFraction = blockBeamFraction * entityBeamFraction;
 
 		plane = plane.withBeamFraction(obstructionFraction * (1.0 - rowShadedFraction))
 				.withSkyFraction(skyViewFactor)

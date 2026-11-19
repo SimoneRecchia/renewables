@@ -29,9 +29,12 @@ Mekanism code of ours involved.
 ### The generators
 
 A **turbine** and an **inverter** expose their output directly, as **Joules** through Mekanism's
-`IStrictEnergyHandler` and as **Forge Energy** for everything else, on **every face but the top**. Electricity
-offered only the bottom and the back, which worked because a tower could stand on a cable; renewables' tower needs
-a sturdy foundation, so a cable now comes in from whichever side of the foot it is laid on.
+`IStrictEnergyHandler` and as **Forge Energy** for everything else, on **every face but the top**. A tower
+stands on a sturdy block or on a block in the `renewables:tower_foundations` tag, which holds Mekanism's four
+Universal Cables, so a tower is set **on a cable** the way a Mekanism wind generator is; a cable laid beside the
+foot connects on whichever side it is. A modpack adds its own cables to the same tag. A tower narrower than its
+block draws the last stretch itself: on each side where something takes its energy, a thinner cable runs from the
+block's side into the shaft through a gland, so the neighbour's cable does not end in mid-air.
 
 * A turbine's machine block sits at the top of its tower, so the tower answers for it: the **lowest tower
   block** exposes the turbine's capability, on the same five faces, and the turbine pushes from there. Placing or

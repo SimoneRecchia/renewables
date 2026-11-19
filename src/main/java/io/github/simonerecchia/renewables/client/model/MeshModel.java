@@ -6,7 +6,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -28,6 +30,7 @@ public final class MeshModel {
 	public final Map<String, Group> groups;
 
 	private final Map<String, PartBox> boxes;
+	private final Map<String, Optional<PartBox>> unions = new ConcurrentHashMap<>();
 	private final List<String> warnings;
 	private final float radius;
 
@@ -83,9 +86,17 @@ public final class MeshModel {
 		return boxes;
 	}
 
-	/** The box round every group whose name starts with {@code prefix}, or null when none has any vertex. */
+	/**
+	 * The box round every group whose name starts with {@code prefix}, or null when none has any vertex.  Worked out once
+	 * a prefix: renderers ask every frame for every machine.  Read-only, like {@link #box}.
+	 */
 	@Nullable
 	public PartBox union(String prefix) {
+		return unions.computeIfAbsent(prefix, key -> Optional.ofNullable(unionOf(key))).orElse(null);
+	}
+
+	@Nullable
+	private PartBox unionOf(String prefix) {
 		Vector3f min = null;
 		Vector3f max = null;
 
